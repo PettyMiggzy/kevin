@@ -32,42 +32,20 @@ export const KEVIN =
   'LINE — heavy uniform black outlines everywhere, flat bright cel-shaded ' +
   'colour, no nose, no eyebrows, no teeth, no visible neck';
 
-/** The look. Also locked. */
-export const STYLE =
-  '2D cartoon illustration in a clean western comic style, bold uniform black ' +
-  'outlines, flat cel shading with one clear light source, bright saturated ' +
-  'colours, crisp vector-like edges, detailed painted background, bright blue ' +
-  'sky with fluffy white clouds where outdoors, dynamic wide cinematic ' +
-  'composition, high contrast, poster quality';
-
 /**
- * STYLE VARIANTS. The character block above never changes — that is what makes
- * him recognisable. These swap the *world* he is standing in.
- *
- * Pass one as opts.style to scene(), or --style on the CLI.
+ * The look. Also locked, and there is only one — every reference shares the
+ * same rendering: bold 2D cartoon character, heavy black outlines, cel shading,
+ * painted detailed background. What changes between images is the SETTING and
+ * the LIGHT, and those belong in the scene description, not in a second style
+ * block. Splitting mood out into "styles" just gives the model a second thing
+ * to drift on.
  */
-export const STYLES = {
-  // The default: bright poster cartoon. refs 01-05.
-  poster: STYLE,
-
-  // ref 06 — toxic graffiti. Dark, neon, dripping, expensive-looking.
-  toxic:
-    '2D cartoon character rendered against a dark high-detail neon environment, ' +
-    'acid yellow-green and black palette, huge dripping graffiti lettering, ' +
-    'wet paint splatters and running drips, glowing screens and readouts in the ' +
-    'background, industrial panels and pipes, strong rim lighting on the ' +
-    'character, deep shadows, heavy black outlines kept on the character itself, ' +
-    'gritty texture over everything, cyberpunk street-art poster, high contrast, ' +
-    'wide cinematic composition',
-
-  // ref 07 — anime action. Motion, terror, dramatic perspective.
-  action:
-    '2D cartoon character in a dramatic anime action shot, extreme wide-angle ' +
-    'perspective with the character mid-motion in the foreground, sharp radial ' +
-    'speed lines, debris and dust streaking past, exaggerated foreshortening, ' +
-    'dynamic low camera angle, heavy black outlines on the character, painted ' +
-    'detailed background, high drama, high contrast, cinematic 16:9',
-};
+export const STYLE =
+  'bold 2D cartoon illustration, heavy black outlines on the character, flat ' +
+  'cel shading with one clear light source, saturated colours, crisp clean ' +
+  'linework, richly painted detailed background behind him, strong contrast ' +
+  'between character and environment, dynamic cinematic composition, poster ' +
+  'quality, no gradients on the character himself';
 
 /** What we never want back. */
 export const NEGATIVE =
@@ -79,15 +57,12 @@ export const NEGATIVE =
   'only, human hair, small eyes, eyes fully inside the muzzle, realistic hands, ' +
   'five fingers, long limbs, tall body, no hood';
 
-const scene = (id, situation, opts = {}) => {
-  const style = STYLES[opts.style || 'poster'] || STYLE;
-  return {
-    id,
-    situation,
-    ...opts,
-    prompt: `${KEVIN}. SCENE: ${situation}. STYLE: ${style}.`,
-  };
-};
+const scene = (id, situation, opts = {}) => ({
+  id,
+  situation,
+  ...opts,
+  prompt: `${KEVIN}. SCENE: ${situation}. STYLE: ${STYLE}.`,
+});
 
 /**
  * Text in images: only the models that are actually good at lettering get
@@ -192,7 +167,6 @@ export const SCENES = [
       'A laminated menu on the table reads "STILL HERE"'
   ),
 
-  // --- toxic graffiti (ref 06) -------------------------------------------
   scene(
     'toxic-lab',
     'Kevin stands with his arms folded in a dark underground control room, ' +
@@ -200,33 +174,34 @@ export const SCENES = [
       'tags and paint splatter. Enormous dripping graffiti letters spelling ' +
       '"KEVIN" cover the wall behind him. Glowing screens show green charts ' +
       'climbing. Tipped-over paint buckets leak acid-yellow across the floor. A ' +
-      'cardboard box beside him reads "100X KEVIN GAINS"',
-    { style: 'toxic' }
+      'cardboard box beside him reads "100X KEVIN GAINS". Lit only by the ' +
+      'screens — acid yellow-green glow against deep black, wet paint drips ' +
+      'catching the light, heavy shadow, gritty texture on every surface'
   ),
   scene(
     'toxic-throne',
     'Kevin sits slouched on a scrapyard throne welded out of server racks and ' +
       'oil drums in a dark neon-lit warehouse, one arm draped over the armrest. ' +
       'Acid-yellow graffiti reading "TOLD NO" drips down the concrete wall ' +
-      'behind him. Screens flicker on either side',
-    { style: 'toxic' }
+      'behind him, screens flickering on either side. Dark warehouse lit in ' +
+      'acid yellow-green and black, hard rim light down one side of him, deep ' +
+      'shadows everywhere else'
   ),
 
-  // --- anime action (ref 07) ---------------------------------------------
   scene(
     'moon-run',
     'Kevin sprints straight at the camera in wide-angle terror, mouth open in a ' +
       'scream, arms flung out, as an enormous cratered moon fills the entire sky ' +
       'behind him and crashes toward the road. Rocks and debris streak past. ' +
-      'Night sky, stars, dust',
-    { style: 'action' }
+      'Shot from a low wide-angle lens with heavy foreshortening, sharp radial ' +
+      'speed lines, debris streaking past the camera. Night sky, stars, moonlit dust'
   ),
   scene(
     'candle-surf',
     'Kevin rides a colossal green candlestick chart bar upward like a surfboard, ' +
       'wind tearing at him, arms out for balance, mouth open in a yell, the city ' +
-      'shrinking far below and red candles collapsing behind him',
-    { style: 'action' }
+      'shrinking far below and red candles collapsing behind him. Extreme ' +
+      'wide-angle from below, speed lines tearing past, dramatic sunset light'
   ),
 ];
 
