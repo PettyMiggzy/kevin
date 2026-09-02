@@ -106,6 +106,56 @@ export async function generate(key, opts) {
   return Buffer.from(typeof b64 === 'string' ? b64 : b64.b64_json, 'base64');
 }
 
+/**
+ * Edit an existing image. This is the consistency trick: instead of asking a
+ * model to invent Kevin twelve times, hand it ONE approved Kevin and describe
+ * the change. The character survives; only the pose moves.
+ */
+export async function edit(key, { image, prompt, model = 'firered-image-edit', aspect_ratio, output_format = 'png', safe_mode = false, resolution }) {
+  const body = { model, prompt, image, output_format, safe_mode };
+  if (aspect_ratio) body.aspect_ratio = aspect_ratio;
+  if (resolution) body.resolution = resolution;
+
+  const r = await fetch(`${API}/image/edit`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return readImageResponse(r, 'edit');
+}
+
+/** Cut the background out. Returns a PNG with a real alpha channel. */
+export async function removeBackground(key, image) {
+  const r = await fetch(`${API}/image/background-remove`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image }),
+  });
+  return readImageResponse(r, 'bg-remove');
+}
+
+/**
+ * /image/generate answers with base64 in JSON; /image/edit and
+ * /image/background-remove answer with the raw image bytes. Reading a binary
+ * body as text corrupts it, so branch on the content type rather than guessing.
+ */
+async function readImageResponse(r, label) {
+  const type = r.headers.get('content-type') || '';
+  if (type.startsWith('image/')) {
+    if (!r.ok) throw new Error(`${label} ${r.status}`);
+    return Buffer.from(await r.arrayBuffer());
+  }
+  const text = await r.text();
+  if (!r.ok) throw new Error(`${label} ${r.status}: ${text.slice(0, 300)}`);
+  const json = JSON.parse(text);
+  const first = (json.images || json.data || [])[0];
+  const b64 = typeof first === 'string' ? first : first?.b64_json || json.image;
+  if (!b64) throw new Error(`${label}: no image in response`);
+  return Buffer.from(b64, 'base64');
+}
+
+export const toBase64 = (buf) => buf.toString('base64');
+
 export async function save(buf, outDir, name) {
   await mkdir(outDir, { recursive: true });
   const p = join(outDir, name);
