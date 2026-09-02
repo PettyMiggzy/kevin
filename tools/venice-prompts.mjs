@@ -10,20 +10,27 @@
 
 /** The character. Locked. This paragraph is the brand. */
 export const KEVIN =
-  'KEVIN is a crude simple cartoon character, deliberately badly drawn, like a ' +
-  "child's MS Paint drawing cleaned up: his head is a large rounded shape " +
-  'covered in a bright red hood of thick blunt dreadlocks that hang straight ' +
-  'down the LEFT side of his head only, ending in short jagged points near his ' +
-  'shoulder — not ears, not rabbit ears, not a cape; the right two-thirds of ' +
-  'his face is a flat pale cream oval; TWO ENORMOUS WHITE OVAL EYES dominate ' +
-  'the face and take up most of the head, sitting high and tilted, the eye on ' +
-  'the right clearly larger than the one on the left, each outlined in thick ' +
-  'black with a small black oval pupil pushed to the LEFT side so he is looking ' +
-  'past the viewer, never at the camera; below the eyes is a SMALL SOLID BLACK ' +
-  'TRIANGLE for an open mouth, pointing sideways; he has a tiny red body far ' +
-  'too small for his head, short simple red arms, and two thin straight red ' +
-  'legs with no knees and small red shoes; thick uneven black outlines ' +
-  'throughout, flat bright colours, no nose, no eyebrows, no teeth';
+  'KEVIN is a bold cartoon character built like this, and these proportions are ' +
+  'the whole character — do not restyle them: ' +
+  'HEAD — a large rounded BRIGHT RED HOOD that covers the top, back and sides ' +
+  'of his head like a snug helmet or balaclava, with several THICK BLUNT ' +
+  'DREADLOCK SPIKES flaring outward and downward from the sides of the hood, ' +
+  'longer and heavier on his left, each spike ending in a rounded point. ' +
+  'EYES — TWO ENORMOUS WHITE OVAL EYES, each nearly a third of the head, set ' +
+  'high on the face, tilted slightly toward each other, and CUTTING UP INTO ' +
+  'THE RED HOOD so the white breaks the hood outline; each eye has a thick ' +
+  'black outline and one small black oval pupil. ' +
+  'FACE — a PALE CREAM MUZZLE shape begins between and below the eyes and ' +
+  'bulges downward and forward over the mouth, outlined in thick black, like a ' +
+  'rounded snout with no nose. ' +
+  'MOUTH — a wide open black mouth with a pink tongue when he is loud, or one ' +
+  'small solid black triangle when he is not. ' +
+  'HANDS — oversized RED MITTEN HANDS with three or four thick blunt fingers, ' +
+  'much bigger than you would expect for his size. ' +
+  'BODY — a small rounded red body, far too small for the head, with short red ' +
+  'arms and tiny red feet. ' +
+  'LINE — heavy uniform black outlines everywhere, flat bright cel-shaded ' +
+  'colour, no nose, no eyebrows, no teeth, no visible neck';
 
 /** The look. Also locked. */
 export const STYLE =
@@ -39,7 +46,9 @@ export const NEGATIVE =
   'noise, deformed anatomy, extra limbs, extra fingers, distorted face, ' +
   'asymmetrical mess, watermark, signature, low resolution, jpeg artifacts, ' +
   'misspelled text, garbled lettering, realistic human, horror, gore, ' +
-  'sexualised, multiple different character designs';
+  'sexualised, multiple different character designs, hair parted down one side ' +
+  'only, human hair, small eyes, eyes fully inside the muzzle, realistic hands, ' +
+  'five fingers, long limbs, tall body, no hood';
 
 const scene = (id, situation, opts = {}) => ({
   id,
