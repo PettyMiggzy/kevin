@@ -12,7 +12,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readdir } from 'node:fs/promises';
 import { loadKey, generate, save, listModels, styleRefs } from './lib/venice.mjs';
-import { SCENES, NEGATIVE, MODEL_PRESETS } from './venice-prompts.mjs';
+import { SCENES, NEGATIVE, MODEL_PRESETS, STYLES } from './venice-prompts.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'assets/scenes/venice');
@@ -32,7 +32,10 @@ const names = argv.filter((a) => !a.startsWith('--') && !argv.includes(`--${a}`)
 
 async function main() {
   if (has('list')) {
-    for (const s of SCENES) console.log(`  ${s.id.padEnd(18)} ${s.situation.slice(0, 90)}…`);
+    for (const s of SCENES) {
+      console.log(`  ${s.id.padEnd(16)} [${(s.style || 'poster').padEnd(6)}] ${s.situation.slice(0, 78)}…`);
+    }
+    console.log(`\n  styles: ${Object.keys(STYLES).join(', ')}   (filter with --style)`);
     return;
   }
 
@@ -73,7 +76,9 @@ async function main() {
     if (!supports) console.log(`  ! ${model} ignores style references — use krea-v2-large or luma-uni-1-max`);
   }
   const preset = MODEL_PRESETS[model] || {};
-  const wanted = names.length ? SCENES.filter((s) => names.includes(s.id)) : SCENES;
+  const styleFilter = flag('style');
+  let wanted = names.length ? SCENES.filter((s) => names.includes(s.id)) : SCENES;
+  if (styleFilter) wanted = wanted.filter((s) => (s.style || 'poster') === styleFilter);
 
   if (!wanted.length) {
     console.error(`No scene matched. Try --list. Wanted: ${names.join(', ')}`);

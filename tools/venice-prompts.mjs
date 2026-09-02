@@ -40,6 +40,35 @@ export const STYLE =
   'sky with fluffy white clouds where outdoors, dynamic wide cinematic ' +
   'composition, high contrast, poster quality';
 
+/**
+ * STYLE VARIANTS. The character block above never changes — that is what makes
+ * him recognisable. These swap the *world* he is standing in.
+ *
+ * Pass one as opts.style to scene(), or --style on the CLI.
+ */
+export const STYLES = {
+  // The default: bright poster cartoon. refs 01-05.
+  poster: STYLE,
+
+  // ref 06 — toxic graffiti. Dark, neon, dripping, expensive-looking.
+  toxic:
+    '2D cartoon character rendered against a dark high-detail neon environment, ' +
+    'acid yellow-green and black palette, huge dripping graffiti lettering, ' +
+    'wet paint splatters and running drips, glowing screens and readouts in the ' +
+    'background, industrial panels and pipes, strong rim lighting on the ' +
+    'character, deep shadows, heavy black outlines kept on the character itself, ' +
+    'gritty texture over everything, cyberpunk street-art poster, high contrast, ' +
+    'wide cinematic composition',
+
+  // ref 07 — anime action. Motion, terror, dramatic perspective.
+  action:
+    '2D cartoon character in a dramatic anime action shot, extreme wide-angle ' +
+    'perspective with the character mid-motion in the foreground, sharp radial ' +
+    'speed lines, debris and dust streaking past, exaggerated foreshortening, ' +
+    'dynamic low camera angle, heavy black outlines on the character, painted ' +
+    'detailed background, high drama, high contrast, cinematic 16:9',
+};
+
 /** What we never want back. */
 export const NEGATIVE =
   'photorealistic, 3d render, cgi, blurry, soft focus, muddy colours, gradient ' +
@@ -50,12 +79,15 @@ export const NEGATIVE =
   'only, human hair, small eyes, eyes fully inside the muzzle, realistic hands, ' +
   'five fingers, long limbs, tall body, no hood';
 
-const scene = (id, situation, opts = {}) => ({
-  id,
-  situation,
-  ...opts,
-  prompt: `${KEVIN}. SCENE: ${situation}. STYLE: ${STYLE}.`,
-});
+const scene = (id, situation, opts = {}) => {
+  const style = STYLES[opts.style || 'poster'] || STYLE;
+  return {
+    id,
+    situation,
+    ...opts,
+    prompt: `${KEVIN}. SCENE: ${situation}. STYLE: ${style}.`,
+  };
+};
 
 /**
  * Text in images: only the models that are actually good at lettering get
@@ -158,6 +190,43 @@ export const SCENES = [
       'night, a burger and a milkshake untouched in front of him, staring flatly ' +
       'at the empty seat across the table. Neon signage glows outside the window. ' +
       'A laminated menu on the table reads "STILL HERE"'
+  ),
+
+  // --- toxic graffiti (ref 06) -------------------------------------------
+  scene(
+    'toxic-lab',
+    'Kevin stands with his arms folded in a dark underground control room, ' +
+      'wearing an oversized black puffer jacket covered in acid-yellow "KEVIN" ' +
+      'tags and paint splatter. Enormous dripping graffiti letters spelling ' +
+      '"KEVIN" cover the wall behind him. Glowing screens show green charts ' +
+      'climbing. Tipped-over paint buckets leak acid-yellow across the floor. A ' +
+      'cardboard box beside him reads "100X KEVIN GAINS"',
+    { style: 'toxic' }
+  ),
+  scene(
+    'toxic-throne',
+    'Kevin sits slouched on a scrapyard throne welded out of server racks and ' +
+      'oil drums in a dark neon-lit warehouse, one arm draped over the armrest. ' +
+      'Acid-yellow graffiti reading "TOLD NO" drips down the concrete wall ' +
+      'behind him. Screens flicker on either side',
+    { style: 'toxic' }
+  ),
+
+  // --- anime action (ref 07) ---------------------------------------------
+  scene(
+    'moon-run',
+    'Kevin sprints straight at the camera in wide-angle terror, mouth open in a ' +
+      'scream, arms flung out, as an enormous cratered moon fills the entire sky ' +
+      'behind him and crashes toward the road. Rocks and debris streak past. ' +
+      'Night sky, stars, dust',
+    { style: 'action' }
+  ),
+  scene(
+    'candle-surf',
+    'Kevin rides a colossal green candlestick chart bar upward like a surfboard, ' +
+      'wind tearing at him, arms out for balance, mouth open in a yell, the city ' +
+      'shrinking far below and red candles collapsing behind him',
+    { style: 'action' }
   ),
 ];
 
