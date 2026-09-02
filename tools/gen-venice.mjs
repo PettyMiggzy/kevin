@@ -10,7 +10,8 @@
 // Output lands in assets/scenes/venice/<scene>-<model>-<n>.png
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadKey, generate, save, listModels } from './lib/venice.mjs';
+import { readdir } from 'node:fs/promises';
+import { loadKey, generate, save, listModels, styleRefs } from './lib/venice.mjs';
 import { SCENES, NEGATIVE, MODEL_PRESETS } from './venice-prompts.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -48,6 +49,29 @@ async function main() {
 
   const model = flag('model', 'ideogram-v4');
   const variants = Number(flag('variants', 1));
+
+  // --ref locks the look to assets/refs/. Pass names (01,hero) or "all".
+  // Only krea-v2-* and luma-uni-1* actually honour style references; the API
+  // silently ignores them elsewhere, so warn rather than pretend.
+  const refArg = flag('ref');
+  const refStrength = Number(flag('ref-strength', 0.6));
+  let references = null;
+  if (refArg) {
+    const dir = join(ROOT, 'assets/refs');
+    const files = (await readdir(dir)).filter((f) => /\.(png|jpe?g|webp)$/i.test(f)).sort();
+    const wanted =
+      refArg === 'all'
+        ? files
+        : files.filter((f) => refArg.split(',').some((r) => f.toLowerCase().includes(r.toLowerCase())));
+    if (!wanted.length) {
+      console.error(`No reference matched "${refArg}". Available:\n  ${files.join('\n  ')}`);
+      process.exit(1);
+    }
+    references = await styleRefs(wanted.map((f) => join(dir, f)), refStrength);
+    const supports = /^(krea-v2|luma-uni-1)/.test(model);
+    console.log(`refs: ${wanted.join(', ')} @ strength ${refStrength}`);
+    if (!supports) console.log(`  ! ${model} ignores style references — use krea-v2-large or luma-uni-1-max`);
+  }
   const preset = MODEL_PRESETS[model] || {};
   const wanted = names.length ? SCENES.filter((s) => names.includes(s.id)) : SCENES;
 
@@ -74,8 +98,9 @@ async function main() {
           ...(s.width ? { width: s.width } : {}),
           ...(s.height ? { height: s.height } : {}),
           ...(s.aspect_ratio ? { aspect_ratio: s.aspect_ratio } : {}),
+          ...(references ? { style_references: references } : {}),
         });
-        const p = await save(buf, OUT, `${label}-${model}.png`);
+        const p = await save(buf, OUT, `${label}-${model}${references ? '-ref' : ''}.png`);
         console.log(`${(buf.length / 1024).toFixed(0)}KB  →  ${p.replace(ROOT + '/', '')}`);
       } catch (e) {
         console.log(`FAILED — ${e.message.split('\n')[0]}`);

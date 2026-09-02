@@ -10,14 +10,20 @@
 
 /** The character. Locked. This paragraph is the brand. */
 export const KEVIN =
-  'KEVIN is a small simple cartoon character: a rounded red creature whose head ' +
-  'is covered by a smooth red hood-like shape that hangs down the left side in ' +
-  'thick blunt red dreadlock points; a pale cream oval face fills the lower right ' +
-  'of the head; two very large white oval eyes sit high and close together, the ' +
-  'right eye noticeably bigger than the left, each with a small black pupil ' +
-  'looking slightly off to the left, never at the camera; a tiny solid black ' +
-  'triangular open mouth below them; a small red body, short red arms and two ' +
-  'thin straight red legs with no knees and simple red shoes';
+  'KEVIN is a crude simple cartoon character, deliberately badly drawn, like a ' +
+  "child's MS Paint drawing cleaned up: his head is a large rounded shape " +
+  'covered in a bright red hood of thick blunt dreadlocks that hang straight ' +
+  'down the LEFT side of his head only, ending in short jagged points near his ' +
+  'shoulder — not ears, not rabbit ears, not a cape; the right two-thirds of ' +
+  'his face is a flat pale cream oval; TWO ENORMOUS WHITE OVAL EYES dominate ' +
+  'the face and take up most of the head, sitting high and tilted, the eye on ' +
+  'the right clearly larger than the one on the left, each outlined in thick ' +
+  'black with a small black oval pupil pushed to the LEFT side so he is looking ' +
+  'past the viewer, never at the camera; below the eyes is a SMALL SOLID BLACK ' +
+  'TRIANGLE for an open mouth, pointing sideways; he has a tiny red body far ' +
+  'too small for his head, short simple red arms, and two thin straight red ' +
+  'legs with no knees and small red shoes; thick uneven black outlines ' +
+  'throughout, flat bright colours, no nose, no eyebrows, no teeth';
 
 /** The look. Also locked. */
 export const STYLE =
@@ -148,10 +154,11 @@ export const SCENES = [
 
 /** Sensible defaults per model family. */
 export const MODEL_PRESETS = {
-  'ideogram-v4': { note: 'best at readable signage and lettering', width: 1280, height: 720 },
-  'gpt-image-2': { note: 'excellent text, clean cartoon linework', quality: 'high', width: 1280, height: 720 },
+  'ideogram-v4': { note: 'best at readable signage and lettering', aspect_ratio: '16:9' },
+  'gpt-image-2': { note: 'excellent text, clean cartoon linework', quality: 'high', aspect_ratio: '16:9' },
   'nano-banana-pro': { note: 'strong all-rounder, huge prompt budget', aspect_ratio: '16:9' },
-  'seedream-v5-pro': { note: 'punchy saturated illustration', width: 1280, height: 720 },
-  'flux-2-max': { note: 'crisp detail, weaker at long text', width: 1280, height: 720 },
-  'krea-v2-large': { note: 'supports style_references — use to lock the character', width: 1280, height: 720 },
+  'seedream-v5-pro': { note: 'punchy saturated illustration', aspect_ratio: '16:9' },
+  'flux-2-max': { note: 'crisp detail, weaker at long text', aspect_ratio: '16:9' },
+  'krea-v2-large': { note: 'supports style_references — use to lock the character', aspect_ratio: '16:9' },
+  'qwen-image-3-pro': { note: 'clean lines, good text', aspect_ratio: '16:9' },
 };

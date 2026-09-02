@@ -4,6 +4,7 @@
 // gitignored). It is never written into any generated file, logged, or
 // committed.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { extname } from 'node:path';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,6 +20,22 @@ export async function loadKey() {
       'No Venice key. Set VENICE_API_KEY, or put the key in tools/.venice.key (gitignored).'
     );
   }
+}
+
+/**
+ * Build a style_references array from local image files. Venice takes a raw
+ * base64 string or a data URI, under 8MB each. Only models with
+ * supportsStyleReferences honour these — krea-v2-*, luma-uni-1*.
+ */
+export async function styleRefs(paths, strength = 0.5) {
+  const out = [];
+  for (const p of paths) {
+    const buf = await readFile(p);
+    if (buf.length > 8 * 1024 * 1024) throw new Error(`${p} is over Venice's 8MB reference limit`);
+    const mime = extname(p).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg';
+    out.push({ image: `data:${mime};base64,${buf.toString('base64')}`, strength });
+  }
+  return out;
 }
 
 export async function listModels(key) {

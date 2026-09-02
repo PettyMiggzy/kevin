@@ -2,21 +2,75 @@
    Drop art into assets/memes/, run the script, commit. */
 window.KEVIN_MEMES = [
   {
-    "file": "kevins-gym.png",
-    "title": "Kevins Gym",
-    "w": 1600,
-    "h": 900
+    "file": "billboard-city.jpg",
+    "title": "Billboard City",
+    "w": 1376,
+    "h": 768
   },
   {
-    "file": "the-getaway.png",
-    "title": "The Getaway",
-    "w": 1600,
-    "h": 900
+    "file": "courtroom.jpg",
+    "title": "Courtroom",
+    "w": 1376,
+    "h": 768
   },
   {
-    "file": "told-no-stayed-anyway.png",
-    "title": "Told No Stayed Anyway",
-    "w": 1600,
-    "h": 900
+    "file": "diner.jpg",
+    "title": "Diner",
+    "w": 1376,
+    "h": 768
+  },
+  {
+    "file": "getaway.jpg",
+    "title": "Getaway",
+    "w": 1376,
+    "h": 768
+  },
+  {
+    "file": "gta-wait.jpg",
+    "title": "Gta Wait",
+    "w": 1376,
+    "h": 768
+  },
+  {
+    "file": "gym.jpg",
+    "title": "Gym",
+    "w": 1376,
+    "h": 768
+  },
+  {
+    "file": "pfp.jpg",
+    "title": "Pfp",
+    "w": 1024,
+    "h": 1024
+  },
+  {
+    "file": "receipts.jpg",
+    "title": "Receipts",
+    "w": 1376,
+    "h": 768
+  },
+  {
+    "file": "robinhood-hq.jpg",
+    "title": "Robinhood Hq",
+    "w": 1376,
+    "h": 768
+  },
+  {
+    "file": "the-burn.jpg",
+    "title": "The Burn",
+    "w": 1376,
+    "h": 768
+  },
+  {
+    "file": "the-no.jpg",
+    "title": "The No",
+    "w": 1376,
+    "h": 768
+  },
+  {
+    "file": "three-pools.jpg",
+    "title": "Three Pools",
+    "w": 1376,
+    "h": 768
   }
 ];
