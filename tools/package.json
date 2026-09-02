@@ -1,0 +1,14 @@
+{
+  "name": "kevin-art-tools",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic generator for every Kevin brand asset.",
+  "scripts": {
+    "art": "node gen-art.mjs",
+    "video": "node gen-video.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.56.1"
+  }
+}
