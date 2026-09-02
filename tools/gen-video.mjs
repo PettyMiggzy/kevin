@@ -91,7 +91,7 @@ async function buildPage(kevinSvg, wordmarkSvg) {
   <div class="type" id="l1">TOLD NO.</div>
   <div class="type" id="l2">STAYED ANYWAY.</div>
   <div class="type" id="pools">WETH 46 · KEK 36 · GME 18</div>
-  <div class="type" id="site">PETTYKEV.FUN</div>
+  <div class="type" id="site">IAMKEVIN.LOL</div>
   <div class="layer" id="mark">${wordmarkSvg}</div>
   <div class="layer" id="dialog">
     <div class="win">

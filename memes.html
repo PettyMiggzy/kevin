@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KEVIN — Memes</title>
+<meta name="description" content="Kevin memes. Take them, caption them, post them. No attribution, no permission, no asking.">
+<link rel="icon" href="assets/art/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/png/favicon-180.png">
+<meta property="og:title" content="KEVIN — Memes">
+<meta property="og:description" content="Take them. Caption them. Post them.">
+<meta property="og:image" content="https://iamkevin.lol/assets/png/og-1200x630.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#ffe500">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap nav__inner">
+    <a class="nav__brand" href="index.html">
+      <img src="assets/art/logo.svg" alt="" width="46" height="46">
+      <span>KEVIN</span>
+    </a>
+    <div class="nav__links">
+      <a href="index.html#the-no">The No</a>
+      <a href="index.html#chain">The Chain</a>
+      <a href="index.html#burn">The Burn</a>
+      <a href="index.html#auction">Auction</a>
+      <a href="memes.html">Memes</a>
+      <a href="index.html#stickers">Stickers</a>
+    </div>
+    <a class="btn btn--sm" data-link="launchpad" href="https://kekfun.xyz" target="_blank" rel="noopener">Kekfun ↗</a>
+  </div>
+</nav>
+
+<header class="section" style="padding-bottom:0">
+  <div class="wrap">
+    <p class="eyebrow">The armoury</p>
+    <h1 style="font-size:clamp(44px,9vw,104px)">Take them.<br><span style="color:var(--red);-webkit-text-stroke:3px var(--ink)">Post them.</span></h1>
+    <p class="lead">
+      Every image on this page is free forever. No attribution, no permission,
+      no asking. Caption one below and it downloads straight to your phone —
+      then it's yours, and what you do with it is between you and whoever you're
+      being petty at.
+    </p>
+  </div>
+</header>
+
+<!-- ====================== CAPTION STUDIO ====================== -->
+<section class="section" id="studio">
+  <div class="wrap">
+    <h2>Make one.</h2>
+    <p class="lead" style="margin-bottom:28px">
+      Pick a picture, type your grudge, hit download. Everything happens in your
+      browser — nothing you type here is sent anywhere, because there is nowhere
+      for it to go.
+    </p>
+
+    <div class="studio">
+      <div class="studio__stage">
+        <canvas id="canvas" width="1600" height="900" aria-label="Meme preview"></canvas>
+        <p class="studio__empty" id="studio-empty">
+          No art loaded yet. Drop images into <code>assets/memes/</code> and run
+          <code>node tools/index-memes.mjs</code>.
+        </p>
+      </div>
+
+      <div class="studio__panel">
+        <label class="field">
+          <span>Top line</span>
+          <input id="top-text" type="text" maxlength="60" placeholder="HE SAID IT WAS GOING TO ZERO">
+        </label>
+        <label class="field">
+          <span>Bottom line</span>
+          <input id="bottom-text" type="text" maxlength="60" placeholder="MARCH. I HAVE THE SCREENSHOT.">
+        </label>
+
+        <label class="field">
+          <span>Picture</span>
+          <select id="pick"></select>
+        </label>
+
+        <label class="field field--row">
+          <input id="use-own" type="file" accept="image/*">
+          <span class="field__hint">…or use your own image</span>
+        </label>
+
+        <div class="studio__actions">
+          <button class="btn" id="download">Download</button>
+          <button class="btn btn--ghost btn--sm" id="copy">Copy image</button>
+          <button class="btn btn--ghost btn--sm" id="clear">Clear text</button>
+        </div>
+        <p class="studio__note" id="studio-note"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== GALLERY ====================== -->
+<section class="section section--ink" id="gallery">
+  <div class="wrap">
+    <h2>The wall.</h2>
+    <p class="lead">Click any one to load it into the studio. Long-press or right-click to save it as-is.</p>
+    <div class="memes" id="meme-grid" style="margin-top:34px"></div>
+    <p id="meme-empty" class="lead" style="display:none;opacity:.7">
+      Nothing here yet.
+    </p>
+  </div>
+</section>
+
+<section class="section section--cream">
+  <div class="wrap">
+    <h2>Rules of engagement</h2>
+    <ol class="rules" style="margin-top:30px">
+      <li><b>Be petty in public.</b> Pettiness in private is just a bad mood.</li>
+      <li><b>Never punch down.</b> Institutions, exchanges, market makers and your own past self. Never somebody's kid, somebody's job, or somebody's bag size.</li>
+      <li><b>Real receipts only.</b> Faking one is the single unforgivable sin in a religion built on receipts.</li>
+      <li><b>No price talk.</b> Kevin exists. The chart is a rumour about him.</li>
+    </ol>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer__top">
+      <div style="display:flex;align-items:center;gap:16px">
+        <img src="assets/art/logo.svg" alt="" width="72" height="72" style="border:4px solid var(--void);border-radius:50%">
+        <div>
+          <div style="font-family:var(--display);font-size:34px;line-height:1">KEVIN</div>
+          <div style="font-size:13px;letter-spacing:.14em;text-transform:uppercase;opacity:.7">Told no. Stayed anyway.</div>
+        </div>
+      </div>
+      <div class="footer__links" id="footer-links"></div>
+    </div>
+    <p class="footer__note">
+      <strong>Kevin is a meme coin.</strong> No utility, no yield, no roadmap, and
+      no promise it will ever be worth anything. Nothing here is financial advice.
+      Kevin is an original character and is not affiliated with, endorsed by, or
+      derived from any existing game, franchise or company. Art on this page is
+      released for any use — the brands, logos and people you choose to point it
+      at are your responsibility, not ours.
+    </p>
+  </div>
+</footer>
+
+<script src="js/config.js"></script>
+<script src="js/memes-data.js"></script>
+<script src="js/memes.js"></script>
+</body>
+</html>

@@ -37,10 +37,42 @@ const S = 12; // outline weight at the 512 viewBox
  * than "generated". A lighter second pass over the outline finishes it, like
  * somebody went round twice to make sure.
  */
-function inked(pts, { fill, seed = 1, width = S, smooth = true, secondPass = true } = {}) {
+let clipId = 0;
+
+/** Darken a hex colour toward black by `amount` (0..1). */
+function darken(hex, amount) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => Math.round(v * (1 - amount)));
+  return `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * Cel shadow: the same silhouette, nudged down-right and clipped back to the
+ * shape, so a hard-edged crescent of shade sits along the bottom-right. One
+ * light source, no gradients — the way a cartoon is painted, not the way a
+ * renderer does it.
+ */
+function celShade(pts, d, fill, seed) {
+  const id = `kc${clipId++}`;
+  const base = d(jitter(pts, 5.2, seed * 7 + 1));
+  // Fill the whole shape with shadow, then lay the base colour back over it
+  // offset up-left. What survives is a hard crescent along the bottom-right —
+  // one light source, top-left, exactly like a painted cel.
+  const lit = pts.map(([x, y]) => [x - 30, y - 38]);
+  return (
+    `<clipPath id="${id}"><path d="${base}"/></clipPath>` +
+    `<g clip-path="url(#${id})">` +
+    path(base, { fill: darken(fill, 0.2) }) +
+    path(d(jitter(lit, 4, seed * 17 + 9)), { fill }) +
+    `</g>`
+  );
+}
+
+function inked(pts, { fill, seed = 1, width = S, smooth = true, secondPass = true, shade = false } = {}) {
   const d = smooth ? smoothPath : polyPath;
   const out = [
     path(d(jitter(pts, 5.2, seed * 7 + 1)), { fill }),
+    shade ? celShade(pts, d, fill, seed) : '',
     path(d(jitter(pts, 2.4, seed * 13 + 5)), { fill: 'none', stroke: C.ink, width }),
   ];
   if (secondPass) {
@@ -318,6 +350,17 @@ function prop(name) {
         inked(blobEllipse(322, 350, 25, 21, { steps: 10, wobble: 0.07, seed: 75 }), { fill: C.red, seed: 75 }) +
         inked(blobEllipse(186, 352, 23, 19, { steps: 10, wobble: 0.07, seed: 76 }), { fill: C.red, seed: 76 })
       );
+    case 'cap':
+      // Sits on the crown, brim out to the right. Small — a big cap turns him
+      // into a different character, and he is touchy about that.
+      return (
+        inked([[146, 92], [168, 44], [240, 20], [318, 34], [352, 78], [356, 100], [250, 88], [160, 100]], {
+          fill: C.red,
+          seed: 81,
+        }) +
+        inked([[336, 78], [432, 92], [446, 118], [330, 108]], { fill: C.redDark, seed: 82, smooth: false }) +
+        inked(blobEllipse(244, 24, 17, 11, { steps: 10, wobble: 0.1, seed: 83 }), { fill: C.redDark, seed: 83 })
+      );
     case 'coffee':
       return (
         path(polyPath([[360, 336], [420, 336], [410, 404], [370, 404]]), { fill: C.white, stroke: C.ink, width: S }) +
@@ -354,6 +397,7 @@ function kevinLayers({
   eyes: eyeMood = 'normal',
   mouth: mouthKind = 'tri',
   props = [],
+  shade = false,
   background = C.void,
   caption = null,
   captionColor = C.ink,
@@ -368,14 +412,14 @@ function kevinLayers({
     background ? `<rect x="-8" y="-8" width="528" height="528" fill="${background}"/>` : '',
     group('k-behind', behind.map(prop).join('')),
     group('k-legs', legs()),
-    group('k-body', inked(bodyPts(), { fill: C.red, seed: 3 })),
+    group('k-body', inked(bodyPts(), { fill: C.red, seed: 3, shade })),
     // the loose mitt only shows when the arms aren't folded over it
     props.includes('arms') ? '' : group('k-hand', inked(handPts(), { fill: C.red, seed: 4, smooth: false })),
     group(
       'k-head',
-      group('k-skull', inked(headPts(), { fill: C.red, seed: 5 })) +
-        group('k-face', inked(facePts(), { fill: C.cream, seed: 6 })) +
-        group('k-hair', inked(hairPts(), { fill: C.red, seed: 7 })) +
+      group('k-skull', inked(headPts(), { fill: C.red, seed: 5, shade })) +
+        group('k-face', inked(facePts(), { fill: C.cream, seed: 6, shade })) +
+        group('k-hair', inked(hairPts(), { fill: C.red, seed: 7, shade })) +
         group('k-eyes', eyes(eyeMood)) +
         group('k-nose', nose()) +
         group('k-mouth', mouth(mouthKind))

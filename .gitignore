@@ -4,3 +4,7 @@ node_modules/
 
 # scratch render/QA scripts, kept out of the repo
 tools/_*.mjs
+
+# Venice API key — never commit this
+tools/.venice.key
+.venice.key

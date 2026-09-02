@@ -94,10 +94,10 @@ export function banner() {
       ink: C.ink,
       seed: 8,
     }).svg,
-    strokeText('WETH / KEK / GME - PETTYKEV.FUN', {
+    strokeText('WETH / KEK / GME - IAMKEVIN.LOL', {
       x: 74,
       y: 372,
-      size: fitSize('WETH / KEK / GME - PETTYKEV.FUN', 700, { max: 30 }),
+      size: fitSize('WETH / KEK / GME - IAMKEVIN.LOL', 700, { max: 30 }),
       fill: C.ink,
       ink: C.ink,
       weight: 0.16,
@@ -118,7 +118,7 @@ export function ogCard() {
     strokeText('KEVIN', { x: 70, y: 96, size: 150, fill: C.red, ink: C.ink, seed: 3 }).svg,
     strokeText('TOLD NO.', { x: 74, y: 286, size: fitSize('TOLD NO.', 600, { max: 66 }), fill: C.white, ink: C.ink, seed: 6 }).svg,
     strokeText('STAYED ANYWAY.', { x: 74, y: 386, size: fitSize('STAYED ANYWAY.', 600, { max: 66 }), fill: C.white, ink: C.ink, seed: 7 }).svg,
-    strokeText('PETTYKEV.FUN', { x: 74, y: 512, size: 40, fill: C.ink, ink: C.ink, weight: 0.16, seed: 9 }).svg,
+    strokeText('IAMKEVIN.LOL', { x: 74, y: 512, size: 40, fill: C.ink, ink: C.ink, weight: 0.16, seed: 9 }).svg,
   ].join('');
   return svg(w, h, body, 'Kevin');
 }

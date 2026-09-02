@@ -11,7 +11,7 @@ The launcher's **IMAGE URL** field wants a publicly reachable square PNG. Once
 this branch is merged and Pages is live, use:
 
 ```
-https://pettykev.fun/assets/png/logo-512.png
+https://iamkevin.lol/assets/png/logo-512.png
 ```
 
 Before DNS resolves, this works immediately off GitHub:
@@ -27,7 +27,7 @@ token list. `logo-1024.png` is there if anything wants larger.
 
 1. Merge this branch to the default branch.
 2. Settings → Pages → **Deploy from a branch**, branch = default, folder = `/`.
-3. `CNAME` is already committed with `pettykev.fun`, so add the DNS records at
+3. `CNAME` is already committed with `iamkevin.lol`, so add the DNS records at
    your registrar:
    - `A` records for the apex → `185.199.108.153`, `185.199.109.153`,
      `185.199.110.153`, `185.199.111.153`
