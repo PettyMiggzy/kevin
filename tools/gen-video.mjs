@@ -299,6 +299,12 @@ async function main() {
     '-c:v', 'libx264', '-preset', 'slow', '-crf', '20', '-pix_fmt', 'yuv420p',
     '-movflags', '+faststart', mp4]);
 
+  // WebM alongside the MP4: Chromium builds without proprietary codecs (and
+  // some embedded webviews) can't decode H.264, and the site offers both.
+  await run(FFMPEG, ['-y', '-framerate', String(FPS), '-i', join(TMP, 'spot_%04d.png'),
+    '-c:v', 'libvpx-vp9', '-crf', '32', '-b:v', '0', '-row-mt', '1', '-an',
+    join(OUT, 'kevin-spot.webm')]);
+
   const loopMp4 = join(OUT, 'kevin-loop.mp4');
   await run(FFMPEG, ['-y', '-framerate', String(FPS), '-i', join(TMP, 'loop_%04d.png'),
     '-c:v', 'libx264', '-preset', 'slow', '-crf', '20', '-pix_fmt', 'yuv420p',

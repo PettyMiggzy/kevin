@@ -29,6 +29,35 @@ export const C = {
 
 const S = 12; // outline weight at the 512 viewBox
 
+/**
+ * Ink a shape the way a kid with a mouse does it: lay the colour down first,
+ * then go round the edge separately. The two never quite line up — the fill
+ * spills over the line here and leaves a sliver of white there — and that
+ * misregistration is most of what your eye reads as "drawn by hand" rather
+ * than "generated". A lighter second pass over the outline finishes it, like
+ * somebody went round twice to make sure.
+ */
+function inked(pts, { fill, seed = 1, width = S, smooth = true, secondPass = true } = {}) {
+  const d = smooth ? smoothPath : polyPath;
+  const out = [
+    path(d(jitter(pts, 5.2, seed * 7 + 1)), { fill }),
+    path(d(jitter(pts, 2.4, seed * 13 + 5)), { fill: 'none', stroke: C.ink, width }),
+  ];
+  if (secondPass) {
+    out.push(
+      path(d(jitter(pts, 3.6, seed * 29 + 3)), {
+        fill: 'none',
+        stroke: C.ink,
+        width: width * 0.5,
+        extra: 'opacity=".5"',
+      })
+    );
+  }
+  return out.join('');
+}
+
+const group = (cls, content) => (content ? `<g class="${cls}">${content}</g>` : '');
+
 // ---------------------------------------------------------------------------
 // silhouette pieces
 // ---------------------------------------------------------------------------
@@ -228,15 +257,17 @@ function mouth(kind) {
 // ---------------------------------------------------------------------------
 
 function legs() {
-  const leg = (x, seed) =>
-    path(polyPath(jitter([[x, 392], [x + 4, 452]], 3, seed), false), { fill: 'none', stroke: C.ink, width: 26 }) +
-    path(polyPath(jitter([[x, 392], [x + 4, 452]], 3, seed), false), { fill: 'none', stroke: C.red, width: 14 });
+  // Two straight lines. No knees. Never any knees.
+  const leg = (x, seed) => {
+    const a = jitter([[x, 392], [x + 4, 452]], 3, seed);
+    const b = jitter([[x, 392], [x + 4, 452]], 4, seed + 11);
+    return (
+      path(polyPath(a, false), { fill: 'none', stroke: C.ink, width: 26 }) +
+      path(polyPath(b, false), { fill: 'none', stroke: C.red, width: 13 })
+    );
+  };
   const foot = (x, seed) =>
-    path(smoothPath(jitter(blobEllipse(x, 460, 30, 16, { steps: 10, wobble: 0.06, seed }), 3, seed)), {
-      fill: C.red,
-      stroke: C.ink,
-      width: S,
-    });
+    inked(blobEllipse(x, 460, 30, 16, { steps: 10, wobble: 0.07, seed }), { fill: C.red, seed, secondPass: false });
   return leg(244, 81) + leg(288, 83) + foot(238, 85) + foot(294, 87);
 }
 
@@ -279,12 +310,13 @@ function prop(name) {
         path(smoothPath(blobEllipse(470, 46, 13, 11, { steps: 8, wobble: 0.05, seed: 64 })), { fill: C.white, stroke: C.ink, width: 7 })
       );
     case 'arms':
-      // crossed. he has been standing like this since March.
+      // Crossed. He has been standing like this since March. Two clean bars
+      // and two mitts — any more geometry and it reads as a tangle.
       return (
-        path(polyPath(jitter([[196, 330], [318, 372], [312, 396], [190, 354]], 3, 71)), { fill: C.red, stroke: C.ink, width: S }) +
-        path(polyPath(jitter([[194, 372], [316, 330], [322, 354], [200, 396]], 3, 73)), { fill: C.red, stroke: C.ink, width: S }) +
-        path(smoothPath(jitter(blobEllipse(324, 342, 26, 22, { steps: 10, wobble: 0.06, seed: 75 }), 3, 3)), { fill: C.red, stroke: C.ink, width: S }) +
-        path(smoothPath(jitter(blobEllipse(188, 344, 24, 20, { steps: 10, wobble: 0.06, seed: 76 }), 3, 4)), { fill: C.red, stroke: C.ink, width: S })
+        inked([[192, 336], [320, 366], [316, 390], [188, 360]], { fill: C.red, seed: 71, smooth: false }) +
+        inked([[188, 378], [316, 334], [324, 356], [196, 400]], { fill: C.red, seed: 73, smooth: false }) +
+        inked(blobEllipse(322, 350, 25, 21, { steps: 10, wobble: 0.07, seed: 75 }), { fill: C.red, seed: 75 }) +
+        inked(blobEllipse(186, 352, 23, 19, { steps: 10, wobble: 0.07, seed: 76 }), { fill: C.red, seed: 76 })
       );
     case 'coffee':
       return (
@@ -330,19 +362,25 @@ function kevinLayers({
   const behind = props.filter((p) => ['brain', 'diamond'].includes(p));
   const front = props.filter((p) => !behind.includes(p));
 
+  // Named groups so an animator can move the parts independently — the head
+  // bobs, the hair lags behind it, the mitt waves, the eyes dart.
   const layers = [
     background ? `<rect x="-8" y="-8" width="528" height="528" fill="${background}"/>` : '',
-    behind.map(prop).join(''),
-    legs(),
-    path(smoothPath(bodyPts()), { fill: C.red, stroke: C.ink, width: S }),
-    path(polyPath(handPts()), { fill: C.red, stroke: C.ink, width: S }),
-    path(smoothPath(headPts()), { fill: C.red, stroke: C.ink, width: S }),
-    path(smoothPath(facePts()), { fill: C.cream, stroke: C.ink, width: S }),
-    path(smoothPath(hairPts()), { fill: C.red, stroke: C.ink, width: S }),
-    eyes(eyeMood),
-    nose(),
-    mouth(mouthKind),
-    front.map(prop).join(''),
+    group('k-behind', behind.map(prop).join('')),
+    group('k-legs', legs()),
+    group('k-body', inked(bodyPts(), { fill: C.red, seed: 3 })),
+    // the loose mitt only shows when the arms aren't folded over it
+    props.includes('arms') ? '' : group('k-hand', inked(handPts(), { fill: C.red, seed: 4, smooth: false })),
+    group(
+      'k-head',
+      group('k-skull', inked(headPts(), { fill: C.red, seed: 5 })) +
+        group('k-face', inked(facePts(), { fill: C.cream, seed: 6 })) +
+        group('k-hair', inked(hairPts(), { fill: C.red, seed: 7 })) +
+        group('k-eyes', eyes(eyeMood)) +
+        group('k-nose', nose()) +
+        group('k-mouth', mouth(mouthKind))
+    ),
+    group('k-props', front.map(prop).join('')),
     caption
       ? strokeText(caption, {
           x: 256,
@@ -359,18 +397,44 @@ function kevinLayers({
   return layers.filter(Boolean).join('\n');
 }
 
+/**
+ * Fractal-noise displacement over every edge at once. Vector paths are too
+ * even to read as hand-drawn no matter how much you jitter the control
+ * points — this puts the waver *between* the points, which is where a real
+ * unsteady hand puts it.
+ */
+let roughId = 0;
+function roughFilter(id, { scale = 5, frequency = 0.019, seed = 4 } = {}) {
+  return (
+    `<filter id="${id}" x="-12%" y="-12%" width="124%" height="124%" filterUnits="objectBoundingBox">` +
+    `<feTurbulence type="fractalNoise" baseFrequency="${frequency}" numOctaves="3" seed="${seed}" result="noise"/>` +
+    `<feDisplacementMap in="SourceGraphic" in2="noise" scale="${scale}" xChannelSelector="R" yChannelSelector="G"/>` +
+    `</filter>`
+  );
+}
+
 /** Kevin as a standalone SVG document. */
 export function kevin(opts = {}) {
   const size = opts.size ?? 512;
+  const rough = opts.rough !== false;
+  const id = `kv-rough-${roughId++}`;
+  const body = kevinLayers(opts);
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 512 512">`,
     `<title>Kevin</title>`,
-    kevinLayers(opts),
+    rough ? `<defs>${roughFilter(id, opts.roughness || {})}</defs>` : '',
+    rough ? `<g filter="url(#${id})">${body}</g>` : body,
     `</svg>`,
   ].join('\n');
 }
 
 /** Kevin as a nestable <g>, for banners, coins and composites. */
 export function kevinGroup(opts = {}, { x = 0, y = 0, scale = 1 } = {}) {
-  return `<g transform="translate(${x},${y}) scale(${scale})">${kevinLayers(opts)}</g>`;
+  const rough = opts.rough !== false;
+  const id = `kv-rough-${roughId++}`;
+  const body = kevinLayers(opts);
+  const inner = rough
+    ? `<defs>${roughFilter(id, opts.roughness || {})}</defs><g filter="url(#${id})">${body}</g>`
+    : body;
+  return `<g transform="translate(${x},${y}) scale(${scale})">${inner}</g>`;
 }

@@ -11,6 +11,8 @@ licensing questions: the character is built from vector primitives in
 `tools/`, so any mood, prop or caption is a few lines away and re-running the
 generator produces byte-identical output.
 
+![The Kevin art system](docs/preview.png)
+
 - **Site** → [pettykev.fun](https://pettykev.fun)
 - **Lore** → [`docs/LORE.md`](docs/LORE.md) — read this before writing a single word of copy
 - **Brand rules** → [`docs/BRAND.md`](docs/BRAND.md)
