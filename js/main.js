@@ -133,6 +133,27 @@
       .join('');
   }
 
+  // --- animated stickers --------------------------------------------------
+  // The webm is the deliverable; it autoplays inline as its own preview.
+  var anim = $('#animated-grid');
+  if (anim && K.animated) {
+    anim.innerHTML = K.animated
+      .map(function (a) {
+        var base = 'assets/stickers/animated/' + a.slug;
+        return (
+          '<div class="sticker sticker--anim">' +
+          '<video src="' + base + '.webm" autoplay loop muted playsinline ' +
+          'aria-label="' + a.name + ' Kevin, animated"></video>' +
+          '<b>' + a.name + '</b>' +
+          '<span class="sticker__dl">' +
+          '<a href="' + base + '.webm" download>webm</a>' +
+          '<a href="' + base + '.gif" download>gif</a>' +
+          '</span></div>'
+        );
+      })
+      .join('');
+  }
+
   // --- footer links -------------------------------------------------------
   var footer = $('#footer-links');
   if (footer) {

@@ -110,6 +110,19 @@ window.KEVIN = {
     'HE REMEMBERS WHAT YOU SAID IN MARCH',
   ],
 
+  // Animated stickers. .webm is the Telegram video sticker (VP9 + alpha,
+  // under 256KB); .gif is the same loop on the void, for X and Discord.
+  animated: [
+    { slug: 'petty', name: 'Petty' },
+    { slug: 'noted', name: 'Noted' },
+    { slug: 'kek', name: 'Kek' },
+    { slug: 'laser', name: 'Send It' },
+    { slug: 'rekt', name: 'Rekt' },
+    { slug: 'wen', name: 'Wen' },
+    { slug: 'gm', name: 'GM' },
+    { slug: 'cope', name: 'Cope' },
+  ],
+
   // The sticker pack. Files live in assets/stickers/.
   stickers: [
     { slug: 'petty', name: 'Petty' },
