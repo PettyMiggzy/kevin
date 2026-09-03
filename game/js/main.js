@@ -20,7 +20,8 @@ import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
 import { load, save, settle, workout, projectedLoss, DECAY_PER_DAY, DAILY_GOAL } from './save.js';
 import { buildCrewBody, applyCrewMuscle } from './voxel.js';
 import { Set as RepSet, REPS_PER_SET, rankOf } from './reps.js';
-import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, mirrorPanel, stripLight } from './gear.js';
+import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, mirrorPanel, stripLight,
+  skyTexture, concreteTexture, facadeTexture, bannerTexture, billboardTexture, boardTexture } from './gear.js';
 import { play, setMuted, isMuted } from './audio.js';
 
 const $ = (s) => document.querySelector(s);
@@ -113,7 +114,7 @@ function buildRoom(scene) {
   // Rubber tile rather than a flat fill. A painted floor does more for "this is
   // a gym" than another rack would, for one texture instead of a draw call.
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(ROOM.w + 14, ROOM.d + 14),
+    new THREE.PlaneGeometry(ROOM.w, ROOM.d),
     flat('#FFFFFF', floorTexture())
   );
   floor.rotation.x = -Math.PI / 2;
@@ -184,6 +185,90 @@ function buildRoom(scene) {
     { bg: '#FFE500', fg: '#0B0B0B', size: 74 });
 
   return { floor };
+}
+
+/**
+ * Outside: the forecourt, the front of the unit, and the signage.
+ *
+ * The gym was a sealed box you woke up inside, which gave it no sense of place
+ * and no arrival. Now you start on the concrete, read the sign, and walk in
+ * through the roller door.
+ */
+function buildExterior(scene) {
+  const flat = (color, map = null) => {
+    const m = toon(color, map ? { map } : {});
+    m.userData.outlineParameters = { visible: false };
+    return m;
+  };
+  const solid = (w, h, d, color, x, y, z, map = null) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), flat(color, map));
+    m.position.set(x, y, z);
+    scene.add(m);
+    return m;
+  };
+
+  // Sky. A box around everything rather than a dome — cheaper, and at this
+  // scale nobody can tell.
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(90, 24, 16),
+    new THREE.MeshBasicMaterial({ map: skyTexture(), side: THREE.BackSide, fog: false })
+  );
+  sky.material.userData = { outlineParameters: { visible: false } };
+  scene.add(sky);
+
+  // The yard.
+  const yard = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), flat('#FFFFFF', concreteTexture()));
+  yard.rotation.x = -Math.PI / 2;
+  yard.position.z = 20;
+  scene.add(yard);
+
+  const FZ = ROOM.d / 2;             // the front plane of the building
+  const LINTEL = 3.3;                // top of the doorway
+  const EAVES = ROOM.h;
+
+  // Front wall, in two pieces with the doorway between them.
+  const leftW = (ROOM.w / 2) + DOOR.x0;
+  const rightW = (ROOM.w / 2) - DOOR.x1;
+  solid(leftW, EAVES, 0.5, '#C9C4BA', DOOR.x0 - leftW / 2, EAVES / 2, FZ);
+  solid(rightW, EAVES, 0.5, '#C9C4BA', DOOR.x1 + rightW / 2, EAVES / 2, FZ);
+  solid(DOOR.x1 - DOOR.x0, EAVES - LINTEL, 0.5, '#C9C4BA', 0, LINTEL + (EAVES - LINTEL) / 2, FZ);
+  blockers.push(
+    { x0: -ROOM.w / 2 - 0.4, x1: DOOR.x0, z0: FZ - 0.4, z1: FZ + 0.4 },
+    { x0: DOOR.x1, x1: ROOM.w / 2 + 0.4, z0: FZ - 0.4, z1: FZ + 0.4 }
+  );
+  // The roller shutter, rolled up above the door.
+  solid(DOOR.x1 - DOOR.x0 + 0.3, 0.42, 0.42, '#8A8F98', 0, LINTEL + 0.24, FZ + 0.2);
+
+  // The parapet the sign is painted on, standing proud of the roof.
+  const facade = solid(ROOM.w + 2.2, 3.0, 0.36, '#FFFFFF', 0, EAVES + 1.5, FZ + 0.12, facadeTexture());
+  facade.material.map.center.set(0.5, 0.5);
+
+  // Banner strung under it.
+  solid(ROOM.w - 2.4, 1.0, 0.1, '#FFFFFF', 0, EAVES - 0.05, FZ + 0.34, bannerTexture());
+
+  // Billboard on a post, off to the right where the yard is empty.
+  solid(0.34, 5.4, 0.34, '#5A5A62', 7.2, 2.7, 15.6);
+  solid(0.34, 5.4, 0.34, '#5A5A62', 10.4, 2.7, 15.6);
+  solid(4.6, 3.1, 0.24, '#FFFFFF', 8.8, 5.6, 15.6, billboardTexture());
+
+  // Hand-painted board by the door.
+  solid(0.22, 2.4, 0.22, '#6B5B41', -6.2, 1.2, 10.2);
+  solid(3.0, 2.25, 0.16, '#FFFFFF', -6.2, 2.9, 10.2, boardTexture());
+
+  // A kerb and a strip of grass, so the concrete has an edge instead of
+  // running to the horizon.
+  solid(60, 0.28, 0.6, '#B4B0A8', 0, 0.14, YARD.z + 1.2);
+  const grass = new THREE.Mesh(new THREE.PlaneGeometry(60, 26), flat('#4E8A3C'));
+  grass.rotation.x = -Math.PI / 2;
+  grass.position.set(0, 0.02, YARD.z + 14);
+  scene.add(grass);
+  blockers.push({ x0: -30, x1: 30, z0: YARD.z + 0.9, z1: YARD.z + 1.5 });
+
+  // Side walls of the unit, seen from outside.
+  solid(0.5, EAVES, 3.0, '#BDB8AE', -ROOM.w / 2, EAVES / 2, FZ + 1.4);
+  solid(0.5, EAVES, 3.0, '#BDB8AE', ROOM.w / 2, EAVES / 2, FZ + 1.4);
+
+  return { sky };
 }
 
 // --- stations ---------------------------------------------------------------
@@ -260,6 +345,15 @@ const SCENERY = [
   ['bucket', { x: -7.6, z: -6.0, width: 0.6, rotY: -0.3, solid: false }],
   ['speaker', { x: -8.6, z: -6.2, width: 0.7, rotY: 0.7 }],
   ['gym-clock', { x: -8.85, z: -4.0, width: 1.0, rotY: Math.PI / 2, y: 3.0, solid: false }],
+
+  // --- out on the forecourt ------------------------------------------------
+  ['plate-tree', { x: -7.4, z: 9.6, width: 1.1, rotY: 0.3 }],
+  ['dumbbell', { x: 4.6, z: 10.4, width: 0.6, rotY: 0.9, solid: false }],
+  ['kettlebell', { x: 5.4, z: 11.0, width: 0.5, rotY: -0.4, solid: false }],
+  ['protein-tub', { x: 3.4, z: 12.2, width: 0.62, rotY: 0.2, solid: false }],
+  ['medicine-ball', { x: -3.8, z: 11.4, width: 0.5, rotY: 0, solid: false }],
+  ['bucket', { x: 7.2, z: 8.2, width: 0.62, rotY: 0.6, solid: false }],
+  ['towel-bin', { x: -5.2, z: 8.4, width: 0.9, rotY: -0.4 }],
 ];
 
 // --- Kevin ------------------------------------------------------------------
@@ -546,6 +640,11 @@ let renderer, effect, scene, camera, kevin, clock;
 let state = load();
 const props = new Map();
 const solids = [];                    // {x,z,r} circles the player cannot walk into
+// Walls are rectangles. Approximating the front of a building with circles
+// leaves gaps you can squeeze through and a doorway you cannot.
+const blockers = [];                  // {x0,x1,z0,z1}
+const DOOR = { x0: -2.1, x1: 2.1 };   // the way in, in world x
+const YARD = { z: 21, x: 13 };        // how far the forecourt runs
 
 const input = { f: 0, s: 0, act: false };
 let set = null;                       // the RepSet in progress, or null
@@ -570,12 +669,12 @@ async function init() {
     return;
   }
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));   // above 2 costs a lot and shows nothing
-  renderer.setClearColor('#FFE500');
+  renderer.setClearColor('#8FC8EA');
 
   effect = new OutlineEffect(renderer, { defaultThickness: 0.007, defaultColor: [0, 0, 0], defaultAlpha: 1 });
 
   scene = new THREE.Scene();
-  scene.fog = new THREE.Fog('#FFE500', 26, 46);
+  scene.fog = new THREE.Fog('#AFD8EF', 44, 88);
   camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 120);
   clock = new THREE.Clock();
 
@@ -587,12 +686,13 @@ async function init() {
   scene.add(key);
 
   buildRoom(scene);
+  buildExterior(scene);
 
   await loadCrew();
   kevin = makePlayer(state.crewId ?? 0);
   // Facing (Y) has to compose with lying back (X), not fight it.
   kevin.group.rotation.order = 'YXZ';
-  kevin.group.position.set(0, 0, 3.6);
+  kevin.group.position.set(0, 0, 15.5);   // on the forecourt, facing the door
   scene.add(kevin.group);
 
   // Gear rides on the body so it never drifts out of his hands.
@@ -718,13 +818,16 @@ function frame() {
     camera.position.lerp(tmp, 1 - Math.pow(0.004, dt));
     aim.set(set.station.x, lookY, set.station.z);
   } else {
+    // Outside, pull back and up: there is a building to read, and the same
+    // shot that frames a room nicely puts your nose against its front wall.
+    const out = clamp((kevin.group.position.z - ROOM.d / 2) / 6, 0, 1);
     tmp.set(
       kevin.group.position.x,
-      kevin.group.position.y + 3.4,
-      kevin.group.position.z + 5.6
+      kevin.group.position.y + 3.4 + out * 2.6,
+      kevin.group.position.z + 5.6 + out * 5.2
     );
     camera.position.lerp(tmp, 1 - Math.pow(0.0015, dt));
-    aim.set(kevin.group.position.x, kevin.group.position.y + lookY, kevin.group.position.z);
+    aim.set(kevin.group.position.x, kevin.group.position.y + lookY + out * 1.4, kevin.group.position.z);
   }
 
   // Shake is a decaying impulse rather than a duration, so a perfect rep on top
@@ -952,14 +1055,21 @@ function move(dt, now) {
     const nx = (input.s / len) * SPEED * dt;
     const nz = (-input.f / len) * SPEED * dt;
     const p = kevin.group.position;
-    const half = { x: ROOM.w / 2 - 0.7, z: ROOM.d / 2 - 0.7 };
+    // Inside, you are held by the room. Outside, by the yard.
+    const outside = p.z > ROOM.d / 2;
+    const half = outside
+      ? { x: YARD.x, z: YARD.z }
+      : { x: ROOM.w / 2 - 0.7, z: YARD.z };
 
     // Resolve each axis separately so sliding along a prop feels right rather
     // than sticking to it.
     for (const [axis, d, limit] of [['x', nx, half.x], ['z', nz, half.z]]) {
       const was = p[axis];
       p[axis] = clamp(p[axis] + d, -limit, limit);
-      if (solids.some((s) => Math.hypot(p.x - s.x, p.z - s.z) < s.r + 0.34)) p[axis] = was;
+      if (solids.some((s) => Math.hypot(p.x - s.x, p.z - s.z) < s.r + 0.34)
+        || blockers.some((b) => p.x > b.x0 - 0.3 && p.x < b.x1 + 0.3 && p.z > b.z0 - 0.3 && p.z < b.z1 + 0.3)) {
+        p[axis] = was;
+      }
     }
 
     kevin.group.rotation.y = Math.atan2(nx, nz);

@@ -138,3 +138,115 @@ export function stripLight(mat, len) {
   g.add(housing);
   return g;
 }
+
+// --- outside ----------------------------------------------------------------
+
+/** Sky: a vertical gradient with a few flat clouds. Painted, not simulated. */
+export const skyTexture = () =>
+  canvasTexture(256, 256, (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#1E7FD6');
+    g.addColorStop(0.55, '#63B4EC');
+    g.addColorStop(1, '#BFE3F7');
+    x.fillStyle = g;
+    x.fillRect(0, 0, w, h);
+    x.fillStyle = '#FFFFFF';
+    const puff = (cx, cy, r) => { x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fill(); };
+    for (const [cx, cy, r] of [[46, 54, 15], [62, 48, 20], [80, 55, 14],
+                               [170, 38, 12], [186, 33, 17], [202, 39, 11],
+                               [120, 92, 10], [134, 88, 14], [148, 93, 9]]) puff(cx, cy, r);
+  });
+
+/** Cracked concrete forecourt. */
+export const concreteTexture = () =>
+  canvasTexture(128, 128, (x, w, h) => {
+    x.fillStyle = '#9E9A92';
+    x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 700; i++) {
+      x.fillStyle = ['#AAA69E', '#928E86', '#B4B0A8'][i % 3];
+      x.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+    }
+    x.strokeStyle = '#7E7A73';
+    x.lineWidth = 2;
+    x.strokeRect(0, 0, w, h);
+    // A couple of cracks, so it reads as a yard rather than a tile.
+    x.lineWidth = 1.5;
+    x.beginPath();
+    x.moveTo(10, 0); x.lineTo(34, 42); x.lineTo(22, 78); x.lineTo(48, 128);
+    x.moveTo(96, 0); x.lineTo(84, 36); x.lineTo(104, 70);
+    x.stroke();
+  }, { repeat: [10, 10] });
+
+/**
+ * The facade sign: KEVIN'S GYM in heavy red block letters on concrete, the way
+ * it is painted straight onto the wall of a unit rather than mounted on a board.
+ */
+export const facadeTexture = () =>
+  canvasTexture(1024, 320, (x, w, h) => {
+    x.fillStyle = '#C9C4BA';
+    x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 2200; i++) {
+      x.fillStyle = i % 2 ? '#00000008' : '#FFFFFF10';
+      x.fillRect(Math.random() * w, Math.random() * h, 3, 3);
+    }
+    x.font = '700 150px ui-monospace, Menlo, monospace';
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    x.lineJoin = 'round';
+    x.lineWidth = 22;
+    x.strokeStyle = '#0B0B0B';
+    x.strokeText("KEVIN'S GYM", w / 2, h / 2);
+    x.fillStyle = '#E8232B';
+    x.fillText("KEVIN'S GYM", w / 2, h / 2);
+  });
+
+/** The banner strung under the sign. */
+export const bannerTexture = () =>
+  canvasTexture(1024, 160, (x, w, h) => {
+    x.fillStyle = '#F3E9C8';
+    x.fillRect(0, 0, w, h);
+    x.strokeStyle = '#0B0B0B';
+    x.lineWidth = 8;
+    x.strokeRect(4, 4, w - 8, h - 8);
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    x.font = '700 74px ui-monospace, Menlo, monospace';
+    x.fillStyle = '#0B0B0B';
+    x.fillText('NO PAIN, ONLY ', w / 2 - 70, h / 2);
+    const width = x.measureText('NO PAIN, ONLY ').width;
+    x.fillStyle = '#E8232B';
+    x.fillText('KEVIN!', w / 2 - 70 + width / 2 + 90, h / 2);
+  });
+
+/** A roadside billboard. Dark, so it reads against the sky. */
+export const billboardTexture = () =>
+  canvasTexture(768, 512, (x, w, h) => {
+    x.fillStyle = '#141414';
+    x.fillRect(0, 0, w, h);
+    x.strokeStyle = '#FFC531';
+    x.lineWidth = 10;
+    x.strokeRect(10, 10, w - 20, h - 20);
+    x.textAlign = 'center';
+    x.font = '700 62px ui-monospace, Menlo, monospace';
+    x.fillStyle = '#FFC531';
+    x.fillText('TRAIN LIKE KEVIN', w / 2, 92);
+    x.fillText('OR CRY LATER', w / 2, h - 48);
+  });
+
+/** The hand-painted board by the door. */
+export const boardTexture = () =>
+  canvasTexture(512, 384, (x, w, h) => {
+    x.fillStyle = '#D9CDB4';
+    x.fillRect(0, 0, w, h);
+    x.strokeStyle = '#6B5B41';
+    x.lineWidth = 12;
+    x.strokeRect(6, 6, w - 12, h - 12);
+    x.textAlign = 'center';
+    x.font = '700 42px ui-monospace, Menlo, monospace';
+    x.fillStyle = '#0B0B0B';
+    x.fillText("WEIGHTS DON'T LIE,", w / 2, 110);
+    x.fillStyle = '#E8232B';
+    x.fillText('KEVIN', w / 2, 190);
+    x.fillStyle = '#0B0B0B';
+    x.fillText("DOESN'T EITHER", w / 2, 268);
+  });
