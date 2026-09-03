@@ -29,8 +29,13 @@ const EMOJI = {
 };
 
 const api = async (method, form) => {
-  const r = await fetch(`https://api.telegram.org/bot${TOKEN}/${method}`, { method: 'POST', body: form });
-  const j = await r.json();
+  // A POST with an empty body comes back empty through the proxy, so calls
+  // without parameters go as GET.
+  const opts = form ? { method: 'POST', body: form } : { method: 'GET' };
+  const r = await fetch(`https://api.telegram.org/bot${TOKEN}/${method}`, opts);
+  const text = await r.text();
+  if (!text) throw new Error(`${method}: empty response (HTTP ${r.status})`);
+  const j = JSON.parse(text);
   if (!j.ok) throw new Error(`${method}: ${j.description}`);
   return j.result;
 };
@@ -47,7 +52,7 @@ async function main() {
     process.exit(1);
   }
 
-  const me = await api('getMe', new FormData());
+  const me = await api('getMe');
   // Telegram requires the pack short name to end in _by_<botusername>
   const shortName = `${NAME}_by_${me.username}`;
 
