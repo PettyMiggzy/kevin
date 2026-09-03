@@ -495,8 +495,40 @@ const SPOTS = [
   { x: -5.6, z: 3.4, ry: Math.PI * 0.8, mode: 'stretch', label: 'mat' },
   { x: 2.2, z: 3.2, ry: Math.PI, mode: 'idle', label: 'floor' },
   { x: 7.2, z: -1.2, ry: -Math.PI / 2, mode: 'stretch', label: 'mirror' },
-  { x: -8.0, z: 4.6, ry: Math.PI / 2, mode: 'idle', label: 'lockers' },
+  { x: -7.0, z: 4.6, ry: Math.PI / 2, mode: 'idle', label: 'lockers' },
 ];
+
+/**
+ * Shove every spot out of whatever it is standing in.
+ *
+ * These are written by hand next to the equipment they belong to, and the
+ * equipment moves — after the room was re-laid, five of nine were inside a
+ * machine, which is exactly what "characters get stuck in the machines" looks
+ * like. Rather than re-tune the numbers every time the furniture changes,
+ * resolve them against the props once they actually exist.
+ */
+function clearSpots() {
+  for (const spot of SPOTS) {
+    for (let step = 0; step < 40 && depthAt(spot.x, spot.z) > 0; step++) {
+      let push = null;
+      let worst = 0;
+      for (const so of solids) {
+        const pen = (so.r + BODY) - Math.hypot(spot.x - so.x, spot.z - so.z);
+        if (pen > worst) { worst = pen; push = so; }
+      }
+      if (!push) break;
+      const dx = spot.x - push.x;
+      const dz = spot.z - push.z;
+      const d = Math.hypot(dx, dz) || 1;
+      spot.x += (dx / d) * (worst + 0.12);
+      spot.z += (dz / d) * (worst + 0.12);
+      // Face what pushed you out — you are meant to be using it.
+      spot.ry = Math.atan2(push.x - spot.x, push.z - spot.z);
+    }
+    spot.x = clamp(spot.x, -ROOM.w / 2 + 0.8, ROOM.w / 2 - 0.8);
+    spot.z = clamp(spot.z, -ROOM.d / 2 + 0.8, ROOM.d / 2 - 0.8);
+  }
+}
 
 /**
  * Give them somewhere to go.
@@ -556,7 +588,16 @@ function makeNpc(grid, mat, startSpot) {
       const dx = st.spot.x - body.group.position.x;
       const dz = st.spot.z - body.group.position.z;
       const d = Math.hypot(dx, dz);
+      st.walked = (st.walked || 0) + dt;
+      if (st.walked > 14) {          // something is in the way; go elsewhere
+        st.walked = 0;
+        const other = pickSpot();
+        if (other) claim(other);
+        else { st.state = 'idle'; st.timer = 2; }
+        return;
+      }
       if (d < 0.12) {
+        st.walked = 0;
         body.group.position.set(st.spot.x, 0, st.spot.z);
         body.group.rotation.y = st.spot.ry;
         st.state = 'work';
@@ -645,6 +686,32 @@ const solids = [];                    // {x,z,r} circles the player cannot walk 
 const blockers = [];                  // {x0,x1,z0,z1}
 const DOOR = { x0: -2.1, x1: 2.1 };   // the way in, in world x
 const YARD = { z: 21, x: 13 };        // how far the forecourt runs
+const BODY = 0.34;                    // how wide anybody is, for collision
+
+/**
+ * How deep into something a point is — not merely whether it is inside.
+ *
+ * A boolean test traps you: once you are inside a prop, every candidate
+ * position is also inside, both axes get rejected, and you are stuck in the
+ * machine forever. Depth lets a move be allowed whenever it makes things
+ * better, so there is always a way out of anything you end up in.
+ */
+function depthAt(x, z) {
+  let worst = 0;
+  for (const s of solids) {
+    const pen = (s.r + BODY) - Math.hypot(x - s.x, z - s.z);
+    if (pen > worst) worst = pen;
+  }
+  for (const b of blockers) {
+    if (x > b.x0 - BODY && x < b.x1 + BODY && z > b.z0 - BODY && z < b.z1 + BODY) {
+      // Shallowest way out of the box is the smallest of the four overlaps.
+      const pen = Math.min(x - (b.x0 - BODY), (b.x1 + BODY) - x,
+                           z - (b.z0 - BODY), (b.z1 + BODY) - z);
+      if (pen > worst) worst = pen;
+    }
+  }
+  return worst;
+}
 
 const input = { f: 0, s: 0, act: false };
 let set = null;                       // the RepSet in progress, or null
@@ -716,9 +783,12 @@ async function init() {
   if (CREW?.crew?.length > 1) {
     const crewMat = toon('#FFFFFF', { vertexColors: true });
     crewMat.userData.outlineParameters = { thickness: 0.010, color: [0, 0, 0], alpha: 1 };
+    // Started with no spot: props are not loaded yet, so the spots have not
+    // been resolved and seating them now would place them inside machines.
     const many = Math.min(6, CREW.crew.length - 1);
     for (let i = 0; i < many; i++) {
-      const npc = makeNpc(CREW.crew[(i + 1) % CREW.crew.length], crewMat, SPOTS[i]);
+      const npc = makeNpc(CREW.crew[(i + 1) % CREW.crew.length], crewMat, null);
+      npc.group.position.set(-6 + i * 2.4, 0, 5.4);
       scene.add(npc.group);
       npcs.push(npc);
     }
@@ -758,6 +828,7 @@ async function init() {
 
   for (const st of STATIONS) st.object = spawn(st.prop, st, st.id);
   for (const [name, opts] of SCENERY) spawn(name, opts);
+  clearSpots();
 
   // Settle the absence before the first frame, so the number in the toast is
   // the number on the bars.
@@ -1065,11 +1136,10 @@ function move(dt, now) {
     // than sticking to it.
     for (const [axis, d, limit] of [['x', nx, half.x], ['z', nz, half.z]]) {
       const was = p[axis];
+      const before = depthAt(p.x, p.z);
       p[axis] = clamp(p[axis] + d, -limit, limit);
-      if (solids.some((s) => Math.hypot(p.x - s.x, p.z - s.z) < s.r + 0.34)
-        || blockers.some((b) => p.x > b.x0 - 0.3 && p.x < b.x1 + 0.3 && p.z > b.z0 - 0.3 && p.z < b.z1 + 0.3)) {
-        p[axis] = was;
-      }
+      // Allow the move if it lands clear, or if it is digging you out.
+      if (depthAt(p.x, p.z) > 0 && depthAt(p.x, p.z) >= before) p[axis] = was;
     }
 
     kevin.group.rotation.y = Math.atan2(nx, nz);
