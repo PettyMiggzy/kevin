@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KEVIN — the storeroom terminal</title>
+<meta name="description" content="On my break I check two things. The rota and the bags. One of them is going well.">
+<link rel="icon" href="assets/png/favicon-32.png" type="image/png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="KEVIN — the storeroom terminal">
+<meta property="og:description" content="On my break I check two things. The rota and the bags. One of them is going well.">
+<meta property="og:image" content="assets/png/og-1200x630.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="assets/png/og-1200x630.png">
+<meta name="theme-color" content="#ffe500">
+<style>
+/* ==========================================================================
+   KEVIN — dos.html
+   A beige box in a storeroom. Amber phosphor. Nothing here is a metaphor.
+   Single file. No external requests. Works offline.
+   ========================================================================== */
+
+:root{
+  --void:#ffe500;
+  --void-deep:#f5c400;
+  --ink:#0b0b0b;
+  --red:#e8232b;
+  --cream:#fff6c8;
+
+  /* phosphor: amber. committed. */
+  --amber:#ffb01a;
+  --amber-hi:#ffe08a;
+  --amber-dim:#a4670a;
+  --p-red:#ff4038;
+  --p-green:#4ade7a;
+  --tube-bg:#100a03;
+
+  --cols:80;
+  --rows:25;
+  --fs:18px;
+  --lh:1.24;
+  --padx:1.8;
+  --pady:3.1;
+  --bezel:60px;
+}
+
+*{box-sizing:border-box;}
+
+html,body{height:100%;}
+body{
+  margin:0;
+  background:var(--void);
+  background-image:
+    radial-gradient(circle at 18% 12%, rgba(255,255,255,.32) 0, transparent 42%),
+    radial-gradient(circle at 84% 88%, rgba(224,180,0,.45) 0, transparent 46%);
+  color:var(--ink);
+  font-family:ui-monospace,"DejaVu Sans Mono","Liberation Mono","Cascadia Mono",Consolas,Menlo,monospace;
+  overflow-x:hidden;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:24px 16px 20px;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* --- the rig ------------------------------------------------------------ */
+.rig{
+  width:min(1100px,100%);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+
+.crt{
+  position:relative;
+  background:linear-gradient(180deg,#fff9d9 0%,var(--cream) 42%,#e7d9a2 100%);
+  border:5px solid var(--ink);
+  border-radius:22px;
+  padding:14px 14px 0;
+  box-shadow:10px 10px 0 var(--ink), 0 26px 60px rgba(0,0,0,.35);
+  max-width:100%;
+}
+/* the little feet */
+.crt::before,.crt::after{
+  content:"";position:absolute;bottom:-14px;width:56px;height:12px;
+  background:var(--ink);border-radius:0 0 6px 6px;
+}
+.crt::before{left:38px}
+.crt::after{right:38px}
+
+.tube{
+  position:relative;
+  width:max-content;
+  max-width:100%;
+  background:var(--tube-bg);
+  border:5px solid #17110a;
+  border-radius:7% / 6%;
+  padding:calc(var(--fs) * var(--pady)) calc(var(--fs) * var(--padx));
+  overflow:hidden;
+  box-shadow:
+    inset 0 0 0 2px rgba(0,0,0,.9),
+    inset 0 0 42px 14px rgba(0,0,0,.95),
+    0 0 0 3px rgba(0,0,0,.25);
+  isolation:isolate;
+}
+
+.glass{position:relative;width:max-content;}
+
+pre{
+  margin:0;
+  font-family:inherit;
+  font-size:var(--fs);
+  line-height:var(--lh);
+  font-weight:400;
+  width:calc(var(--cols) * 1ch);
+  height:calc(var(--rows) * var(--lh) * var(--fs));
+  white-space:pre;
+  letter-spacing:0;
+  font-variant-ligatures:none;
+  color:var(--amber);
+  text-shadow:0 0 1px currentColor, 0 0 .45em rgba(255,150,0,.42);
+  tab-size:8;
+}
+#screen{position:relative;z-index:2;}
+.bloom{
+  position:absolute;left:0;top:0;z-index:1;
+  filter:blur(calc(var(--fs) * .16)) saturate(1.5);
+  opacity:.6;
+  mix-blend-mode:screen;
+  pointer-events:none;
+}
+
+/* phosphor colours (VGA-ish, but the tube is amber and it shows) */
+.hi{color:var(--amber-hi);text-shadow:0 0 1px currentColor,0 0 .5em rgba(255,210,120,.6);}
+.w{color:#ffeccb;text-shadow:0 0 1px currentColor,0 0 .5em rgba(255,220,160,.5);}
+.dim{color:var(--amber-dim);text-shadow:0 0 1px currentColor,0 0 .35em rgba(180,110,0,.4);}
+.r{color:var(--p-red);text-shadow:0 0 1px currentColor,0 0 .5em rgba(255,50,40,.55);}
+.g{color:var(--p-green);text-shadow:0 0 1px currentColor,0 0 .55em rgba(60,220,120,.6);}
+.tri{display:inline-block;width:1ch;text-align:center;font-style:normal;}
+
+.cur{
+  display:inline-block;
+  width:1ch;height:.95em;
+  background:var(--amber);
+  vertical-align:-.13em;
+  box-shadow:0 0 .5em rgba(255,160,0,.8);
+  animation:blink 1.06s steps(1,end) infinite;
+}
+@keyframes blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
+
+/* --- CRT overlays ------------------------------------------------------- */
+.fx{position:absolute;inset:0;pointer-events:none;}
+.fx-scan{
+  z-index:5;
+  background:repeating-linear-gradient(
+    to bottom,
+    rgba(0,0,0,.34) 0px,
+    rgba(0,0,0,.34) 1px,
+    rgba(0,0,0,0) 2px,
+    rgba(0,0,0,0) 3px);
+  opacity:.75;
+}
+.fx-mask{
+  z-index:6;
+  background:repeating-linear-gradient(
+    to right,
+    rgba(255,140,0,.05) 0px,
+    rgba(255,140,0,.05) 1px,
+    rgba(0,0,0,.06) 2px,
+    rgba(0,0,0,.06) 3px);
+}
+.fx-vig{
+  z-index:7;
+  background:
+    radial-gradient(120% 100% at 50% 46%, rgba(0,0,0,0) 48%, rgba(0,0,0,.42) 78%, rgba(0,0,0,.86) 100%);
+}
+.fx-shine{
+  z-index:8;
+  background:
+    linear-gradient(160deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.045) 22%, rgba(255,255,255,0) 46%),
+    radial-gradient(60% 34% at 26% 12%, rgba(255,255,255,.10), rgba(255,255,255,0) 70%);
+}
+.fx-roll{
+  z-index:9;
+  background:linear-gradient(to bottom, rgba(255,190,90,0) 0%, rgba(255,190,90,.10) 45%, rgba(255,190,90,.16) 50%, rgba(255,190,90,.10) 55%, rgba(255,190,90,0) 100%);
+  height:22%;
+  top:-22%;
+  mix-blend-mode:screen;
+  animation:roll 7.4s linear infinite;
+}
+@keyframes roll{0%{transform:translateY(0)}100%{transform:translateY(560%)}}
+
+.fx-flick{z-index:10;background:rgba(255,170,40,.035);animation:flick 3.1s steps(2,end) infinite;}
+@keyframes flick{0%,92%{opacity:.25}93%{opacity:.75}94%{opacity:.15}96%{opacity:.6}100%{opacity:.25}}
+
+/* power-on smear */
+.fx-on{z-index:20;background:#fff3d0;opacity:0;transform:scaleY(.006);}
+.tube.warm .fx-on{animation:poweron .42s ease-out 1;}
+@keyframes poweron{
+  0%{opacity:1;transform:scaleY(.004) scaleX(1)}
+  38%{opacity:.9;transform:scaleY(.02) scaleX(1)}
+  100%{opacity:0;transform:scaleY(1) scaleX(1)}
+}
+
+/* --- bezel front -------------------------------------------------------- */
+.front{
+  height:var(--bezel);
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:0 6px;
+}
+.badge{
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.14em;
+  color:#6b5a2a;
+  white-space:nowrap;
+}
+.vents{
+  flex:1;
+  height:12px;
+  background:repeating-linear-gradient(to right,
+    rgba(11,11,11,.22) 0 2px, transparent 2px 7px);
+  border-radius:2px;
+  min-width:20px;
+}
+.knobs{display:flex;gap:8px;align-items:center;}
+.btn{
+  font:700 11px/1 ui-monospace,"DejaVu Sans Mono",monospace;
+  letter-spacing:.12em;
+  color:var(--ink);
+  background:linear-gradient(180deg,#fffdf0,#e8dbaa);
+  border:3px solid var(--ink);
+  border-radius:5px;
+  padding:8px 11px;
+  cursor:pointer;
+  box-shadow:0 3px 0 var(--ink);
+  transition:transform .06s linear, box-shadow .06s linear;
+}
+.btn:hover{background:linear-gradient(180deg,#fff,#f0e5bd);}
+.btn:active{transform:translateY(3px);box-shadow:0 0 0 var(--ink);}
+.btn:focus-visible{outline:3px solid var(--red);outline-offset:2px;}
+.btn[disabled]{opacity:.4;cursor:default;box-shadow:0 3px 0 var(--ink);}
+.led{
+  width:11px;height:11px;border-radius:50%;
+  background:var(--red);
+  border:2px solid var(--ink);
+  box-shadow:0 0 9px rgba(232,35,43,.9);
+  flex:0 0 auto;
+}
+
+.sig{
+  margin:22px 0 0;
+  font-size:12px;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+  opacity:.72;
+}
+.sig a{color:var(--ink);text-decoration:none;border-bottom:2px solid var(--ink);padding-bottom:1px;}
+.sig a:hover{color:var(--red);border-color:var(--red);}
+
+.probe{position:absolute;visibility:hidden;white-space:pre;font-size:100px;left:-9999px;top:0;}
+
+@media (max-width:659px){
+  body{padding:10px 6px 12px;}
+  .crt{border-radius:16px;padding:7px 7px 0;box-shadow:6px 6px 0 var(--ink),0 14px 34px rgba(0,0,0,.3);}
+  .crt::before{left:22px}
+  .crt::after{right:22px}
+  .badge{font-size:10px;letter-spacing:.1em;}
+  .btn{padding:7px 9px;font-size:10px;}
+  .front{gap:9px;padding:0 2px;}
+  .sig{margin-top:14px;font-size:11px;}
+}
+
+@media (prefers-reduced-motion: reduce){
+  .fx-roll,.fx-flick{animation:none;}
+  .fx-roll{display:none;}
+  .cur{animation:none;}
+  .tube.warm .fx-on{animation:none;}
+}
+</style>
+</head>
+<body>
+
+<div class="rig">
+  <div class="crt">
+    <div class="tube" id="tube">
+      <div class="glass">
+        <pre id="screen" aria-live="polite" aria-label="Kevin's terminal"></pre>
+        <pre class="bloom" id="bloom" aria-hidden="true"></pre>
+      </div>
+      <div class="fx fx-scan"></div>
+      <div class="fx fx-mask"></div>
+      <div class="fx fx-vig"></div>
+      <div class="fx fx-shine"></div>
+      <div class="fx fx-roll"></div>
+      <div class="fx fx-flick"></div>
+      <div class="fx fx-on"></div>
+    </div>
+    <div class="front">
+      <span class="badge">KEVINTRON&nbsp;486</span>
+      <span class="vents"></span>
+      <span class="knobs">
+        <button class="btn" id="skip" type="button" title="Jump to the end">SKIP</button>
+        <button class="btn" id="replay" type="button" title="Run it again">REPLAY</button>
+      </span>
+      <span class="led"></span>
+    </div>
+  </div>
+  <p class="sig"><a href="index.html">iamkevin.lol</a></p>
+</div>
+
+<span class="probe" id="probe">00000000000000000000</span>
+
+<script>
+(function(){
+"use strict";
+
+var screenEl = document.getElementById('screen');
+var bloomEl  = document.getElementById('bloom');
+var tubeEl   = document.getElementById('tube');
+var probeEl  = document.getElementById('probe');
+var skipBtn  = document.getElementById('skip');
+var replayBtn= document.getElementById('replay');
+
+var RM = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+/* ---------------------------------------------------------------- layout */
+var chRatio = 0.6;
+function measure(){
+  var w = probeEl.getBoundingClientRect().width;
+  if(w > 0) chRatio = (w / 20) / 100;
+}
+
+var narrow = window.innerWidth < 660;
+var COLS = 80, ROWS = 25;
+
+function layout(){
+  narrow = window.innerWidth < 660;
+  COLS = narrow ? 40 : 80;
+  ROWS = narrow ? 26 : 25;
+
+  var padx = narrow ? 0.75 : 1.8;
+  var pady = narrow ? 2.4  : 3.1;
+  var bezel = narrow ? 50 : 60;
+  var lh = 1.24;
+  var borderPx = narrow ? 8 + 10 : 10 + 10;      /* tube border + crt border */
+  var casing  = narrow ? 14 : 28;                /* crt padding l+r */
+  var chromeV = narrow ? 22 + 40 + 18 : 44 + 46 + 28; /* body pad + sig + crt pad */
+
+  var rig = document.querySelector('.rig');
+  var availW = Math.max(200, rig.clientWidth - borderPx - casing);
+  var availH = Math.max(240, window.innerHeight - chromeV - bezel - borderPx);
+
+  var fsW = availW / (COLS * chRatio + 2 * padx);
+  var fsH = availH / (ROWS * lh + 2 * pady);
+  var fs = Math.min(fsW, fsH, narrow ? 17 : 20);
+  fs = Math.max(7.5, Math.floor(fs * 20) / 20);
+
+  var root = document.documentElement.style;
+  root.setProperty('--cols', COLS);
+  root.setProperty('--rows', ROWS);
+  root.setProperty('--fs', fs + 'px');
+  root.setProperty('--padx', padx);
+  root.setProperty('--pady', pady);
+  root.setProperty('--bezel', bezel + 'px');
+}
+
+/* ------------------------------------------------------------- rendering */
+function esc(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function fmt(line){
+  var out = '', i = 0, m;
+  var re = /\{([a-z]+)\|([^}]*)\}/g;
+  while((m = re.exec(line))){
+    out += esc(line.slice(i, m.index));
+    out += '<span class="' + m[1] + '">' + esc(m[2]) + '</span>';
+    i = m.index + m[0].length;
+  }
+  out += esc(line.slice(i));
+  return out.replace(/\u25b2/g, '<i class="tri">\u25b2</i>');
+}
+
+var buf = [];
+var cursorOn = true;
+
+function paint(){
+  var lines = buf.slice(-ROWS).map(fmt);
+  if(cursorOn && lines.length) lines[lines.length - 1] += '<b class="cur"></b>';
+  while(lines.length < ROWS) lines.push('');
+  var html = lines.join('\n');
+  screenEl.innerHTML = html;
+  bloomEl.innerHTML = html;
+}
+
+/* --------------------------------------------------------- table builder */
+function cell(t, w, a){
+  t = t == null ? '' : String(t);
+  var inner = w - 2;
+  if(t.length > inner) t = t.slice(0, inner);
+  var sp = inner - t.length;
+  if(a === 'r')      t = new Array(sp + 1).join(' ') + t;
+  else if(a === 'c') t = new Array(Math.floor(sp/2) + 1).join(' ') + t + new Array(Math.ceil(sp/2) + 1).join(' ');
+  else               t = t + new Array(sp + 1).join(' ');
+  return ' ' + t + ' ';
+}
+function bar(ws, l, m, r){
+  return l + ws.map(function(n){ return new Array(n + 1).join('\u2550'); }).join(m) + r;
+}
+var TOP = function(ws){ return bar(ws,'\u2554','\u2566','\u2557'); };
+var MID = function(ws){ return bar(ws,'\u2560','\u256c','\u2563'); };
+var BOT = function(ws){ return bar(ws,'\u255a','\u2569','\u255d'); };
+function row(ws, cells){
+  return '\u2551' + cells.map(function(c, i){
+    var txt = cell(c.t, ws[i], c.a);
+    return c.c ? '{' + c.c + '|' + txt + '}' : txt;
+  }).join('\u2551') + '\u2551';
+}
+function boxed(inner, lines, indent){
+  var pad = new Array(indent + 1).join(' ');
+  var out = [pad + '\u2554' + new Array(inner + 1).join('\u2550') + '\u2557'];
+  lines.forEach(function(l){
+    var plain = l.replace(/\{[a-z]+\|([^}]*)\}/g, '$1');
+    var sp = inner - plain.length;
+    if(sp < 0) sp = 0;
+    out.push(pad + '\u2551' + l + new Array(sp + 1).join(' ') + '\u2551');
+  });
+  out.push(pad + '\u255a' + new Array(inner + 1).join('\u2550') + '\u255d');
+  return out;
+}
+
+/* -------------------------------------------------------------- the copy */
+var TICKERS = [
+  { s:'SPTL',  avg:'0.04120000', last:'0.00097400', pc:'-97.6%',  val:'$  11.83' },
+  { s:'WAGE',  avg:'1.88000000', last:'0.21400000', pc:'-88.6%',  val:'$  27.41' },
+  { s:'MOPX',  avg:'0.00311000', last:'0.00004120', pc:'-98.7%',  val:'$   3.06' },
+  { s:'LAMBO', avg:'12.4000000', last:'0.83000000', pc:'-93.3%',  val:'$  19.92' },
+  { s:'SLEEP', avg:'0.75000000', last:'0.00000000', pc:'-100.0%', val:'$   0.00' },
+  { s:'CRNCH', avg:'0.09800000', last:'0.01130000', pc:'-88.5%',  val:'$   8.60' }
+];
+
+var SHIFTS = [
+  { d:'MON', t:'06:00 - 14:00', n:'-' },
+  { d:'TUE', t:'06:00 - 14:00', n:'-' },
+  { d:'WED', t:'14:00 - 22:00', n:'COVERING FOR DAVE' },
+  { d:'THU', t:'06:00 - 14:00', n:'-' },
+  { d:'FRI', t:'16:00 - 00:00', n:'CLASH: TOKEN LAUNCH 18:00', hot:1 },
+  { d:'SAT', t:'06:00 - 14:00', n:'-' },
+  { d:'SUN', t:'10:00 - 18:00', n:'DEEP CLEAN. OIL CHANGE.' }
+];
+
+var PLAN = [
+  ' ROBIN PLAN:',
+  '',
+  '   {g|[X]} LAUNCH',
+  '   {g|[X]} MOON',
+  '   {g|[X]} LAMBO',
+  '   [ ] SLEEP',
+  '',
+  ' {dim|three of four. sleep is later.}'
+];
+
+/* ------------------------------------------------------------- op script */
+function CLS(){ return ['cls']; }
+function W(ms){ return ['w', ms]; }
+function P(line, ms){ return ['p', line, ms]; }
+function CMD(text){ return ['cmd', text]; }
+function T(line, ms){ return ['t', line, ms]; }
+
+function PLIST(lines, ms){
+  return lines.map(function(l){ return ['p', l, ms]; });
+}
+function flat(a){
+  var out = [];
+  a.forEach(function(x){
+    if(Array.isArray(x) && Array.isArray(x[0])) out = out.concat(flat(x));
+    else out.push(x);
+  });
+  return out;
+}
+
+var BOOTL = 165, TBL = 92;
+
+function sceneBoot(){
+  if(narrow){
+    return flat([
+      CLS(),
+      P('{w|Award Modular BIOS v4.51PG}', BOOTL),
+      P('{dim|Copyright (C) 1984-94}', BOOTL),
+      P('{dim|Award Software, Inc.}', BOOTL),
+      P('', 60),
+      P('KEVINTRON 486DX2/66', BOOTL),
+      P('{dim|BIOS Date 09/03/94}', BOOTL),
+      P('', 60),
+      P('Memory Test :   640K OK', 720),
+      P('', 60),
+      P('IDE Master .. WDC AC2340H 341MB', 230),
+      P('IDE Slave  .. None', 230),
+      P('FRYER      .. {hi|ON}', 270),
+      P('WIFI       .. {hi|FOUND}', 270),
+      P('PLAN B     .. {dim|None}', 760),
+      P('', 60),
+      P('Starting MS-DOS...', 1200)
+    ]);
+  }
+  return flat([
+    CLS(),
+    P('{w|Award Modular BIOS v4.51PG}', BOOTL),
+    P('{dim|Copyright (C) 1984-94, Award Software, Inc.}', BOOTL),
+    P('', 60),
+    P('KEVINTRON 486DX2/66                        {dim|BIOS Date 09/03/94}', BOOTL),
+    P('', 60),
+    P('Memory Test :        640K OK', 720),
+    P('', 60),
+    P('Detecting IDE Primary Master ..... WDC AC2340H   341MB', 230),
+    P('Detecting IDE Primary Slave  ..... None', 230),
+    P('Detecting FRYER              ..... {hi|ON}', 270),
+    P('Detecting WIFI               ..... {hi|FOUND}', 270),
+    P('Detecting PLAN B             ..... {dim|None}', 760),
+    P('', 60),
+    P('Starting MS-DOS...', 1200)
+  ]);
+}
+
+function sceneRota(){
+  var ops = [CLS(), W(380), CMD('ROTA.EXE'), P('', 90)];
+  if(narrow){
+    var ws = [5, 13, 9];
+    ops.push(P('{hi|ROTA v2.1  WEEK 37  EMP #0047}', 260));
+    ops.push(P('', 90));
+    ops.push(P(TOP(ws), TBL));
+    ops.push(P(row(ws, [{t:'DAY',c:'hi'},{t:'SHIFT',c:'hi'},{t:'STATION',c:'hi'}]), TBL));
+    ops.push(P(MID(ws), TBL));
+    SHIFTS.forEach(function(s){
+      ops.push(P(row(ws, [
+        {t:s.d, c:'w'},
+        {t:s.t.replace(/ /g,'')},
+        {t:'FRYER'}
+      ]), s.hot ? 240 : TBL));
+    });
+    ops.push(P(BOT(ws), TBL));
+    ops.push(P('', 200));
+    ops.push(P(' {dim|WED:} COVERING FOR DAVE', 220));
+    ops.push(P(' {dim|FRI:} {r|CLASH - TOKEN LAUNCH 18:00}', 520));
+    ops.push(P(' {dim|SUN:} DEEP CLEAN. OIL CHANGE.', 260));
+    ops.push(P('', 260));
+    ops.push(P(' HOURS THIS WEEK : {hi|56}', 240));
+    ops.push(P(' DAYS OFF        : {hi|0}', 380));
+    ops.push(P(' CLASH RESOLVED  : {hi|LAUNCH -> 00:05}', 240));
+    ops.push(P(' {hi|FRYER UNAFFECTED.}', 2900));
+  } else {
+    var w2 = [6, 16, 11, 30];
+    ops.push(P('{hi|ROTA v2.1    WEEK 37    EMPLOYEE #0047    KEVIN}', 260));
+    ops.push(P('', 90));
+    ops.push(P(TOP(w2), TBL));
+    ops.push(P(row(w2, [{t:'DAY',c:'hi'},{t:'SHIFT',c:'hi'},{t:'STATION',c:'hi'},{t:'NOTES',c:'hi'}]), TBL));
+    ops.push(P(MID(w2), TBL));
+    SHIFTS.forEach(function(s){
+      ops.push(P(row(w2, [
+        {t:s.d, c:'w'},
+        {t:s.t},
+        {t:'FRYER'},
+        {t:s.n, c:s.hot ? 'r' : (s.n === '-' ? 'dim' : null)}
+      ]), s.hot ? 520 : TBL));
+    });
+    ops.push(P(BOT(w2), TBL));
+    ops.push(P('', 320));
+    ops.push(P('  HOURS THIS WEEK : {hi|56}', 240));
+    ops.push(P('  DAYS OFF        : {hi|0}', 460));
+    ops.push(P('  CLASH RESOLVED  : {hi|LAUNCH MOVED TO 00:05. FRYER UNAFFECTED.}', 3200));
+  }
+  ops.push(P('', 60));
+  ops.push(P('C:\\>', 900));
+  return flat(ops);
+}
+
+function sceneBags(){
+  var ops = [CMD('CLS'), CLS(), W(320), CMD('BAGS.EXE'), P('', 90)];
+  var i;
+  if(narrow){
+    var ws = [8, 10, 8];
+    ops.push(P('{hi|PORTFOLIO 1.03    WIFI: OK}', 260));
+    ops.push(P('', 90));
+    ops.push(P(TOP(ws), TBL));
+    ops.push(P(row(ws, [{t:'TICKER',c:'hi'},{t:'LAST',c:'hi'},{t:'CHANGE',c:'hi'}]), TBL));
+    ops.push(P(MID(ws), TBL));
+    for(i = 0; i < TICKERS.length; i++){
+      var t = TICKERS[i];
+      ops.push(P(row(ws, [
+        {t:t.s, c:'w'},
+        {t:t.last.slice(0,8), a:'r'},
+        {t:t.pc, c:'r', a:'r'}
+      ]), 250));
+    }
+    ops.push(P(MID(ws), 700));
+    ops.push(P(row(ws, [
+      {t:'KEVIN', c:'g'},
+      {t:'---', c:'dim', a:'c'},
+      {t:'\u25b2', c:'g', a:'c'}
+    ]), 260));
+    ops.push(P(BOT(ws), 700));
+    ops.push(P('', 120));
+    ops.push(P(' TOTAL   : {r|$70.82   -94.8%}', 400));
+    ops.push(P(' KEVIN   : {dim|NO PRICE FEED.}', 240));
+    ops.push(P('           {dim|RENDERED GREEN}', 240));
+    ops.push(P('           {dim|BY DEFAULT.}', 1500));
+    ops.push(P('', 120));
+    ops.push(T(' Down 94.8 percent.', 44));
+    ops.push(T(' My shift starts at four.', 44));
+  } else {
+    var w2 = [10, 13, 13, 10, 13];
+    ops.push(P('{hi|PORTFOLIO 1.03      HOLDER: KEVIN      WIFI: CONNECTED      17:42}', 260));
+    ops.push(P('', 90));
+    ops.push(P(TOP(w2), TBL));
+    ops.push(P(row(w2, [
+      {t:'TICKER',c:'hi'},{t:'AVG COST',c:'hi'},{t:'LAST',c:'hi'},{t:'CHANGE',c:'hi'},{t:'VALUE',c:'hi'}
+    ]), TBL));
+    ops.push(P(MID(w2), TBL));
+    for(i = 0; i < TICKERS.length; i++){
+      var k = TICKERS[i];
+      ops.push(P(row(w2, [
+        {t:k.s, c:'w'},
+        {t:k.avg, a:'r'},
+        {t:k.last, a:'r'},
+        {t:k.pc, c:'r', a:'r'},
+        {t:k.val, c:'r', a:'r'}
+      ]), 250));
+    }
+    ops.push(P(MID(w2), 780));
+    ops.push(P(row(w2, [
+      {t:'KEVIN', c:'g'},
+      {t:'---', c:'dim', a:'c'},
+      {t:'NOT LIVE', c:'dim', a:'c'},
+      {t:'\u25b2', c:'g', a:'c'},
+      {t:'PRE-LAUNCH', c:'g', a:'c'}
+    ]), 300));
+    ops.push(P(BOT(w2), 760));
+    ops.push(P('', 140));
+    ops.push(P('  TOTAL COST    : {dim|$1,364.00}', 260));
+    ops.push(P('  TOTAL VALUE   : {r|$    70.82}        CHANGE: {r|-94.8%}', 460));
+    ops.push(P('  KEVIN         : {dim|NO PRICE FEED. RENDERED GREEN BY DEFAULT.}', 1600));
+    ops.push(P('', 140));
+    ops.push(T('  Down 94.8 percent. My shift starts at four.', 44));
+  }
+  ops.push(W(3000));
+  ops.push(P('', 60));
+  ops.push(P('C:\\>', 800));
+  return flat(ops);
+}
+
+function sceneClose(){
+  var ops = [CMD('CLS'), CLS(), W(320), CMD('TYPE PLAN.TXT'), P('', 120)];
+  var board = boxed(narrow ? 32 : 38, PLAN, narrow ? 1 : 2);
+  board.forEach(function(l){ ops.push(P(l, 130)); });
+  ops.push(P('', 1700));
+  ops.push(CMD('KEVIN.EXE'));
+  ops.push(P('', 160));
+  if(narrow){
+    ops.push(T('I am Kevin. I work the fryer.', 42));
+    ops.push(T('I have WiFi.', 42));
+    ops.push(P('', 420));
+    ops.push(T('I have checked the rota.', 42));
+    ops.push(T('I have checked the bags.', 42));
+    ops.push(T('{hi|Both are on schedule.}', 60));
+  } else {
+    ops.push(T('I am Kevin. I work the fryer. I have WiFi.', 42));
+    ops.push(P('', 460));
+    ops.push(T('I have checked the rota and I have checked the bags.', 42));
+    ops.push(T('{hi|Both are on schedule.}', 60));
+  }
+  ops.push(P('', 120));
+  ops.push(P('C:\\>', 5200));
+  return flat(ops);
+}
+
+function buildScript(){
+  return [sceneBoot(), sceneRota(), sceneBags(), sceneClose()];
+}
+
+/* ---------------------------------------------------------------- runner */
+var token = 0;
+var timer = null;
+var running = false;
+var loopOn = true;
+
+function sleep(ms, t){
+  return new Promise(function(res){
+    timer = setTimeout(function(){ if(t === token) res(); }, ms);
+  });
+}
+function jit(ms){ return Math.round(ms * (0.6 + Math.random() * 0.85)); }
+
+function applyInstant(ops){
+  for(var i = 0; i < ops.length; i++){
+    var op = ops[i];
+    if(op[0] === 'cls') buf = [];
+    else if(op[0] === 'p') buf.push(op[1]);
+    else if(op[0] === 't') buf.push(op[1]);
+    else if(op[0] === 'cmd') buf.push('C:\\>' + op[1]);
+  }
+}
+
+function showFinal(){
+  token++;
+  running = false;
+  clearTimeout(timer);
+  buf = [];
+  var script = buildScript();
+  applyInstant(script[script.length - 1]);
+  cursorOn = true;
+  paint();
+  skipBtn.disabled = true;
+}
+
+async function run(instant){
+  var t = ++token;
+  clearTimeout(timer);
+  running = true;
+  skipBtn.disabled = false;
+  buf = [];
+  cursorOn = true;
+  paint();
+
+  if(!RM.matches){
+    tubeEl.classList.remove('warm');
+    void tubeEl.offsetWidth;
+    tubeEl.classList.add('warm');
+  }
+
+  var script = buildScript();
+
+  for(var s = 0; s < script.length; s++){
+    var ops = script[s];
+    for(var i = 0; i < ops.length; i++){
+      if(t !== token) return;
+      var op = ops[i];
+
+      if(op[0] === 'cls'){
+        buf = [];
+        paint();
+        if(!instant){ await sleep(90, t); if(t !== token) return; }
+
+      } else if(op[0] === 'w'){
+        if(!instant){ await sleep(op[1], t); if(t !== token) return; }
+
+      } else if(op[0] === 'p'){
+        buf.push(op[1]);
+        paint();
+        if(!instant){ await sleep(op[2] == null ? 90 : op[2], t); if(t !== token) return; }
+
+      } else if(op[0] === 'cmd'){
+        buf.push('C:\\>');
+        paint();
+        if(!instant){ await sleep(430, t); if(t !== token) return; }
+        var txt = op[1];
+        for(var c = 0; c < txt.length; c++){
+          if(t !== token) return;
+          buf[buf.length - 1] += txt.charAt(c);
+          paint();
+          if(!instant){ await sleep(jit(78), t); if(t !== token) return; }
+        }
+        if(!instant){ await sleep(520, t); if(t !== token) return; }
+
+      } else if(op[0] === 't'){
+        var line = op[1];
+        var m = line.match(/^\{([a-z]+)\|([^}]*)\}$/);
+        var cls = m ? m[1] : null;
+        var body = m ? m[2] : line;
+        buf.push(cls ? '{' + cls + '|}' : '');
+        for(var d = 0; d < body.length; d++){
+          if(t !== token) return;
+          var sofar = body.slice(0, d + 1);
+          buf[buf.length - 1] = cls ? '{' + cls + '|' + sofar + '}' : sofar;
+          paint();
+          if(!instant){ await sleep(jit(op[2] == null ? 42 : op[2]), t); if(t !== token) return; }
+        }
+        if(!instant){ await sleep(320, t); if(t !== token) return; }
+      }
+    }
+    if(instant && s < script.length - 1){
+      await sleep(1900, t);
+      if(t !== token) return;
+    }
+  }
+
+  running = false;
+  skipBtn.disabled = true;
+
+  if(loopOn && !RM.matches && !instant){
+    await sleep(1400, t);
+    if(t !== token) return;
+    run(false);
+  }
+}
+
+/* --------------------------------------------------------------- control */
+skipBtn.addEventListener('click', function(){
+  loopOn = false;
+  showFinal();
+  replayBtn.focus();
+});
+replayBtn.addEventListener('click', function(){
+  loopOn = !RM.matches;
+  run(RM.matches);
+});
+
+document.addEventListener('keydown', function(e){
+  if(e.target && e.target.tagName === 'BUTTON') return;
+  if(e.key === ' ' || e.key === 'Enter' || e.key === 'Escape'){
+    e.preventDefault();
+    loopOn = false;
+    showFinal();
+  } else if(e.key === 'r' || e.key === 'R'){
+    loopOn = !RM.matches;
+    run(RM.matches);
+  }
+});
+
+/* --------------------------------------------------------------- startup */
+var wasNarrow = null;
+function boot(){
+  measure();
+  layout();
+  wasNarrow = narrow;
+  if(RM.matches){
+    loopOn = false;
+    showFinal();
+  } else {
+    loopOn = true;
+    run(false);
+  }
+}
+
+var rz = null;
+window.addEventListener('resize', function(){
+  clearTimeout(rz);
+  rz = setTimeout(function(){
+    var before = narrow;
+    measure();
+    layout();
+    if(narrow !== before){
+      if(RM.matches || !running) showFinal();
+      else run(false);
+    } else {
+      paint();
+    }
+  }, 220);
+});
+
+if(document.fonts && document.fonts.ready){
+  document.fonts.ready.then(boot).catch(boot);
+} else {
+  boot();
+}
+})();
+</script>
+</body>
+</html>
