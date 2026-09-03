@@ -1,0 +1,937 @@
+# KEVIN'S GYM — BUILD PLAN
+
+Produced by a fifteen-agent research sweep: seven dimensions researched
+independently, each fact-checked by a second agent against primary sources,
+then synthesised. Licences and URLs were verified rather than assumed.
+
+---
+
+{
+  "summary": "Research the stack for a 3D Kevin gym game: assets, engine, toon shading, rigging, backend",
+  "agentCount": 15,
+  "logs": [
+    "Researching 7 dimensions of the Kevin gym build",
+    "7/7 dimensions verified"
+  ],
+  "result": {
+    "plan": "# KEVIN'S GYM — BUILD PLAN\n\n**Verdict up front:** commit. This is buildable in roughly three months by one developer. The technology risk is low and well-understood; the two real risks are the character pipeline and whether the art actually looks hand-drawn. Both are testable in week one, cheaply, before you spend money on art. If you take one thing from this document, take the week-one plan in §5.\n\n---\n\n## 1. THE STACK\n\n### Engine: three.js, pinned to exactly `0.185.1` (MIT)\n\nNot a preference — the other three options each fail on something specific:\n\n| | Download (gzipped) | Fatal problem |\n|---|---|---|\n| **three.js 0.185.1** | **159 KB** | none |\n| Babylon.js 9.23.0 | 801 KB | its only cel-shading material provably cannot render a morphing character |\n| PlayCanvas 2.21.4 | 494 KB | ships no toon material and no cartoon outline at all; editor costs $15/mo |\n| Godot 4.7.2 | ~10 MB | 63× the payload, inside a Telegram webview, before a single asset |\n\nThe Babylon point is the decisive one and it is not a judgment call. Its `CellMaterial` shader contains the string \"morph\" exactly zero times. Babylon's one built-in cartoon material physically cannot be applied to a character whose body shape changes — which is the entire product. three.js is the only engine of the four whose shipped toon material **and** shipped outline effect both already follow morphing, skinned geometry. As Kevin inflates, his black ink line inflates with him, for free.\n\nPin the exact version, no `^` range. The outline code lives in three.js's `examples/jsm` folder, which carries no compatibility guarantee between releases.\n\n**No React Three Fiber. No Rapier. No ammo.js. No WebAssembly physics.** For a one-room game this is pure overhead, and WASM threading needs security headers (COOP/COEP) that would block Telegram's own SDK script, which is served without the header that would let it through. Copy the movement code from three.js's own `examples/games_fps.html` instead — Octree collision plus a capsule player, ~15 KB of plain JavaScript, MIT, proven. It has no touch input; you write the joystick (borrow the joystick→store→controller wiring pattern from **pmndrs/ecctrl**, MIT, actively maintained as of Aug 2026).\n\n### Assets: a CC0-first policy\n\n**Ship no attribution-required assets in v1 if you can avoid it.** One CC BY asset in the build obligates you to a permanent, real credits panel with author name, link, and a note that you modified the work — forever, on every build. That's a shipping requirement, not a formality.\n\n| Role | Pack | License | Size |\n|---|---|---|---|\n| **Gym equipment** | *One More Rep: Gym & Fitness Props* (The SideQuest Shop, itch.io) | CC0 1.0, no attribution | 21 props, 15,214 tris, GLB + FBX, name-your-price |\n| **Room shell & clutter** | *Kenney Furniture Kit* | CC0 | 140 models, GLB-native, 5.13 MB |\n| **Modular walls/floors + gap-fill** | *3D LowPoly Gym Game Assets* (andre4cale, itch.io) | Custom: commercial OK, no credit required, no redistribution | 31 models, native glTF, 772 kB, **$5** |\n| **Protein tub** | *Kenney Food Kit* — retexture `can.glb` or `barrel.glb` | CC0 | 4.61 MB |\n\nSpend the $5. It ships native glTF (zero conversion), includes four floor tiles and four modular walls, and asks nothing of you legally.\n\n**One caution that matters:** One More Rep's CC0 claim, and Kenney's, are asserted on store pages that the author can edit tomorrow. Download each pack, check for a LICENSE file inside the zip, and archive a dated screenshot of the page before you ship. This takes ten minutes and is the difference between a defensible position and a hopeful one.\n\n**Fallbacks if the CC0 route leaves a hole** (accepting a credits screen): VNB-Leo's *Low Poly Gym Set [+70 Models]* (CC BY 4.0, 70+ models, FBX only) is the largest gym set found; 3DLAND's 19-piece *FREE LowPoly Crossfit* series (all CC BY, all verified downloadable) fills specific gaps.\n\n**Plainly: none of these already look like your target.** There is no open-licensed gym environment in a bold cartoon style — the only genuine modular gym found is 167,500 triangles of semi-realistic student work, usable as a layout reference and nothing else. Confirmed CC0 gym geometry outside the One More Rep pack amounts to one 340-triangle dumbbell and one exercise bike. You are kit-bashing from mixed sources and unifying them yourself. Budget that as real work; see §2.\n\nWrite **one headless Blender script** that ingests everything: strip materials, apply your shared palette, decimate anything over a hard face budget and *fail loudly* if it can't, bake smoothed normals, export meshopt-compressed GLB. Do not convert models by hand.\n\n### Character: MPFB2 → Blender → Mixamo → shape key → glTF\n\n**MPFB2** (MakeHuman Plugin For Blender 2) generates the base body. Its assets are **CC0** — public domain, commercial, closed-source, no attribution. The plugin itself is GPL, which does not encumber what you export. Requires Blender ≥ 4.2.\n\n**A finding worth the whole research effort:** I verified in MPFB2's source that it ships a `muscle` macro — `{\"type\":\"float\",\"name\":\"muscle\",\"description\":\"The muscularity of the character\",\"label\":\"Muscle\",\"default\":0.5}` — as a 0.0–1.0 slider alongside gender, age, weight, height and proportions, implemented by interpolating shape keys on a single fixed basemesh. It also ships per-limb targets (`l-upperarm-muscle-incr`, `r-lowerarm-muscle-decr`, and so on).\n\n**This means you get the muscle morph nearly for free, on guaranteed-identical topology, without sculpting.** Generate Kevin at muscle=0.2, generate him at muscle=0.9, and because both are the same basemesh with different shape-key mixes, the vertex count and order are identical by construction — which is exactly what the morph system requires and exactly what a hand-sculpted or AI-generated approach cannot guarantee. You will still need one standard Blender step to bake the difference between the two into a single clean shape key named `Muscle` (Shape Key from Mix / Join as Shapes). That is a menu operation, not an art skill.\n\n**Animation: Mixamo.** Free, royalty-free for commercial games, bipedal humanoids only, exports FBX (so Blender is mandatory as the converter). Pipeline: character FBX with no animation; each clip downloaded *without skin*; import all into Blender with Automatic Bone Orientation; export one glTF.\n\n**Honest flag:** Adobe's Mixamo FAQ page returned HTTP 503 to every automated fetch across two independent attempts. The royalty-free commercial grant is corroborated through multiple sources quoting that page and I would plan on it — but **have a human open it in a browser and screenshot it before launch.** This is the licence the entire animation dimension rests on. Three claims commonly repeated about Mixamo (an Enterprise/Federated-ID restriction, a China country-code restriction, \"stores only the last uploaded character\") could not be sourced at all. Do not plan around them.\n\n**No AI mesh generation on the critical path.** Tripo AI is excluded entirely: its licence page, its terms, and its own feature page all return HTTP 403 to every request. Nothing about it — not the licence, not the limits, not the pricing — is verifiable from a primary source, and its marketing saturates the neutral search results you'd use to check it. Meshy is usable but its Terms of Use state that on the **free plan Meshy owns all right, title and interest in the output** and licenses it back to you only under CC BY 4.0, requiring a visible \"Model created with Meshy\" credit. For a memecoin whose character *is* the brand, that is disqualifying. Paid plans grant ownership. If you use Meshy at all, pay. Better: use the CC0 MakeHuman base and own everything from line one.\n\n### Backend: one $12 droplet\n\n- **DigitalOcean Basic**, Ubuntu 24.04: 1 vCPU / 2 GiB / 50 GB SSD / 2 TB transfer — $12/mo (verified against live pricing). That's ~130,000 cold loads of a 15 MB bundle, and your bundle should be a fraction of that.\n- **Caddy 2** (Apache-2.0) — automatic HTTPS, automatic renewal, Let's Encrypt with ZeroSSL failover. Serves the static game too.\n- **Node.js 24 LTS** + **Fastify 5.12.1** (MIT)\n- **better-sqlite3 13.0.3** (MIT) in WAL mode. One file. (Node's built-in `node:sqlite` is close but still Release Candidate; use better-sqlite3.)\n- **Litestream v0.5.x** (Apache-2.0) streaming continuous backups to DigitalOcean Spaces.\n- **systemd**, not PM2. PM2 is AGPL-3.0 — avoidable copyleft sitting next to a commercial product, for a job the operating system already does.\n- **Auth: `@tma.js/init-data-node` 2.0.8** (MIT). ⚠️ The package most guides name — `@telegram-apps/init-data-node` — **is deprecated**; npm attaches \"This package is not supported anymore\" to it. Same author, same repo, renamed. Set `expiresIn` explicitly to 3600; the default is 86,400 seconds.\n- **jose 6.2.10** (MIT) for session tokens, **zod 4.5.4** (MIT) for request validation.\n- Skip an ORM for v1. Numbered `.sql` migration files and a `schema_version` row.\n- **Shell:** fork `Telegram-Mini-Apps/reactjs-template` (MIT). Its three sibling templates have **no licence file at all** — avoid all three.\n\nThe Telegram signature check is the one place hand-rolling goes wrong, and the reason is specific: the secret key is an HMAC-SHA-256 of **the bot token as the message** with the literal string `WebAppData` **as the key**. Almost everyone reverses those two. Use the library.\n\n---\n\n## 2. HOW IT LOOKS LIKE THE ART\n\nTwo techniques, both shipping in three.js already, both mobile-cheap.\n\n**The black line: inverted-hull outlines via `three/addons/effects/OutlineEffect.js`.** It draws each object a second time, slightly fattened along its surface normals, in flat black, with the front faces culled — so a black shell peeks out from behind the silhouette. Its shader gives you *constant screen-space thickness*, meaning the line reads the same weight whether Kevin is near or far. Default is 0.003; go 0.006–0.010 for a bold Borderlands weight. Turn outlines off on floors and walls (`material.userData.outlineParameters = { visible: false }`) or the room becomes a cage.\n\n**The flat colour: `MeshToonMaterial` with an explicit `gradientMap`.** A 2- or 3-pixel texture with nearest-neighbour filtering. Two or three pixels = two or three hard bands of colour with a razor edge between them. One directional light, flat ambient, no PBR, no shadow maps, no reflections.\n\n**Do not skip the gradientMap.** If you leave it null, three.js falls back to a soft ramp from 70% to 100% brightness — washed-out and gradient-y, the opposite of the target. This is the single most common way people conclude \"toon shading in three.js looks bad.\"\n\n**No post-processing.** Screen-space edge detection is rejected on the merits: luminance-based Sobel misses same-colour silhouettes and draws lines on texture detail; depth+normal outlines are scale-sensitive and their reference demo is dead. More importantly, adding *any* post-processing pass in three.js silently disables free hardware anti-aliasing on mobile GPUs. Render straight to the screen with `{ antialias: true }` and cap pixel ratio at 2.\n\n### The known limits — say these out loud before anyone is surprised\n\n1. **Split normals will make your first outline test look catastrophically broken.** Hard-edged low-poly models duplicate vertices at every crease. The inflated black shell tears open at every corner. It looks like the technique doesn't work. It does — the fix is a build step: weld duplicate vertices, recompute smooth normals, bake them into a spare vertex slot, and read them only in the outline shader. **Budget two days and expect one bad day.** If your developer doesn't know this is coming, they will abandon the technique.\n\n2. **The shade band cannot change hue.** three.js's toon shader multiplies the base colour by a single brightness value. Cream shades to darker cream — it cannot shade to warm red. If your art direction requires coloured shadows (and bold cartoon often does), you must move to the MToon material (`@pixiv/three-vrm-materials-mtoon`, MIT, 680 KB). **Decide this in week one**, because it sits underneath every material in the game.\n\n3. **Line weight won't read uniform across mixed-source props out of the box.** A per-material thickness tuning pass is real work. One day.\n\n4. **No mesh instancing.** The outline effect has a confirmed defect with instanced geometry — the outline detaches from the object. For a one-room gym this costs nothing. If you later want 100 identical dumbbells on a rack, you write a ~40-line replacement shader then, copying MToon's formula.\n\n---\n\n## 3. THE CHARACTER\n\n### How muscle growth actually works\n\nOne number, one line of code:\n\n```js\nmesh.morphTargetInfluences[mesh.morphTargetDictionary['Muscle']] = muscleStat;\n```\n\n`muscleStat` is 0 to 1. The mesh smoothly inflates. Name the shape key `Muscle` in Blender and it is addressable by that string in JavaScript automatically.\n\n### The one decision you cannot undo\n\nThe glTF specification is explicit: **\"All morph target accessors MUST have the same `count` as the accessors of the original primitive.\"** A morph target is a list of per-vertex nudges applied to a *fixed* vertex ordering.\n\n**Therefore you cannot build the muscle system from two separately-created models.** Skinny Kevin and buff Kevin as two independent AI generations, or two sculpts, or two commissions, have unrelated topology and will never blend into each other. Not \"will look bad\" — cannot be loaded.\n\nOne base mesh. The buff version derived from that same mesh with zero vertices added, deleted or reordered. This is exactly why MPFB2 is the right starting point: its muscle macro deforms one fixed basemesh, so identical topology is guaranteed by construction rather than by discipline.\n\n**Order of operations, and it matters:** finalise base mesh → auto-rig → import the rigged file into Blender → **then** create the Muscle shape key → export glTF. Skinning and morphing coexist happily on one mesh, but only if the morph is authored after the FBX round-trip, which cannot be trusted to preserve shape keys.\n\n**Compression: use meshopt, not Draco.** This is a silent trap. Draco — the compression everyone reaches for by default — does not handle morph targets at all; the word \"morph\" does not appear in its specification. It would ship your muscle deltas uncompressed and give you no error. Use `gltfpack`/`EXT_meshopt_compression`, which explicitly covers morph target data and recommends narrow quantized storage for it. Target 8–15k triangles. In the Blender exporter: enable Shape Keys, enable \"Use Sparse Accessor if better\", disable Shape Key Tangents.\n\n### Does auto-rigging work on a cartoon body? Honest answer: yes, *if you constrain the design before the art exists.*\n\nThe line is specific, not vague, and two independent vendors state it identically:\n\n- **Exaggerated muscle mass is fine.** Auto-riggers do not care that the deltoids are twice life-size.\n- **Deformed proportions are not.** Mixamo requires a humanoid with distinguishable head/body/arms/legs, no large extra appendages, a neutral pose, and — critically — **no spaces between parts**. Meshy's docs independently require \"proportions close to standard human body to avoid severe limb deformation\" and \"keep limbs separated.\"\n- **Practical line: a head at roughly ¼ to ⅓ of body height rigs. A true chibi at ½ body height with stub limbs does not.**\n- **The bodybuilder trap is real and specific:** big lats bring the arms flush against the torso, which violates the no-gaps rule. **Bind Kevin in a wide A-pose with visible air between his arms and his body.** If the mesh self-intersects at bind time you get garbage skin weights and no error message telling you why.\n\nSo: write \"stylized but riggable — head ¼ to ⅓ body height, wide A-pose, arms clear of torso\" into the art brief **before** commissioning anything. Then rig-test a deliberately ugly greybox at those proportions. That test costs an afternoon. Discovering the problem after the art is final costs the art budget.\n\n**If the auto-rigger refuses him:** Blender's **Rigify** is free, bundled, GPL, and metarig-based, so it handles proportions auto-riggers reject. Budget 1–3 days of learning for someone who has never rigged. **Auto-Rig Pro** is $40 if you want it smoother. **Reallusion AccuRIG** is a third option — its EULA explicitly grants the right to export models and animations and embed them in games.\n\n---\n\n## 4. WHAT SHIPS FIRST\n\n**The fun is not in the rep. The fun is the fear of shrinking.** v1 must test exactly one hypothesis: *do people open this tomorrow because Kevin will visibly shrink if they don't?* Everything that does not serve that hypothesis is cut.\n\n**One room.** Six modular wall/floor pieces, a mirror, a rug, a plant, a speaker. Static. No doors that open, no second room, no windows.\n\n**Three visible stations, two code paths.** Bench press and dumbbell rack both feed *strength* (different animation, same reward function). Treadmill feeds *stamina*. That's it.\n\n**Interaction: walk over, tap, watch a 4-second animation, a number goes up.** **No minigame in v1.** No timing bar, no tapping rhythm. The minigame is a v2 hypothesis about session depth; v1 is a hypothesis about return rate. Don't confound them.\n\n**Three UI screens, all HTML overlay on top of the 3D — never 3D text.**\n1. **HUD** — muscle bar, streak, currency. Tiny, always on.\n2. **Stats screen** — strength, stamina, streak, and *\"you will lose X by tomorrow.\"* This screen is where the entire product lives. Give it the most design attention of anything in the build.\n3. **Shop** — exactly three supplements: one session booster, one decay-slower (\"protein shake\" = a streak freeze), one cosmetic.\n\n**Currency is earned from workouts only.** No wallet, no token, no purchases. Adding crypto to v1 converts a game problem into a compliance and security problem before you know whether the game works.\n\n**Character: one model, one morph target, four animation clips** (idle, bench, treadmill, walk). No customization, no clothing, no colours.\n\n**Explicitly not in v1:** multiplayer, leaderboards, wallet connect, NFTs, second room, minigames, achievements, quests, NPCs, sound.\n\n**The one thing v1 must nail:** open inside Telegram on a real iPhone, in under three seconds on 4G, and show a Kevin who is visibly smaller than he was two days ago.\n\n---\n\n## 5. EFFORT\n\nOne competent full-stack developer who can find their way around Blender but is not a 3D artist. Calendar weeks.\n\n| Piece | Time | Risk |\n|---|---|---|\n| Telegram shell, auth, droplet, Caddy, Fastify, SQLite, Litestream | 4–6 days | **Low.** Pure assembly; every part verified. |\n| Asset acquisition + the one headless Blender normalisation script | 4–5 days | Medium |\n| Room build & kit-bash so mixed sources read as one hand | 5–8 days | Medium — this is art direction time |\n| Toon material, gradient ramp, outline, split-normal fix, thickness pass | 5–8 days | **High** |\n| Character: MPFB2 → stylize → rig → Muscle shape key → export | 8–15 days | **Highest** |\n| Mixamo clips → Blender → one glTF → animation state machine | 3–4 days | Low–medium |\n| Movement, touch joystick, station proximity triggers | 4–5 days | Low |\n| Decay maths, streak, server clock, grace mechanisms | 4–5 days | Low to code, **high to tune** |\n| UI: HUD, stats, shop | 5–6 days | Low |\n| Mobile performance pass on real devices inside Telegram | 4–6 days | Medium–high |\n\n**Total: 10–14 weeks. Call it three months.** If someone quotes you six weeks, they have not done the character.\n\n### Week one, before anything else\n\n**Build a deliberately ugly greybox Kevin all the way through the pipeline** — MPFB2 → Mixamo → Muscle shape key → meshopt glTF → three.js → a slider that inflates him, running inside Telegram on a physical iPhone. In parallel, put **one** gym prop on screen with the toon ramp and the black outline, on that same phone, and have a human look at it and say whether it reads as the reference art.\n\nBoth of those are afternoons. Together they retire the two risks that can kill the project, before a single dollar of art is committed. Do not skip them, and do not let them slip to week four.\n\n### The three real risks, ranked\n\n1. **The character pipeline** — the only piece where a week-2 decision forces you to redo weeks 3–6. The topology lock and the rig-before-shape-keys ordering are effectively irreversible.\n2. **The look** — nothing you can buy already looks like the target, and \"does it look right\" is not a test you can automate. The unification pass is not polish; **it is the thing that makes a mixed-source gym read as one hand instead of an asset flip.**\n3. **Split normals** — narrow, technical, and it will make you think the outline technique is broken.\n\n**Not a risk, despite feeling like one: the backend.** One droplet, one SQLite file, continuous backup. It will absorb far more traffic than a token launch will send it.\n\n---\n\n## 6. WHAT WOULD KILL THIS\n\n**1. The look never arrives and you ship an asset flip.** Most likely killer. Three months of engineering, no 3D artist, and the entire pitch is \"it looks like a cartoon.\" If the shading pass slips to the end, it slips forever, and you ship generic low-poly with a gym theme — indistinguishable from a hundred free demos and worthless as a brand asset. *Avoid it by inverting the order: shading in week one, on a phone, judged by a human.*\n\n**2. The character can't be rigged, discovered in month two.** You commission a chibi Kevin because chibi reads well as a mascot, the auto-rigger refuses him, you hand-rig, and then discover your two Kevin meshes have incompatible topology and cannot morph. *Avoid it with the week-one greybox and the proportion constraint written into the art brief.*\n\n**3. Punishing decay churns the audience.** The instinct to make the punishment harsh is exactly wrong. A crypto audience opening the app after a bad week to find a stick figure will close it forever, and your most engaged users become your loudest detractors.\n- **Set the bar to keep your muscle absurdly low — one set on one machine.** Track the ambitious workout as a separate rewarded layer on top. Duolingo's measured result from decoupling streak-keeping from the ambitious daily goal: **+3.3% day-14 retention, +1% daily actives, +19% streak rate.**\n- **Use an exponential curve, not linear.** Loop Habit Tracker's shipped formula gives ~5.2% loss per idle day and a 13-day half-life — a missed week costs ~31%, not everything. Read the GPL source, extract the maths, reimplement it clean, and keep a note recording that you did.\n- **Cap damage per absence** so a two-week trip isn't fourteen separate punishments.\n- **Ship 1–2 earnable \"protein shake\" freezes.** Duolingo measured +0.38% daily actives from allowing two.\n- **Earn-back through effort, never through payment.** A paid streak restore in a crypto game invites exactly the conversation you don't want.\n- No confirmshaming. \"Are you really going to give up now?\" costs more than it earns.\n\n**4. A server outage silently deletes everyone's muscle.** One bad night and every player wakes to a body they didn't lose — unrecoverable in a community that already assumes you'll rug them. **Ship a global decay-suspension kill switch and a retroactive forgiveness window in v1, not v2.** Precedent: Duolingo's \"Big Red Button\" has protected over two million streaks; Habitica ships the same thing. Half a day of work, buys you the ability to survive your own downtime.\n\n**5. Client-side decay, cheatable in ten seconds.** Change the phone clock, get infinite muscle. **All decay computed from server time**, stored as last-checkpoint plus value, derived lazily on read. The client sends *intents* (\"I used the bench\"), never results.\n\n**6. A licence lands in the build you can't ship.** Every one of these is a click off the recommended path:\n- **CC0 on itch.io is an author's self-declaration on an editable page.** Archive dated captures.\n- **sousinho's Sketchfab account mixes licences** — the gym models are CC BY, but other models on the same account are under Sketchfab \"Free Standard,\" which is not Creative Commons.\n- **Sketchfab's \"Gym Equipment\" carries an explicit NoAI flag** barring use in or as input to generative AI programs.\n- **`brunosimon/my-room-in-3d`** — the beautiful reference everyone copies — declares `\"license\": \"UNLICENSED\"`. Study the technique, copy nothing.\n- **Habitica's art is CC-BY-NC-SA 3.0** — non-commercial — separately from its GPL code.\n- **PM2 is AGPL-3.0.** Three Telegram sibling templates have no licence at all. `@telegram-apps/init-data-node` is deprecated.\n- Policy: **CC0 or paid-with-clear-terms only.** If even one CC BY asset ships, build the credits panel on day one. Retrofitting attribution after launch is how projects get caught.\n\n**7. Scope creep from the token community.** The pattern is predictable: leaderboard, then wallet connect, then NFT skins, then battle mode — and the founder says yes because the community *is* the marketing. Each is a month, none tests the core loop. **Ship the loop first.** The token integration goes far better on top of a game people already open daily, and it is a compliance problem you want to meet once, not twice.\n\n**8. Nobody tests on a real phone inside Telegram until week ten.** Desktop browsers lie about memory ceilings, GPU behaviour, touch, and how the Telegram SDK initialises. Test on a physical iPhone inside Telegram in week one and every week after.\n\n---\n\n## WHERE THE RESEARCH IS THIN — stated plainly\n\n- **Mixamo's licence could not be fetched.** Adobe's FAQ returned HTTP 503 to every attempt across two independent sessions. Corroborated secondhand and high-confidence, but get a human screenshot before launch. This is the licence all animation rests on.\n- **Tripo AI is completely unverifiable** — licence, terms and feature page all 403. Excluded, not evaluated.\n- **Poly Pizza is completely unverifiable** — site 403, model pages 403, API 401. It may be a fine source; we simply cannot say. Worth ten minutes of a human with a browser.\n- **No reference game exists** for this exact combination (Telegram Mini App + cartoon 3D + continuous body morph + real-time decay). There is nothing to fork. Every individual piece is demonstrated — three.js ships working morph-target examples — but nobody has assembled this shape. That's the opportunity and the risk in the same sentence.\n- **No open-licensed cartoon gym environment exists.** You will kit-bash. Budget it.\n- **CC0 gym equipment barely exists.** If One More Rep's CC0 claim doesn't survive inspection of the actual download, you fall back to CC BY plus a credits screen, or lean harder on the $5 pack.\n- **Whether tap-and-watch is fun enough is untested and untestable without shipping.** That is what v1 is for.",
+    "dimensions": [
+      {
+        "dimension": "assets",
+        "checked": [
+          {
+            "name": "Low Poly Gym Set [+70 Models] — VNB-Leo (itch.io)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up. The itch.io structured \"Asset license\" field literally contains 'Creative Commons Attribution v4.0 International' (verified in raw page HTML), 70+ models, Standard FBX zip 5.3 MB / Unity package 1.3 MB, name-your-own-price. The commercial-use quote is verbatim and correct. The claimed licence conflict is also real and verbatim: the author writes \"you're not allowed to re-sell or publish my work alone or as a part of some asset pack\" alongside the CC BY 4.0 tag — the researcher's risk flag is accurate, not overstated. One item downgraded from fact to inference: I could not complete itch's pay-what-you-want download flow, so the specific \"~12x12 pixel PNG palette\" dimension is NOT independently verified. However the load-bearing mechanism IS confirmed by the author's own page text: \"Textures (paintings, palettes, etc, all included and you can easily create new ones using these as reference)\" and \"with the exception of the palettes (which are now incompatible with prev ones, new ones are way clearer and UVs arrange differently)\". Models are UV-mapped to a shared swappable palette, so the one-file-recolour plan is sound; treat the exact pixel dimensions as unconfirmed."
+          },
+          {
+            "name": "Kenney — Furniture Kit",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Contents verified by downloading the actual zip, and the researcher's inventory is exact. kenney_furniture-kit.zip is 5,130,729 bytes (5.13 MB decimal, as claimed) and contains exactly 140 .glb, 140 .obj, 140 .mtl, 140 .fbx, 140 .dae, 140 .stl and 702 .png — every count matches. All 23 individually named models exist verbatim (bathroomMirror, bench, benchCushion, benchCushionLow, bookcaseClosedDoors, coatRack, coatRackStanding, rugRectangle, rugSquare, wall, wallCorner, wallHalf, wallDoorway, wallWindow, floorFull, floorHalf, doorway, trashcan, speaker, speakerSmall, televisionModern, pottedPlant, stairs) under Models/GLTF format/. CC0 confirmed on the asset page. ONE MINOR CORRECTION: individual GLB sizes are 2,260 bytes to 72,048 bytes (mean 14 KB), not the claimed \"7-35 KB\" — the real spread is wider at both ends. Immaterial to the plan; everything is still tiny."
+          },
+          {
+            "name": "3DLAND / 3dworldvibes — \"FREE LowPoly Crossfit\" series (19 models, Sketchfab)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Fully verified via the Sketchfab v3 API and unusually accurate. A search of this author's models for \"Crossfit\" returns exactly 19 results, every one CC Attribution and every one isDownloadable=true. All nineteen face counts match the report exactly: Pull Ups 193, Jumping Boxes 332, Weight Bench 2 612, Push Up Tools 648, Rope climbing 672, Treadmill 1168, WOD bench 1446, Rubber Bands 1488, Weight Bench 1 1572, Boxing 2728, workout Weight 3660, Elliptical Trainer 3664, Curved Treadmill 3686, Bike 3929, Squats stuff 4740, Bars Weights 4888, Wall Balls 6024, Hand Weight 8272, Kettlebell 19864. The kettlebell outlier is real. One clarification: the linked profile URL is a mixed portfolio, not a gym account — it also holds weapons, Stargate and vehicle models — so filter to the \"FREE LowPoly Crossfit\" name prefix rather than downloading the author's page wholesale."
+          },
+          {
+            "name": "\"Gym Equipment\" by Low Poly Models (Sketchfab)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up exactly. Sketchfab v3 API returns name \"Gym Equipment\", faceCount 15,868 (matching the report precisely), vertexCount 8,450, isDownloadable true, and licence \"CC Attribution\" / Creative Commons Attribution 4.0 with the explicit requirement string \"Author must be credited. Commercial use is allowed.\" Uploader is username LowPolyModelsWorld, display name \"Low Poly Models\" — the researcher's provenance caveat about a generic unbacked handle is fair."
+          },
+          {
+            "name": "Matrixxy — \"LowPoly Gym Assets\" (Sketchfab)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up exactly. API returns faceCount 9,876 (matching precisely), vertexCount 4,972, isDownloadable true, licence \"CC Attribution\" with \"Author must be credited. Commercial use is allowed.\" Uploader username matrixxy."
+          },
+          {
+            "name": "Sousinho — gym equipment set (7 models, Sketchfab)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "All seven gym models verified individually: Treadmill Machine 6,106; Squat Rack With Bar 9,686; Flat Bench 10,687; Incline Bench 5,628; Weightlifting Blocks 3,492; Weightlifting Bumper Plates 24,064; Olympic Weightlifting Platform 50,994 — every face count exact, all CC Attribution, all downloadable. IMPORTANT ADDITION THE REPORT MISSED: this author's wider portfolio mixes licences. Listing the account's downloadable models surfaces several under Sketchfab's \"Free Standard\" licence rather than CC BY — Sweater, Steel bin, Electric floor lamp, Tool trolleys and Shampoo bottle among them. Free Standard is NOT a Creative Commons licence and carries different terms. The seven gym pieces are clean, but if anyone cherry-picks further from this account they must re-check the licence per model rather than assuming CC BY. Also a characterisation nit: this is a general prop artist's portfolio (taxis, spaceships, grenades, a medieval wagon), not a dedicated powerlifting set — the seven gym items are internally consistent, but the account is not a gym source."
+          },
+          {
+            "name": "3D LowPoly Gym Game Assets — andre4cale (itch.io)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up exactly, including the verbatim licence text: \"This asset pack can be used in free and commercial projects. You can modify the assets as you need. Credit is not necessary, but always appreciated. You may not repackage, redistribute or resell the assets, no matter how much they are modified.\" Confirmed: $5.00 USD or more, 31 models, glTF + OBJ + FBX, 772 kB. Commercial use permitted and attribution genuinely optional, so the \"no attribution obligation\" claim is correct — this is a custom permissive licence, correctly NOT described as Creative Commons."
+          },
+          {
+            "name": "OpenGameArt — three genuinely CC0 gym items",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "All three verified CC0 and reachable (HTTP 200). Vintage Dumbbell 3D by GGBotNet: CC0, 340 triangles, .FBX and .OBJ, Dumbbell.zip 140.2 KB — exactly as claimed; small addition, it also ships a 256x256 diffuse texture you would discard anyway under the strip-materials plan. hometrainer: CC0 confirmed. lowpoly-fitness-characters: CC0 confirmed. The iPoly3D negative claim also checks out precisely — \"Low Poly Gym Environment\" returns faceCount 566,006 with isDownloadable=false, so it is correctly excluded."
+          },
+          {
+            "name": "ambientCG — CC0 material library",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up. The licence page confirms Creative Commons CC0 1.0 Universal across the downloadable asset files and preview renders, commercial use permitted, attribution not required (\"You don't need to give credit but I would of course appreciate it\"), and raw files may be embedded directly in a game. No exceptions or carve-outs found. The researcher's own \"weak fit\" rating is the right call for a cel-shaded target."
+          },
+          {
+            "name": "Quaternius — full library (no gym pack exists)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "The headline correction is real and important, and it verifies. quaternius.com/license.html states \"Quaternius Asset License (QAL) v1.0\", last updated 8/28/2026 — it is NOT CC0. Commercial use is granted (\"use these assets, free of charge, in personal, educational, and commercial games and other projects\"), \"No attribution is required\", and redistribution is barred: \"You may not extract, repackage, sublicense, sell, or otherwise redistribute the Assets (in original or modified form) as a standalone asset\". Anyone relying on an older \"Quaternius is CC0\" blog post would be citing a dead licence. I did not exhaustively enumerate every pack to re-confirm \"no gym pack exists\", so treat that specific negative as unverified — but it does not affect the recommendation, which uses Quaternius for nothing."
+          },
+          {
+            "name": "Kenney — full 3D catalogue (no gym pack exists)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "The 404 probes reproduce exactly: /assets/sports-kit, /assets/gym-kit and /assets/fitness-kit all return HTTP 404, while /assets/food-kit, /assets/retro-urban-kit, /assets/mini-arena and /assets/category:3D all return 200. Kenney genuinely has no gym or 3D sports kit. Food Kit downloaded and measured at 4.61 MB (claimed 4.6 MB, correct), 200 GLB models. CORRECTION TO THE FILE LIST: of the five files named, barrel.glb, can.glb and carton.glb exist verbatim under Models/GLB format/, but there is NO bottle.glb and NO cereal.glb. The actual names are bottle-ketchup.glb, bottle-musterd.glb, bottle-oil.glb, soda-bottle.glb and bowl-cereal.glb. This does not damage the recommendation, since the two files actually proposed for the protein-tub retexture — can.glb and barrel.glb — both exist as named."
+          },
+          {
+            "name": "vinciplay — CC0 \"FITNESS\" / \"WORKOUT\" series (Sketchfab)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "The licence tag is confirmed CC0 Public Domain on every FITNESS and WORKOUT model sampled, and the provenance skepticism is fully substantiated: the account holds exactly 1,076 models with biography null, website null, empty descriptions and zero tags on every model checked — precisely the bulk-upload signature described. Minor numeric correction: the face range is wider than the claimed \"mostly 1,400-19,000\", with FITNESS 1151 at 50,357 and WORKOUT RB2328 at 22,556. I could not independently confirm the outdoor-park-equipment characterisation without rendering thumbnails, but the recommendation against using these on provenance grounds stands regardless of what they depict — a CC0 tag from an anonymous 1,076-model account with no authorship metadata is an uploader assertion, not a warranty."
+          },
+          {
+            "name": "Poly Pizza — COULD NOT VERIFY",
+            "urlReachable": false,
+            "licenseConfirmed": false,
+            "correction": "The non-finding reproduces exactly and the researcher was right to flag rather than report it. https://poly.pizza/ returns HTTP 403, the specific model page https://poly.pizza/m/hOBP8R1z1f returns HTTP 403, and api.poly.pizza returns HTTP 401 demanding an API key. Nothing about this source — licence, formats or poly counts — can be confirmed from here. Correctly excluded from the recommendation; a human with a browser should check it manually."
+          }
+        ],
+        "survivingRecommendation": "Everything material survived. This report is unusually accurate: I re-derived every Sketchfab face count via the v3 API and downloaded the Kenney zips, and the numbers match exactly (15,868 / 9,876 / all 19 Crossfit counts / all 7 sousinho counts / 140-of-each-format at 5.13 MB). Three corrections are cosmetic and one addition is a genuine legal catch. The plan stands as written.\n\nSPINE — VNB-Leo Low Poly Gym Set (itch.io, name-your-own-price). CC BY 4.0 confirmed verbatim in itch's structured Asset license field; commercial use explicitly granted. 70+ models, FBX zip 5.3 MB. The one-file-recolour trick is real — the author's own page confirms models are UV-mapped to shared swappable palette textures — but the specific \"12x12 pixel\" figure is unverified, so plan the palette swap as the mechanism without budgeting against an exact texture size.\n\nSHELL AND PROPS — Kenney Furniture Kit (CC0, 140 models, GLB-native, 5.13 MB, verified by download) for modular walls, floors, doorways, mirror, benches, mats and clutter. Plus Kenney Food Kit (CC0, 4.61 MB) for the supplement tub — retexture can.glb or barrel.glb, both of which exist verbatim. Do not go looking for bottle.glb or cereal.glb; they do not exist under those names (the real ones are bottle-ketchup.glb, soda-bottle.glb, bowl-cereal.glb). Individual Furniture Kit GLBs run 2 KB to 72 KB, a slightly wider spread than reported but negligible either way.\n\nGAP-FILLING — 3DLAND's 19-piece Crossfit series (all 19 confirmed CC BY, all downloadable, 193 to 19,864 faces) and Matrixxy's LowPoly Gym Assets (CC BY, 9,876 faces). Filter 3DLAND by the \"FREE LowPoly Crossfit\" name prefix — the profile is a mixed portfolio containing weapons and vehicles, not a gym account. Decimate or replace the 19,864-face kettlebell.\n\nINSURANCE — spend the $5 on andre4cale's pack. Licence text verified verbatim: commercial use allowed, credit not necessary, no redistribution. 31 models, native glTF, 772 kB. Still the only find with zero conversion cost and zero attribution obligation.\n\nNEW LEGAL CATCH, not in the original report: sousinho's Sketchfab account mixes licences. The seven gym models are all genuinely CC BY, but other models on that account (Sweater, Steel bin, Electric floor lamp, Tool trolleys, Shampoo bottle) are under Sketchfab's \"Free Standard\" licence, which is NOT Creative Commons and carries different terms. If anyone cherry-picks beyond the seven verified gym pieces, they must check the licence per model. This is exactly the failure mode the brief warns about, and it is one click away from the recommended path.\n\nCORRECTLY EXCLUDED, all three verified as excluded for good reason: vinciplay (CC0 tag is real, but 1,076 models with null bio, null website, no descriptions and no tags is an uploader assertion, not provenance — avoid); Poly Pizza (403/403/401 reproduced exactly, nothing confirmable, needs a human with a browser); iPoly3D's Low Poly Gym Environment (566,006 faces, isDownloadable=false — not obtainable). Quaternius stays out of the build but its licence correction is real and worth carrying: it is QAL v1.0 as of 2026-08-28, no longer CC0. Commercially free and attribution-free, so practically equivalent, but cite it correctly.\n\nThe strategic conclusions all hold. CC0 gym equipment essentially does not exist — the only CC0 gym geometry I could confirm is a 340-triangle dumbbell and one exercise bike on OpenGameArt, both verified. So you will depend on CC BY for the actual gym equipment, which means a credits panel with author name, link and a note that you modified the work is a real shipping requirement, not a formality. Build it on day one. Only Kenney and andre4cale ship browser-ready GLB; write the single headless Blender pass (strip materials, apply shared palette, decimate above a hard face budget that fails loudly, export Draco GLB) rather than converting by hand. And the decisive point is unchanged and correct: no open-licensed assets already look like your target, so the material-normalisation and outline pass is not polish — it is the thing that makes a mixed-source gym read as one hand instead of an asset flip."
+      },
+      {
+        "dimension": "environments",
+        "checked": [
+          {
+            "name": "Kenney \"Mini\" series room shell (Mini Market / Mini Arcade / Mini Skate)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up. kenney.nl/assets/mini-market, /mini-arcade and /mini-skate all resolve, all state Creative Commons CC0, all are 3D, ~20 files each; Mini Arcade is 2024 v1.2, Mini Skate v1.2 with character rigs — consistent with the claim that the Mini kits ship rigged characters. One narrowing: the claim \"There is no Kenney gym or sports kit\" is true only for 3D. Kenney DOES publish kenney.nl/assets/sports-pack (380 assets, CC0), but it is a 2D top-down tile pack, so it is useless here. The specific slugs probed (/sports-kit, /gym-kit, /interior-kit) are indeed not real pages. Also note the researcher's Kenney sweep missed two live 3D modular kits that are plausible shell alternatives and were never evaluated: kenney.nl/assets/building-kit and kenney.nl/assets/prototype-kit."
+          },
+          {
+            "name": "Kenney Furniture Kit",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up. Page resolves, states 140x files and Creative Commons CC0, free download. The asset page itself only tags furniture/interior/table/chair/bed and does not enumerate wall/floor/shower/mirror models, so the detailed manifest rests entirely on the researcher's own download rather than on any public page — re-confirm from the zip before planning around bathroomMirror.glb / shower.glb specifically. Licence and commercial use are solid."
+          },
+          {
+            "name": "KayKit Prototype Bits (Kay Lousberg)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up in full. Page confirms CC0, \"free for personal and commercial use, no attribution required\", the don't-resell request, 64+ models in the free tier, OBJ/FBX/GLTF, lockers + tools + workbench, and the single 1024x1024 gradient atlas \"can be downsampled up to 128x128\". One addition the finding omits: paid tiers are Extra $3.95+ (12 more assets) and Source $5.95+ — cheaper than the KayKit Dungeon Source tier the recommendation proposes buying."
+          },
+          {
+            "name": "One More Rep: Gym & Fitness Props (The SideQuest Shop)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up exactly, including the specifics. Page confirms CC0 1.0 public-domain / commercial use / no attribution on the base tier, the separate $7.95+ colourways tier as royalty-free-but-no-standalone-redistribution, name-your-own-price base, GLB and FBX, 15,214 triangles across 21 props, and the prop list. The researcher's own caveat stands and should be kept: this is an author self-declaration on an itch store page, not a licence file, so download and archive a capture before shipping."
+          },
+          {
+            "name": "Unity-Asset Polytoon Gym (comphonia)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up, and one caveat resolves. Page confirms CC0 with the exact quoted wording, free/name-your-own-price, 24 models, 1 MB, single colour-grid UV, no characters. The finding says \"the store page does not explicitly list file formats\" — it does: the download is a Unity 3D asset package (.zip). So the conversion step is confirmed, not speculative: this is a .unitypackage, not FBX/GLB, and needs Unity-side extraction plus a Blender export before it can reach a browser. That is a heavier lift than the finding implies for a team with no 3D pipeline."
+          },
+          {
+            "name": "KayKit Dungeon Pack",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up exactly, including the pricing the recommendation depends on: free tier 200+ assets, Extra $7.95+ for 275+ assets and 6 alternative textures, Source $11.95+ for .blend files. CC0, commercial use, no attribution required. FBX/GLTF/OBJ confirmed."
+          },
+          {
+            "name": "Quaternius Sushi Restaurant Kit",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up, and it is better than the finding claims. Page confirms 108 models, CC0, and all four formats FBX/OBJ/Blend/glTF. Critically, the pack page explicitly advertises \"modular interior models\" alongside animated characters (30 animations), food and dishes — so the finding's flagged risk that the room-shell claim was \"inferred, not confirmed\" is now partly resolved by the page itself. The individual wall/floor model list still is not enumerable without downloading, so treat the exact module inventory as unverified, but the room-shell claim itself is no longer unsupported. Site-wide licence at quaternius.com/license.html verified verbatim: commercial exploitation granted, no attribution required, standalone redistribution of raw assets forbidden."
+          },
+          {
+            "name": "Quaternius Ultimate House Interior Pack",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up exactly, including the load-bearing negative. Page lists 123 models, CC0, and formats FBX / OBJ / Blend with NO glTF — confirming the Blender conversion step. Deprioritisation is justified."
+          },
+          {
+            "name": "Quaternius Modular Sci-Fi MegaKit",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "MATERIAL CORRECTION — the piece count is tier-gated and the finding presents it as free. The itch page confirms CC0 and FBX/OBJ/glTF, but the tiers are: Standard free = 190 assets; Pro $9.99+ = 230+ assets; Source $14.99+ = 270+ assets with Unity URP / Unreal / Godot project files. The finding's \"277 modular environment pieces\" is the paid Source tier, not the free download. The page also describes the catalogue as \"270+\", not 277. The pack is still real, still CC0, still glTF, and the free 190 assets are still the largest CC0 grid-modular room system verified here — but do not budget on 277 free pieces."
+          },
+          {
+            "name": "Kenney Modular Dungeon Kit",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up. Page resolves, states Creative Commons CC0, and confirms v2.1 with added ground textures and detail. Minor discrepancy: the asset page advertises \"40x\" files against the researcher's counted 42 GLBs — Kenney's page counts are rounded and the download is authoritative, so this is not a real conflict. The byte measurements (7.4 MB total, room-large.glb at ~921 KB, template-wall.glb at 43,216 bytes) come from the researcher's own download and cannot be checked from the page; they are the basis of the whole deprioritisation, so re-measure if that decision is ever revisited."
+          },
+          {
+            "name": "Low Poly Gym Set [+70 Models] (VNBP - Leo)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up exactly, including the licence trap. Page confirms Creative Commons Attribution v4.0 International, the author's permissive wording, the no-resell restriction, name-your-own-price, 70+ models, and both downloads at the stated sizes (separated FBX 5.3 MB, Unity package 1.3 MB). No glTF, so the conversion step is real. Attribution is legally mandatory under CC BY 4.0 regardless of the author's casual phrasing — the finding is right to say so. One added detail: the pack uses 12x12 pixel PNG palette textures, i.e. the same single-palette re-skin trick as the CC0 kits, which makes it a slightly stronger fallback than the finding suggests if the attribution cost is accepted."
+          },
+          {
+            "name": "3D LowPoly Gym Game Assets (andre4cale)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up, licence quoted accurately. Page confirms $5.00+ USD, 31 stylised low-poly game-ready assets, glTF/OBJ/FBX, 4x floor tiles and 4x modular walls alongside the gym equipment, and the exact custom terms — commercial use allowed, modification allowed, credit not required, and \"You may not repackage, redistribute or resell the assets, no matter how much they are modified.\" This is a proprietary royalty-free licence, correctly flagged as NOT open source. One practical addition the finding omits: the download is a 772 kB .rar, so extraction needs unrar rather than a standard zip tool."
+          },
+          {
+            "name": "Sketchfab: \"Modular Gym\" by Kristen Brown",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up. Model exists, author Kristen Brown (@kristnbrown) credited as a group project with Matthew, Tyler and Kyle, licence CC Attribution (CC BY 4.0), downloadable (9,797 downloads), 167.5k triangles / 85.5k vertices. Commercial use permitted with credit. The recommendation to use it only as a layout reference and never ship it is correct on the numbers."
+          },
+          {
+            "name": "Sketchfab: \"Gym Equipment\" by Low Poly Models (MaHa)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up, including the NoAI flag. Page confirms author MaHa (@LowPolyModelsWorld), CC Attribution licence, free download, 15.9k triangles / 8.5k vertices, texture atlas, published Oct 2023, and the explicit notice \"This model may not be used in datasets for, in the development of, or as inputs to generative AI programs.\" The finding's escalation of that flag to the team is warranted."
+          },
+          {
+            "name": "OpenGameArt: \"Modular House - 3D Models\" by Keith / Fertile Soil Productions",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up exactly. Page confirms author Keith at Fertile Soil Productions, CC0 public-domain-zero, unrestricted commercial use, .obj files formatted for Asset Forge, and both downloads at the stated sizes (house_collection.zip 508 KB, modular_house_collection.zip 1.3 MB). Contents match: walls, windows, doors, steps, railing, plus kitchen and bathroom fixtures."
+          },
+          {
+            "name": "OpenGameArt: \"Modular Concrete Interior 3D\" by AXLplosion",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up exactly. Page confirms author AXLplosion, CC0 with the quoted \"even commercial ones\" wording, modular_concrete_interior.zip at 50.4 MB, 2K textures across 3 materials, posted April 2021, described as very low poly-count for first-person games. The rejection on download size and photoreal PBR styling is sound."
+          },
+          {
+            "name": "Poly Haven",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up. Site confirms CC0 across the library, no signup, no paywall, and three categories: HDRIs, photoscanned PBR textures (8k minimum), and models. The finding's characterisation as photoreal-only and unsuitable for a cel-shaded gym is accurate. Worth noting as a small plus the finding did not mention: Poly Haven states its assets are hand-crafted and explicitly avoid generative AI, which is relevant only if the team ever needs provenance guarantees."
+          }
+        ],
+        "survivingRecommendation": "Every one of the 17 findings survived fact-checking. All 17 URLs resolve, and every licence claim was confirmed against the live page or, for Quaternius, against the site-wide licence text. There are no hallucinated packs and no wrong licences in this set — which is unusual and worth saying plainly, because it means the recommendation can be acted on. Three corrections change details, and one changes a number you would have budgeted against.\n\nTHE CENTRAL FINDING SURVIVES. There is no open-source gym environment in a cartoon style. The only genuine modular gym environment with a commercial licence — Sketchfab's \"Modular Gym\" by Kristen Brown — is verified at 167.5k triangles, CC BY (attribution mandatory), and semi-realistic student environment art. Confirmed as a layout reference only, never shippable. Build the room from a modular shell and drop CC0 gym props into it. Budget that kit-bash time explicitly.\n\nSHELL — Kenney Mini series (Mini Market + Mini Arcade). All three Mini pages resolve, all state CC0, all are 3D, ~20 files each. Commercial use with no attribution is confirmed on the asset pages; the researcher additionally read the License.txt inside the downloaded zips. One narrowing: \"Kenney has no sports kit\" is true only for 3D — a CC0 Kenney Sports Pack does exist but is a 2D top-down tile pack, so it is irrelevant here. Two live Kenney 3D modular kits were never evaluated and should be looked at before committing: Building Kit and Prototype Kit. Add Kenney Furniture Kit (page confirms 140 files, CC0) for architectural variety — but note its detailed model manifest, including the bench/mirror/shower props the recommendation leans on, appears nowhere on the public page and rests entirely on the researcher's download. Re-confirm from the zip. Pick ONE Kenney family and stay in it.\n\nEQUIPMENT — \"One More Rep: Gym & Fitness Props\" free tier. Verified to the digit: CC0 1.0 public domain, commercial use, no attribution, name-your-own-price base tier, GLB and FBX, 15,214 triangles across 21 props, and the paid $7.95+ colourways tier correctly flagged as no-standalone-redistribution. Covers all three gameplay stations. This is the strongest single find and it checks out completely.\n\nSupplement with Polytoon Gym (CC0 confirmed verbatim, 24 models, 1 MB, single colour-grid UV, no characters) — but with a heavier caveat than the finding gave it. The page DOES state its format, and it is a Unity .unitypackage, not FBX. That means Unity-side extraction plus a Blender export before it reaches a browser: a two-step pipeline for a team with no 3D artist, not a one-step conversion. Treat it as second choice, not a casual add.\n\nAnd KayKit Prototype Bits for lockers — verified in full: CC0, no attribution, 64+ free models, OBJ/FBX/GLTF, lockers/tools/workbench present, single 1024x1024 gradient atlas downsamplable to 128x128 exactly as claimed.\n\nTHE ONE NUMBER TO CHANGE: Quaternius Modular Sci-Fi MegaKit is not 277 free pieces. The free Standard tier is 190 assets; 230+ costs $9.99+, and the 270+ figure is the $14.95-class Source tier. Still CC0, still ships glTF, still the largest CC0 grid-modular room system verified — but re-plan against 190 free pieces if you cherry-pick from it.\n\nONE CAVEAT TO RELAX: the Quaternius Sushi Restaurant Kit's room-shell claim is no longer unverified. Its pack page explicitly advertises \"modular interior models\" and lists all four formats including glTF, with 108 models under CC0. The exact wall/floor inventory still needs a download to enumerate, but the structural claim now has page support.\n\nTHE SOURCE-FILES ADVICE STANDS, WITH A CHEAPER OPTION. KayKit Dungeon Pack's $11.95 Source tier with .blend files is confirmed at that price. But KayKit Prototype Bits — already in your stack for lockers — has its own Source tier at $5.95+. If the goal is simply an escape hatch to edit geometry, buy the cheaper one from the pack you are actually using.\n\nLICENCE HYGIENE, ALL CONFIRMED. CC BY 4.0 verified on all three attribution-required assets (VNBP Low Poly Gym Set, Sketchfab Modular Gym, Sketchfab Gym Equipment) — one of these in the build forces a permanent credits screen. The NoAI flag on Sketchfab's \"Gym Equipment\" is real and reads exactly as quoted: no use in datasets for, development of, or as input to generative AI programs. andre4cale's $5 pack is confirmed proprietary-but-commercial with a redistribution ban that survives modification, and ships as a 772 kB .rar. Quaternius's no-standalone-redistribution clause is verified verbatim on their licence page. The itch.io provenance risk the researcher raised is the right one to act on: One More Rep, Polytoon Gym and both KayKit packs assert CC0 only on an editable store page, so download each, check for a LICENSE file, and archive a dated capture before shipping.\n\nThe download budget conclusion — well under 500 KB of GLB plus ~25 KB of textures for the environment, leaving the mobile budget for the character's muscle-morph model — depends on byte measurements taken from the researcher's own downloads and cannot be checked from any page. Nothing contradicts it, and the direction is clearly right, but re-measure before you treat it as a hard budget."
+      },
+      {
+        "dimension": "engine",
+        "checked": [
+          {
+            "name": "three.js (r185 / npm 0.185.1)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": ""
+          },
+          {
+            "name": "Babylon.js 9.23.0 (@babylonjs/core + @babylonjs/loaders + @babylonjs/materials)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": ""
+          },
+          {
+            "name": "PlayCanvas Engine 2.21.4",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": ""
+          },
+          {
+            "name": "Godot 4.6-stable, web export",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "License and payload measurements are correct, but two claims are wrong. (1) STALE VERSION: 4.6-stable is superseded. As of today the current stable is 4.7.2-stable (published 2026-08-18); godot-builds also tags 3.6.3-stable as 'Latest'. There is no 4.6-stable on the first page of releases — the asset only resolves by direct URL. I re-ran the researcher's exact method against 4.7.2-stable: web_nothreads_release.zip -> godot.wasm = 39,514,754 bytes raw / 10,054,758 bytes gzip -9. Current Godot is BIGGER than the version measured, so the correct figures are ~39.5 MB raw / ~10.05 MB gzipped, and the ratio versus three.js is ~63x, not ~59x. The finding's conclusion is unchanged and in fact understated. (2) ISSUE MISCHARACTERIZED: github.com/godotengine/godot/issues/107390 exists but is not an 'open report of web builds crashing or reloading on iOS Chrome/Safari.' It is titled 'Godot 4.5 dev5 HTML export web game crashes/reloads in iOS Chrome and Safari after a few minutes IF AUDIO IS USED' — a narrow, audio-triggered regression (affects 4.5-dev5 and 4.4.1; 4.3 and 3.5.3 unaffected), and it is CLOSED with fix PR #107948. Citing it as evidence of general iOS web instability overstates it; drop it or restate it accurately. Everything else in this entry verified exactly: the docs URL resolves and contains the COOP/COEP requirement, the single-threaded default, the Safari 'several issues with WebGL 2.0 support' warning, and the mobile CPU/GPU caution; the 4.6 templates .tpz is 1,251,639,300 bytes (the claimed 1.25 GB); and I reproduced the 4.6 numbers byte-for-byte by range-reading the central directory — web_release.zip 9,540,266, web_nothreads_release.zip 9,545,149, godot.wasm 37,686,550 raw / 9,392,898 gzip -9."
+          }
+        ],
+        "survivingRecommendation": "VERDICT: The recommendation survives intact and is strengthened. All four URLs resolve and describe what was claimed. All four licenses are confirmed correct and all four permit commercial use — there is no legal exposure in this dimension. Every bundle measurement independently reproduced within 0.07%. The only errors found are in the Godot entry, and both cut in favor of the existing recommendation.\n\nLICENSES (all verified against the actual license text / npm metadata, not from memory):\n- three.js 0.185.1 — MIT. LICENSE reads verbatim \"The MIT License / Copyright © 2010-2026 three.js authors\". npm `latest` is 0.185.1, so the pinned version is current. Commercial use allowed; only obligation is preserving the notice.\n- Babylon.js — Apache-2.0, confirmed on the GitHub repo AND in npm metadata for both @babylonjs/core@9.23.0 and @babylonjs/materials@9.23.0 (both `latest`). Commercial use allowed. The finding's note that Apache-2.0 adds NOTICE-preservation and a patent grant that MIT lacks is accurate and worth keeping.\n- PlayCanvas engine 2.21.4 — MIT, LICENSE reads \"Copyright (c) 2011-2026 PlayCanvas Ltd.\" npm `latest` is 2.21.4. Engine is commercially usable and self-hostable; the editor is correctly identified as separate commercial SaaS.\n- Godot — MIT engine, no royalties. Correct.\n\nMEASUREMENTS I REPRODUCED INDEPENDENTLY (npm install + esbuild --bundle --minify --format=esm + gzip -9, my own entry points):\n- three.js: 625,463 raw / 158,728 gzipped (claimed 625,248 / 158,620) — matches.\n- Babylon.js: 3,461,469 raw / 801,038 gzipped (claimed 3,461,586 / 801,029) — matches.\n- PlayCanvas: 1,933,186 raw / 494,079 gzipped (claimed 1,933,278 / 494,164); prebuilt playcanvas.min.mjs 2,370,756 raw / 606,938 gzipped — exact match. I also hit the same `node:worker_threads` bundling papercut and had to mark it external, so that caveat is real.\n- Godot 4.6: exact to the byte (see correction). Godot 4.7.2 (current): 39,514,754 raw / 10,054,758 gzipped.\nSo the ratios stand and are slightly worse for the alternatives than stated: three.js is ~5x smaller than Babylon, ~3x smaller than PlayCanvas, and ~63x smaller than current Godot.\n\nTHE DECISIVE TECHNICAL CLAIMS ALL HELD, verified against source:\n- three.js src/renderers/shaders/ShaderLib/meshtoon.glsl.js includes <skinning_pars_vertex>, <skinning_vertex>, <morphtarget_pars_vertex>, <morphtarget_vertex>, <morphnormal_vertex> (plus <morphcolor_vertex>, <morphinstance_vertex>). Confirmed.\n- examples/jsm/effects/OutlineEffect.js: docstring is verbatim \"An outline effect for toon shaders\", imports BackSide (inverted hull), exposes outlineThickness, and its generated outline shader injects <skinning_pars_vertex>, <skinning_vertex>, <morphtarget_pars_vertex>, <morphtarget_vertex>, <morphnormal_vertex>. Confirmed — the outline does track the morph-inflated silhouette, which is the core muscle-growth hook.\n- MeshToonMaterial gradientMap docstring re NearestFilter — confirmed verbatim. WebGLMorphtargets does pack targets into textures — confirmed.\n- Babylon CellMaterial showstopper — CONFIRMED EXACTLY. @babylonjs/materials@9.23.0/cell/cell.vertex.js contains the string \"morph\" ZERO times while containing bonesDeclaration, bonesVertex and instancesVertex; @babylonjs/core@9.23.0 default.vertex.js has morph references on exactly 9 lines (the \"9\" is line count, as stated — 18 raw substring occurrences across 5 distinct tokens). Babylon's one shipped cel material genuinely cannot render a morph-driven character.\n- Telegram COOP/COEP risk — CONFIRMED. https://telegram.org/js/telegram-web-app.js returns `access-control-allow-origin: *` and NO `cross-origin-resource-policy` header, and core.telegram.org/bots/webapps says verbatim \"place the script telegram-web-app.js in the <head> tag before any other scripts\". The COEP: require-corp blocking analysis is sound. (One sub-claim I could not confirm from the Telegram docs page: that Mini Apps use a native webview on mobile and an iframe on desktop. Not refuted, just unverified — treat it as reasonable but uncited.)\n\nOnly immaterial nits: OutlineEffect is 489 lines, not \"~400\" (still cheap to vendor); the Draco+Meshopt bundle delta measured 168,360 gzipped on my entry point vs the claimed 166,862 — same ~8-10 KB story.\n\nSURVIVING RECOMMENDATION: Use three.js pinned to exactly 0.185.1 (no caret range — OutlineEffect lives in examples/jsm, which carries no semver guarantee), with MeshToonMaterial + a NearestFilter gradientMap ramp for the cel bands and three/addons/effects/OutlineEffect.js for the thick black outline. The case rests on two independently verified facts: the whole realistic art stack bundles to ~159 KB gzipped, and three.js is the only one of the four whose shipped toon material AND shipped outline both already follow skinned + morph-target geometry, which is exactly the muscle-growth mechanic. Babylon costs 5x the download and its only cel material provably cannot do morph targets, so the built-in-toon advantage evaporates precisely where it is needed. PlayCanvas costs 3x, ships no toon material or cartoon outline at all, and its editor advantage carries a $15/month floor with private projects locked on cancellation (verified on playcanvas.com/plans). Godot wins the art brief on paper and loses on payload by more than the original finding claimed — ~10.05 MB of gzipped WebAssembly on current stable, before a single asset or the .pck, inside a Telegram webview. Keep the build guidance as written: author 3-6 additive blendshapes driven from one 0..1 muscle scalar, verify the actual character model exports blendshapes through glTF before committing to it, bake averaged/smooth normals on anything that needs an outline, budget a real tuning pass for per-material outlineThickness so line weight reads uniform across props, test on a physical iPhone inside Telegram in week one, and serve static files with Brotli. Two edits to make before circulating: update the Godot figures to 4.7.2-stable (39.5 MB raw / ~10.05 MB gzipped, ~63x) since 4.6 is superseded, and either drop the citation of godot issue 107390 or restate it accurately as a closed, audio-specific regression rather than an open general iOS crash report."
+      },
+      {
+        "dimension": "shading — flat cartoon look + thick black outlines in a mobile browser",
+        "checked": [
+          {
+            "name": "three.js OutlineEffect (inverted-hull)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up. Fetched the raw source: calculateOutline() is `vec4 pos2 = projectionMatrix * modelViewMatrix * vec4(skinned.xyz + normal, 1.0); vec4 norm = normalize(pos - pos2); return pos + norm * thickness * pos.w * ratio;` — the finding's quoted expression omits the trailing `* ratio`, which is `const float ratio = 1.0` (a no-op with a TODO comment), so the pos.w / constant-NDC-width claim is exactly right. defaultThickness = 0.003 confirmed. All three includes confirmed present (morphtarget_vertex, skinning_vertex, displacementmap_vertex). The WebGPU/ToonOutlinePassNode note is verbatim in the JSDoc. userData.outlineParameters is read in updateUniforms(). The instancing defect is confirmed by reading: `#include <project_vertex>` produces gl_Position (applying instanceMatrix/batchingMatrix) but pos2 is built by hand from projectionMatrix * modelViewMatrix only. License MIT verified at raw LICENSE ('Copyright © 2010-2026 three.js authors, The MIT License') — commercial use permitted."
+          },
+          {
+            "name": "three.js MeshToonMaterial + gradientMap",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Substantively holds up; one small citation error. The page's <title> is 'three.js webgl - materials', NOT 'Toon Material with OutlineEffect' — that string is the info-div subtitle on the page. Everything else verified against source: example line 90 is `new THREE.DataTexture(colors, colors.length, 1, THREE.RedFormat)` and line 159 `new OutlineEffect(renderer)`. MeshToonMaterial.js doc comment verbatim: 'It's required to set Texture#minFilter and Texture#magFilter to NearestFilter' and 'gradientMap represents non-color data. Any texture assigned must have texture.colorSpace = NoColorSpace (default).' gradientmap_pars_fragment.glsl.js verified: with USE_GRADIENTMAP it returns `vec3(texture2D(gradientMap, coord).r)` (single scalar multiplier — the 'cannot re-hue the shade band' limit is real), and the #else fallback is `mix(vec3(0.7), vec3(1.0), smoothstep(0.7 - fw.x, 0.7 + fw.x, coord.x))` — the 0.7→1.0 washed-out claim is exact. MIT, commercial use permitted."
+          },
+          {
+            "name": "@pixiv/three-vrm-materials-mtoon",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up, verified line by line against packages/three-vrm-materials-mtoon/src/shaders/mtoon.vert. Under #ifdef OUTLINE: `float worldNormalLength = length(transformedNormal); vec3 outlineOffset = outlineWidthFactor * worldNormalLength * objectNormal;` then under #ifdef OUTLINE_WIDTH_SCREEN `outlineOffset *= vViewPosition.z / projectionMatrix[1].y;` then `gl_Position.z += 1E-6 * gl_Position.w; // anti-artifact magic`. morphtarget_vertex and skinning_vertex are included; `// #include <displacementmap_vertex>` is commented out exactly as claimed. shadeColorFactor / shadingShiftFactor / shadingToonyFactor confirmed as uniforms in MToonMaterial.ts. feature-test.html source confirmed: `const materialOutline = mesh.material.clone(); materialOutline.isOutline = true; materialOutline.side = THREE.BackSide;`. Two additions the finding omits: outlineWidthMultiplyTexture samples the .g channel (`texture2D(...).g`), so author your line-weight mask in green; and the npm peerDependency is `three: >=0.137` (open-ended upper bound, so pin and test). npm 3.5.5, license MIT, unpackedSize 680,339 bytes — all three figures exact. LICENSE at pixiv/three-vrm dev: 'Copyright (c) 2019-2026 pixiv Inc. / MIT License'. Commercial use permitted."
+          },
+          {
+            "name": "VRMC_materials_mtoon-1.0 specification",
+            "urlReachable": true,
+            "licenseConfirmed": false,
+            "correction": "URL loads in a browser (github.com blocks scripted GETs with 403; the raw README returns 200). Quoted spec text confirmed verbatim: 'the thickness of the outline being constant regardless of the world space distance to the mesh'; 'a ratio to the screen height'; outlineColorFactor default [0,0,0]; outlineLightingMixFactor default 1.0 with 'If the value is set to 0.0, the outline is rendered in the color specified by outlineColorFactor directly.' The license caution should be UPGRADED from 'did not verify' to 'verified absent': I probed LICENSE, LICENSE.md, LICENSE.txt and NOTICE at the repo root — all 404 — and the README contains no licence or copyright statement. So there is no licence grant at all: this is read-only reference. Do not copy spec prose or code from it; using the parameter NAMES as your own shader's API is fine (names are not copyrightable expression)."
+          },
+          {
+            "name": "OmarShehata/webgl-outlines",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up. Repo loads (curl gets 403 from GitHub's bot filter; browser fetch renders it). LICENSE verified at raw main: 'MIT License, Copyright (c) 2021 Omar Shehata' — commercial use permitted. README confirms depth buffer + surface normal buffer + FXAA pass, and the vertex-welder directory exists. The dead-demo claim is exact: threejs-outlines-postprocess.glitch.me returns HTTP 410, and the README still links it. Discourse thread quotes confirmed verbatim, including the scale sensitivity ('the model is pretty big, so you'll get a better result scaling the near/far planes'). The EffectComposer/MSAA claim is also confirmed at source: EffectComposer.js line 69 is `new WebGLRenderTarget(w * pixelRatio, h * pixelRatio, {type: HalfFloatType})` with no `samples` key anywhere in the file. One thing the finding misses: the README also points to a newer follow-up technique, 'Better outline rendering using surface IDs', which exists specifically to fix the missing-outline-at-certain-angles case — if you ever do go post-process, use that variant, not the 2021 depth+normal one."
+          },
+          {
+            "name": "three.js Sobel post-processing example",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up exactly. Source confirms `ShaderPass(LuminosityShader)` then `ShaderPass(SobelOperatorShader)` with `resolution.x = window.innerWidth * window.devicePixelRatio`. HTTP 200. MIT. The 'luminance-based, so it misses same-colour silhouettes and draws on texture detail' criticism is correct by construction — this is the right call to rate it weak."
+          },
+          {
+            "name": "Babylon.js mesh.renderOutline / OutlineRenderer",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up, and the disqualifying claim is verified at source rather than inferred. outline.vertex.fx line 48: `vec3 offsetPosition = positionUpdated + (normalUpdated * offset);` — object space, before finalWorld is applied at line 54. outlineRenderer.pure.ts line 153: `effect.setFloat(\"offset\", useOverlay ? 0 : renderingMesh.outlineWidth);`. zOffset = 1 and zOffsetUnits = 4 confirmed with the comment '4 to account for projection a bit by default'. Four render pass IDs confirmed (_passIdForDrawWrapper[0..3]). renderOutline is installed on Mesh.prototype via Object.defineProperty in that same file, so the BABYLON.Mesh typedoc URL is the right place to look; it returns 200. Both forum threads return 200. License Apache-2.0 verified at raw license.md — commercial use permitted (note the Apache-2.0 NOTICE/attribution obligation if you redistribute, unlike MIT)."
+          },
+          {
+            "name": "Babylon.js CellMaterial (@babylonjs/materials)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Content holds up; the URL is one level too high. The cited page is the materials-library INDEX — CellMaterial's actual doc page is https://doc.babylonjs.com/toolsAndResources/assetLibraries/materialsLibrary/cellShadingMat, which confirms `new BABYLON.CellMaterial('cell', scene)`, diffuseColor and `cell.computeHighLevel = true`. Shader claims verified in cell.fragment.fx: ToonThresholds[4] = {0.95, 0.5, 0.2, 0.03} hardcoded, five brightness levels ending ToonBrightnessLevels[4] = 0.2, and the final line `return max(diffuseBase, vec3(0.2));` — the un-disableable black floor is real. Apache-2.0, commercial use permitted."
+          },
+          {
+            "name": "Babylon.js HighlightLayer",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up as a 'wrong tool' verdict; one mechanism detail is off. The doc page (title 'Highlighting Meshes') states the engine must be created with the STENCIL BUFFER enabled — `new BABYLON.Engine(canvas, true, {stencil: true})` — so it is stencil + blur compositing, not purely an offscreen-buffer blur as described. Immaterial to the conclusion: it is a soft glow for selection feedback and cannot produce a hard uniform ink line. Apache-2.0, commercial use permitted."
+          },
+          {
+            "name": "three.js ToonOutlinePassNode / toonOutlinePass (WebGPU + TSL)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up. Example is HTTP 200 and its source contains `import { toonOutlinePass } from 'three/tsl'`, `renderPipeline.outputNode = toonOutlinePass(scene, camera)`, a RedFormat DataTexture gradientMap and MeshToonNodeMaterial. ToonOutlinePassNode.js confirms the restriction in both the JSDoc ('Only 3D objects with materials of type MeshToonMaterial and MeshToonNodeMaterial') and the runtime guard `if (material.isMeshToonMaterial || material.isMeshToonNodeMaterial)`. Same maths as OutlineEffect, node-form: `pos.add(norm.mul(this.thicknessNode).mul(pos.w).mul(ratio))`, default thickness 0.003, side = BackSide. MIT, commercial use permitted."
+          },
+          {
+            "name": "pmndrs/postprocessing OutlineEffect",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up in every particular. Demo HTTP 200. npm registry metadata for postprocessing latest = 6.39.4, license field 'Zlib', unpackedSize 2,768,428 bytes (2.77 MB) — all three exact. LICENSE.md is zlib boilerplate, 'Copyright © 2015 Raoul van Rüschen' — permissive, commercial use permitted, no attribution required in binary form. API docs confirm OutlineEffect exposes `selection`, `selectObject()`, `blurPass` (KawaseBlurPass), `edgeStrength`, `patternTexture` and `xRay` — it is a selection highlighter, not a cel outliner. Correctly rated weak."
+          },
+          {
+            "name": "Blender Solidify modifier with Flip Normals",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Both URLs are real and the Blender-tracker quote is verbatim. Issue 31579 is titled 'Solidify modifier: Add new option \"Flip Normals\"' by Shinsuke Irie and its body reads: 'It makes normals pointing to the inside by swapping original faces and generated faces, and allows us to easily setup the backface polygons used for toon edge rendering.' Caveat on reachability: projects.blender.org sits behind Cloudflare and returns 403 / a JS challenge to non-browser clients — I had to confirm via its Gitea REST API. Second caveat the finding does not flag: blendernpr.org/solidify-modifier-contouroutline/ loads (title 'Solidify modifier Contour/Outline') but is Blender-Internal / pre-2.8-era content — it talks about back-face culling, 'Traceable' off and GLSL viewport setup. The Solidify + Flip Normals technique is still valid in current Blender; the specific material instructions on that page are not. Licence reasoning is correct: Blender's GPL covers Blender, not the glTF you export."
+          },
+          {
+            "name": "BufferGeometryUtils.mergeVertices + computeVertexNormals",
+            "urlReachable": false,
+            "licenseConfirmed": true,
+            "correction": "URL IS STALE — do not cite it. three.js has migrated its docs to JSDoc-style module pages; the docs index at threejs.org/docs/ now contains ZERO 'examples/en/utils' routes and lists this as 'module-BufferGeometryUtils.html'. The hash URL returns HTTP 200 only because it loads the docs shell — it resolves to no BufferGeometryUtils content. (The module-*.html targets themselves currently 404 from the GitHub Pages origin, so the docs site appears mid-migration.) Cite the source file instead: https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/jsm/utils/BufferGeometryUtils.js. The API itself is real and the technique claim survives: mergeVertices(geometry, tolerance = 1e-4) is documented there as 'Returns a new geometry with vertices for which all similar vertex attributes (within tolerance) are merged', and BufferGeometry.computeVertexNormals() exists in src/core/BufferGeometry.js. MIT, commercial use permitted."
+          },
+          {
+            "name": "Delt06/toon-rp — Inverted Hull Outline documentation",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "THE LICENSE CLAIM IS WRONG, AND IT IS WRONG IN THE PROJECT'S FAVOUR. The finding says 'NO LICENSE FILE FOUND ... all-rights-reserved: READ IT, TAKE NO CODE.' In fact https://raw.githubusercontent.com/Delt06/toon-rp/master/LICENSE.md returns HTTP 200 with 'MIT License / Copyright (c) 2023 - 2024 Vladislav Kantaev'. The researcher's probe evidently only hit the `main` branch, which 404s — the repo's default branch is `master`, and LICENSE.md exists only there. The repo is MIT and commercially usable with attribution; the 'take no code' restriction should be struck. Practical caveat that does survive: it is Unity HLSL against Unity's SRP, so there is nothing to copy-paste into three.js regardless — the value is still the design checklist. Wiki content confirmed verbatim: 'a very cheap effect suitable even for mobile devices', smoothed normals written to UV2 or Tangents, a dedicated 'Fixed Screen Space Thickness' option, and Max Distance / Distance Fade controls."
+          }
+        ],
+        "survivingRecommendation": "EVERY finding's URL resolved and every license claim checked out EXCEPT two items, one of which materially changes the guidance:\n\nCORRECTION 1 (licensing, in your favour): Delt06/toon-rp IS MIT-licensed — LICENSE.md exists on the `master` branch (the researcher only probed `main`, which 404s). Strike the \"all-rights-reserved, take no code\" warning. In practice it is Unity HLSL so you still would not paste it into three.js, but you may freely quote, adapt and reference it with attribution.\n\nCORRECTION 2 (dead citation): the BufferGeometryUtils docs URL (threejs.org/docs/#examples/en/utils/BufferGeometryUtils) no longer resolves — three.js migrated to JSDoc module pages and the old hash route now loads an empty shell. Cite examples/jsm/utils/BufferGeometryUtils.js directly. The API and the technique are unaffected.\n\nTwo license statuses to hold onto: vrm-specification has NO license file at all (I probed LICENSE, LICENSE.md, LICENSE.txt, NOTICE — all 404, and the README makes no statement), so it is read-only reference; reusing its parameter NAMES in your own shader API is fine, copying its text or code is not. And Babylon.js is Apache-2.0, not MIT — commercial use is fine but it carries a NOTICE/attribution obligation the MIT options do not.\n\nWith that, the recommendation stands essentially as written:\n\n1) OUTLINE — inverted hull with SCREEN-SPACE thickness. Two paths, both verified at source:\n   - Ship fast with `OutlineEffect` from three/addons. Its shader is confirmed as `norm = normalize(pos - pos2); return pos + norm * thickness * pos.w * ratio;` (ratio is a const 1.0 no-op), so the pos.w term does give constant screen-space width at any camera distance. defaultThickness is 0.003 as claimed — go 0.006–0.010 for bold. Kill outlines on floor/walls via `mat.userData.outlineParameters = {visible:false}`.\n   - Own ~40 lines instead, copying MToon's formula (verified verbatim in mtoon.vert): `outlineOffset = outlineWidthFactor * length(transformedNormal) * objectNormal;` then `outlineOffset *= vViewPosition.z / projectionMatrix[1].y;` then `gl_Position.z += 1E-6 * gl_Position.w;`. outlineWidthFactor is a fraction of screen height — 0.02–0.03 for Jet Set Radio weight. The length(transformedNormal) term is what keeps line weight correct as the character scales with the muscle stat.\n\n2) SHADING — MeshToonMaterial with an explicit gradientMap: 2–3 pixel RedFormat DataTexture, minFilter = magFilter = NearestFilter, colorSpace NoColorSpace. The \"don't skip the gradientMap\" warning is confirmed at the shader chunk: the no-gradientMap fallback is literally `mix(vec3(0.7), vec3(1.0), smoothstep(...))`. One directional light, flat ambient, no PBR, no shadow maps.\n\n3) SPLIT NORMALS are still the #1 risk. Derive smoothed normals with mergeVertices + computeVertexNormals at BUILD time, bake into a spare vertex attribute in the .glb, read it only in the outline shader. Confirmed as the documented remedy in both toon-rp's wiki (UV2/Tangents) and OmarShehata's vertex-welder.\n\n4) MOBILE — no EffectComposer. Verified: EffectComposer.js creates its targets as `new WebGLRenderTarget(w, h, {type: HalfFloatType})` with `samples` never set anywhere in the file, so adding a composer silently costs you free tile-GPU MSAA. Render to the default framebuffer with {antialias:true} and clamp pixelRatio to 2.\n\n5) PALETTE — the hue limit is real: getGradientIrradiance returns `vec3(texture2D(gradientMap, coord).r)`, a scalar multiplier. If cream must shade to warm red, you need MToon's shadeColorFactor. @pixiv/three-vrm-materials-mtoon is MIT, 3.5.5, 680 KB unpacked, peer `three: >=0.137` (open upper bound — pin and test). Decide in week 1.\n\n6) Outline fragment outputs flat black with no lighting term (MToon's outlineLightingMixFactor = 0).\n\nRisk-list adjustments beyond the two corrections above:\n- The OutlineEffect instancing defect is CONFIRMED by reading the shader: gl_Position comes from `#include <project_vertex>` (which applies instanceMatrix/batchingMatrix) while pos2 is hand-built from `projectionMatrix * modelViewMatrix` only. Real, no config flag, applies to InstancedMesh and BatchedMesh.\n- The morph/displacement constraint is CONFIRMED: mtoon.vert has `// #include <displacementmap_vertex>` commented out while morphtarget_vertex and skinning_vertex are live; OutlineEffect includes all three. Pick the growth mechanism and the outline mechanism together.\n- The \"no maintained npm package\" risk is OVERSTATED. `three` itself ships OutlineEffect in addons, and three-stdlib (2.36.1, MIT, actively published) re-exports it. The accurate framing: there is no dedicated npm package for a screen-space toon outline beyond MToon, so screen-space thickness is the part you own.\n- If you ever do reconsider post-process, use OmarShehata's newer surface-IDs technique rather than the 2021 depth+normal one — it exists specifically to fix the missing-outline-at-certain-angles failure he documents in the thread. The threejs-outlines-postprocess.glitch.me demo is confirmed HTTP 410 dead and the repo README still links it."
+      },
+      {
+        "dimension": "character",
+        "checked": [
+          {
+            "name": "glTF 2.0 morph targets (the muscle mechanism)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": ""
+          },
+          {
+            "name": "three.js morph target runtime API",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Substance holds; one file-path error. src/objects/Mesh.js is reachable and declares morphTargetInfluences ('An array of weights typically in the range [0,1] that specify how much of the morph is applied'), morphTargetDictionary ('A dictionary representing the morph targets in the geometry. The key is the morph targets name, the value its attribute index') and updateMorphTargets(). three.js LICENSE confirmed MIT ('Copyright © 2010-2026 three.js authors'). BUT the GLTFLoader path cited is wrong: src/loaders/GLTFLoader.js returns 404. The real file is examples/jsm/loaders/GLTFLoader.js, and the targetNames logic is at ~line 2488, not 2474. Code verified there verbatim: it checks Array.isArray(meshDef.extras.targetNames), requires mesh.morphTargetInfluences.length === targetNames.length, builds mesh.morphTargetDictionary[targetNames[i]] = i, else console.warn('THREE.GLTFLoader: Invalid extras.targetNames length. Ignoring names.'). WebGLMorphtargets.js confirmed: imports DataArrayTexture, allocates new DataArrayTexture(buffer, width, height, morphTargetsCount) and clamps against capabilities.maxTextureSize. Issue #24545 confirmed: models above ~241 morph targets render invisible on ViVO iQOO neo3 5G / ASUS ZenFone 3 / AQUOS SHV38, closed 'not planned'. Practical impact: none — the loader path matters only if someone greps for the file."
+          },
+          {
+            "name": "MakeHuman / MPFB2 (MakeHuman Plugin For Blender 2)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Asset licensing confirmed — the cited FAQ page says verbatim 'Yes. All core assets (the base mesh, targets, skins…) are shared under CC0', with the caveat 'if you use a third party asset shared under a different license it is your responsibility to fulfill the obligations of that license.' CC0 = commercial, closed-source, no attribution. Two corrections. (1) SOFTWARE LICENSE IS WRONG: the finding says MPFB is 'AGPLv3'. MakeHuman's own license page states 'The source code of MPFB is shared under GPL' and separately 'the source code of MakeHuman is shared under AGPL'. MPFB2 is GPL, not AGPL. Neither encumbers exported assets, so the commercial conclusion is unaffected, but do not repeat the AGPL claim. (2) The two supporting claims are real but come from pages OTHER than the cited URL. The shape-key architecture is confirmed at static.makehumancommunity.org/mpfb/docs/assets/targets.html: 'A \"target\" is conceptually a blend shape (a.k.a \"shape key\"). In rough summary, a target is what you use when you drag a slider on the model tab.' The Muscle/Weight macro sliders and the 'proportion of muscle and fat contributing to the weight' language are confirmed in MakeHuman's 'Modeling the body' documentation (macro controls: Gender, Age, Muscle, Weight, Height, Proportions), not in the closed-source FAQ. The researcher's own caveat that the exact slider UI in the current MPFB release is unverified still stands — the Muscle macro is documented for MakeHuman; confirm it in your installed MPFB2 build before committing."
+          },
+          {
+            "name": "Mixamo — animation library and auto-rigger",
+            "urlReachable": false,
+            "licenseConfirmed": true,
+            "correction": "THE URL DOES NOT LOAD FROM THIS ENVIRONMENT. helpx.adobe.com/creative-cloud/faq/mixamo-faq.html returned HTTP 503 on every WebFetch attempt (including the /ie/ regional mirror), and curl died with 'HTTP/2 stream 1 was not closed cleanly: INTERNAL_ERROR'. So the 'verified verbatim from Adobe's FAQ' framing overstates what can be confirmed here. The license claim IS corroborated — search results quoting the official Adobe page return the substance: characters and animations are usable royalty free for personal, commercial and non-profit projects including creating video games, and 'the auto-rigger and animation libraries are for bipedal humanoids only.' Treat the commercial grant as high-confidence but SECOND-HAND: have a human open the FAQ in a browser and screenshot it for the record before shipping, since this is the license the whole animation pipeline rests on. Specifically NOT confirmed by any source I could reach: the Enterprise/Federated ID restriction, the China country-code restriction, and 'stores only the last uploaded character.' Those may well be accurate but are currently unsourced — do not put them in a plan as facts. The Don McCurdy pipeline IS confirmed: his post 'Creating animated glTF Characters with Mixamo and Blender' (donmccurdy.com/2017/11/06/) documents downloading each animation as FBX 'without including the skin, because the skin is already in the base character file', importing all FBX files into Blender with 'Automatic Bone Orientation', and exporting one glTF."
+          },
+          {
+            "name": "Mixamo auto-rigger requirements — the cartoon-proportion verdict",
+            "urlReachable": false,
+            "licenseConfirmed": true,
+            "correction": "Same unreachable URL as above (HTTP 503). Four of the seven quoted requirements are corroborated through search results citing the official FAQ: the character must be humanoid with distinguishable head, body, arm and leg areas; no large extra appendages or props (additional limbs, wings, tails, large hair and clothing); default or neutral pose; and no spaces between parts, with the explicit note that the auto-rigger does not work on floating heads disjoined from the body. NOT independently confirmed: 'There is no other content in the file', 'The character is centered in the scene', 'The character mesh is clean and error free', and the exact sentence 'If the character proportions are too deformed, the auto-rigger may not work.' The analytical verdict built on these — that exaggerated muscle mass is not the same as deformed proportions, that a bulky gym character rigs fine while a true chibi will not, and that a bodybuilder's lats resting against the torso violate the no-spaces-between-parts rule — is sound reasoning from the confirmed requirements and survives. Independently, Meshy's rigging docs corroborate the general principle: 'Ensure character proportions are close to standard human body to avoid severe limb deformation' and 'Keep limbs separated and avoid overlapping arms/legs.' Two vendors state the same constraint, so the concept-art guidance is safe to act on."
+          },
+          {
+            "name": "Meshy (image-to-3D + auto-rig)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Licensing is fully confirmed and is the most legally load-bearing item here, so it is worth restating precisely. The cited help article confirms free plan = CC BY 4.0 with mandatory attribution in the format 'Model created with Meshy – CC BY 4.0 License', and that 'if you are a paid customer, you own the assets created through our platform.' The stronger ownership claim is confirmed at meshy.ai/terms-of-use (NOT meshy.ai/terms, which 404s): 'Customers using Meshy's Services under the free plan, acknowledge and agree that Provider owns all right, title, and interest, including all intellectual property rights, in and to the AI Customer Output and grants such customer a license to the Assets under the Creative Commons Attribution 4.0 International License (CC BY 4.0).' The community-page clause is also confirmed verbatim: 'If You release any Customer Output to the Meshy Community page, such output is licensed under the Creative Commons Zero (CC0) 1.0 Universal Public Domain Dedication license.' Correction on the caveats: they are not on the cited URL and one is unverified. The rigging requirements ARE confirmed, at docs.meshy.ai/en/webapp/guides/3d-model/rigging — proportions 'close to standard human body', T-pose or A-pose, 'Clean topology gives the most accurate bone binding and weight assignment, so Remesh first', limbs separated, and a ~300K polygon input ceiling (a useful number the finding omitted). But the verbatim quote 'Heavily stylized art styles — including anime, cartoon, and fantasy — introduce non-standard proportions... increase the likelihood of artifacts on hands, faces, and fine details' COULD NOT BE LOCATED in any reachable Meshy documentation. Meshy's current marketing runs the other way, claiming its rigging 'works on humanoid characters, bipeds, quadrupeds, and stylized figures' and that Meshy 7 'holds the art style of the input' for anime and cartoon references. Drop that quote; the proportion and topology warnings from the rigging docs carry the same practical point and are real."
+          },
+          {
+            "name": "Tripo AI (image-to-3D + auto-rig)",
+            "urlReachable": false,
+            "licenseConfirmed": false,
+            "correction": "WORSE THAN THE FINDING ADMITS. The finding flagged only the terms pages as blocked, but the URL attached to this finding — tripo3d.ai/features/ai-auto-rigging — is ITSELF HTTP 403 (Cloudflare) to both WebFetch and curl with a browser user-agent. tripo3d.ai/terms is also 403. So nothing about Tripo is verifiable from a primary source: not the license, and not the capability specifics either. Every technical claim in this entry — GLB/OBJ/FBX/STL input, ~100 MB and ~1.5M polygon limits, ~20 credits per rig, Mixamo-compatible output, and the 'Smart Mesh' low-poly quad topology claim — traces to Tripo's own marketing and is unconfirmed. Treat this entire entry as unverified vendor marketing, not as research. The finding's own observation that the AI-auto-rigging search space is saturated with Tripo-authored SEO content is corroborated: a Tripo blog post titled 'Is there a Mixamo alternative for rigging non-humanoid or quadruped characters' surfaces as a top result for neutral Mixamo queries. Do not enter Tripo into the pipeline until a human opens the real ToS in a browser."
+          },
+          {
+            "name": "Reallusion AccuRIG / ActorCore",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Both quoted clauses verified verbatim in the EULA at the cited URL: 'The right to export generated models and/or animations to external software and include them in your games, applications, web services, or other interactive projects' (§2.1.B) and 'You may also sell or distribute models and/or animation assets only when embedded within games, applications, interactive projects, or in 3D print format' (§2.2). Embedding in this game is permitted. Two additions. (1) This document is Reallusion's GENERAL product EULA — it does not name AccuRIG or ActorCore anywhere; it governs 'all products' and explicitly discusses Character Creator's Base Model License (§5). Confirm no separate ActorCore-specific terms apply to the free-account export path before relying on it. (2) The finding missed §3.6: content in Reallusion proprietary formats 'are not allowed to be sold, distributed, and published in any third-party marketplaces.' Irrelevant for shipping inside a game, but relevant if assets ever move between vendors or storefronts. The researcher's own note that the AccuRIG cartoon/toon-proportion capability claims are unverified marketing stands — I could not corroborate any documented proportion limit either."
+          },
+          {
+            "name": "Blender Rigify and Auto-Rig Pro (the manual-rigging fallback)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "The cgdive page loads and does compare the two tools. Rigify confirmed 'free and comes pre-installed with Blender' and metarig-based (the page notes its separate MetaRig armature 'can be problematic if deleted after initial rig generation'). AUTO-RIG PRO PRICE IS NOW VERIFIED: the page states a '$40 price tag' — upgrade the finding's 'price not verified' to $40, and note ARP 'integrates the reference bones within the generated rig', which cgdive frames as more robust than Rigify's detached metarig. HOWEVER, three claims attributed to this source are NOT in it: the page does not discuss cartoon or non-standard character proportions, does not discuss limb-segment options for forcing IK/FK chains on cartoon limbs, and does not discuss Mixamo bone naming ('mixamorig:') or retargeting. It mentions only that ARP includes a 'Remap' retargeting tool, with no Mixamo specifics. The underlying reasoning — that Rigify's metarig approach is what lets it handle proportions auto-riggers reject, and that Rigify-generated rigs need retargeting for Mixamo clips — is technically correct and widely known, but is unsourced here. The 1–3 day learning estimate is the researcher's judgment, not a cited figure. Keep Rigify as the fallback; stop citing cgdive for the cartoon-proportion and Mixamo-naming claims."
+          },
+          {
+            "name": "EXT_meshopt_compression (not Draco) for shipping morph targets",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Fully verified, including the negative result, which is the most actionable item in the whole set. EXT_meshopt_compression confirmed to cover 'geometry (vertex and index data, including morph targets), animation (keyframe time and values) and other data', and to advise verbatim 'It is recommended to use quantized storage for morph target deltas, possibly with a narrower type than that used for baseline values.' Status confirmed 'Complete, Ratified by the Khronos Group'; meshoptimizer reference implementation is MIT. The Draco negative result is independently confirmed: I fetched KHR_draco_mesh_compression's README and it contains no occurrence of 'morph' or 'target' — it compresses primitive geometry attributes (POSITION, NORMAL, TEXCOORD_0, WEIGHTS_0, JOINTS_0) and indices only. The 'use meshopt, not Draco' conclusion holds."
+          },
+          {
+            "name": "Blender glTF exporter — shape key export settings",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "URL reachable and all quoted strings verified verbatim, though note WebFetch gets HTTP 403 from docs.blender.org while plain curl gets 200 — the page is live, some fetchers are blocked. Confirmed under 'Data - Shape Keys': 'Export shape keys (morph targets).' / 'Shape Key Normals — Export vertex normals with shape keys (morph targets).' / 'Shape Key Tangents — Export vertex tangents with shape keys (morph targets).' Confirmed under 'Data - Shape Keys - Optimize': 'Use Sparse Accessor if better — Sparse Accessor will be used if it save space (if the exported file is smaller).' One useful option the finding omitted, visible in the same panel: 'Omitting Sparse Accessor if data is empty — If data is empty, omit to export Sparse Accessor. Not all viewer managed it correctly, so this option is Off by default' — leave it Off, as the default already is. Minor licensing note: the manual page itself does not state the glTF I/O addon's license, so 'Apache 2.0' is uncorroborated at this URL. It does not matter commercially — Blender's output files are yours regardless — but do not cite the manual for it. The byte-cost argument for disabling tangents/normals is confirmed by the glTF spec quote in finding 1, verified verbatim at spec line 1541."
+          }
+        ],
+        "survivingRecommendation": "WHAT SURVIVED: the entire technical spine. Every glTF, three.js, meshopt, Draco and Blender claim checked out verbatim against primary sources. What weakened is the vendor layer — Mixamo's FAQ would not load, Tripo is entirely unverifiable, and three claims were attributed to sources that do not contain them.\n\nLEAD WITH THE TOPOLOGY LOCK — VERIFIED VERBATIM. The glTF 2.0 spec states 'All morph target accessors MUST have the same `count` as the accessors of the original primitive.' Morph targets are per-vertex deltas on a fixed vertex order. The muscle system therefore CANNOT be built from two separate AI generations — skinny Kevin and buff Kevin as independent Tripo/Meshy runs have unrelated topology and cannot blend. One base mesh; the buff version sculpted from that same mesh with no vertex added, deleted or reordered. Decide this before anyone spends a credit. Also verified: 'The number of morph targets is not limited. Client implementations SHOULD support at least eight morphed attributes,' and — the line that settles skinning-plus-morphing — 'Any node MAY contain one mesh... The mesh MAY be skinned using information provided in a referenced `skin` object. The mesh MAY have morph targets.' Mixamo skinning and the muscle blend coexist on one mesh, confirmed by the spec itself.\n\nPRIMARY PIPELINE (unchanged, and strengthened): MPFB2/MakeHuman base → stylize in Blender → rig → Blender shape key → glTF+meshopt. MPFB2's licensing is the strongest verified fact in the set: MakeHuman's own FAQ says 'Yes. All core assets (the base mesh, targets, skins…) are shared under CC0' — public domain, commercial, closed-source, no attribution. Correct one detail before repeating it: MPFB's source is GPL, not AGPL (AGPL covers MakeHuman proper); neither encumbers your exported assets. The shape-key architecture is confirmed ('A \"target\" is conceptually a blend shape (a.k.a \"shape key\")... what you use when you drag a slider on the model tab'), and the Muscle/Weight macro sliders with the muscle-vs-fat proportion behaviour are confirmed in MakeHuman's 'Modeling the body' docs. Still verify the Muscle slider exists in your installed MPFB2 build — that is a five-minute check, not a research task.\n\nORDER OF OPERATIONS: rig FIRST, shape keys SECOND. Finalize base mesh → auto-rig → import the rigged FBX to Blender → THEN sculpt the 'Muscle' shape key → export glTF. The spec permits skinning and morphing on the same mesh, but only if the morph is authored after the FBX round trip, which you should not assume preserves blend shapes.\n\nAUTO-RIGGING AND CARTOON PROPORTIONS: the verdict holds, now on two independent vendors instead of one. Mixamo's requirements — humanoid with distinguishable head, body, arm and leg areas; no large extra appendages; neutral pose; no spaces between parts (it explicitly fails on heads disjoined from the body) — are corroborated, and Meshy's rigging docs independently state 'Ensure character proportions are close to standard human body to avoid severe limb deformation' and 'Keep limbs separated and avoid overlapping arms/legs.' Two vendors, same constraint. So: exaggerated MUSCLE mass is fine; deformed PROPORTIONS are not. A wide-torso, thick-armed gym character with the head at a quarter to a third of body height rigs; a true chibi with a head half the body height and stub limbs does not. The bodybuilder trap is real — lats bring the arms against the torso, violating the no-spaces rule — so bind in a wide A-pose with visible air between arms and body. Brief the concept artist for 'stylized but riggable' and rig-test a greybox BEFORE commissioning finished art. This constraint is free today and expensive after the art is final.\n\nRUNTIME is trivial and verified in three.js source: mesh.morphTargetInfluences[mesh.morphTargetDictionary['Muscle']] = muscleStat. GLTFLoader builds that dictionary from mesh.extras.targetNames, which Blender fills from your shape key name — name it 'Muscle' in Blender and it is addressable by that string in JS. One caution confirmed in the loader: if targetNames length does not match influences length it warns 'Invalid extras.targetNames length. Ignoring names.' and you lose the dictionary — keep shape keys consistent across exports. (Read the code at examples/jsm/loaders/GLTFLoader.js, not src/loaders/ — that path does not exist.) three.js is MIT. Use 1–2 position-only targets: base = deflated, 'Muscle' at 0..1, optionally 'Fat' for the missed-days look. The ~241-target mobile bug is real but three orders of magnitude away from your usage.\n\nMOBILE/SIZE — the concrete trap, fully verified both ways. EXT_meshopt_compression explicitly covers 'geometry (vertex and index data, including morph targets)' and recommends 'quantized storage for morph target deltas, possibly with a narrower type than that used for baseline values.' KHR_draco_mesh_compression contains ZERO occurrences of 'morph' or 'target' — Draco would silently ship your muscle deltas uncompressed with no error to warn you. Use meshopt/gltfpack and wire MeshoptDecoder into GLTFLoader. In Blender enable Shape Keys and 'Use Sparse Accessor if better'; leave 'Omitting Sparse Accessor if data is empty' Off (its default); disable Shape Key Tangents and, if cel shading tolerates it, Shape Key Normals — the spec confirms clients support eight single-attribute targets but only two with three-to-four attributes. Target ~8–15k triangles.\n\nANIMATION — free, but downgrade your confidence in the paperwork. Adobe's Mixamo FAQ returned HTTP 503 on every attempt from every method, so the 'verified verbatim' claim does not stand as fetched evidence. The royalty-free commercial grant covering video games IS corroborated through search results quoting the official page, and I would still plan on it — but have someone open the FAQ in a browser and screenshot it before launch, because this is the license the whole animation dimension rests on. Three claims are currently UNSOURCED and should not appear in a plan as facts: the Enterprise/Federated ID restriction, the China country-code restriction, and 'stores only the last uploaded character.' Verify them or drop them. What is confirmed: bipedal humanoids only, no glTF export (FBX/Collada, so Blender is mandatory), and Don McCurdy's recipe — character FBX without animation, each clip downloaded 'without skin' since the skin is already in the base file, all imported to Blender with Automatic Bone Orientation, one glTF out. Archive every FBX locally now.\n\nIF YOU GO THE AI-MESH ROUTE, the ranking has changed. TRIPO IS OUT until a human reads the real terms: its licensing pages AND its own auto-rigging feature page all return HTTP 403, so nothing about it — not the license, not the 100MB/1.5M-poly limits, not the credit cost, not the 'Smart Mesh' quad-topology claim — has any primary source behind it. Its marketing also pollutes the neutral search space. MESHY is usable but the IP problem is confirmed and severe for a memecoin whose character IS the brand: the Terms of Use state that on the free plan 'Provider owns all right, title, and interest, including all intellectual property rights, in and to the AI Customer Output' and grants only CC BY 4.0 back, requiring a visible 'Model created with Meshy – CC BY 4.0 License' credit; publishing to the community page dedicates the model to CC0 outright. Paid plans give you ownership. Pay, or use CC0 MakeHuman assets. If you use Meshy for silhouette only, its rigging docs require proportions close to a standard human, T/A-pose, separated limbs, remeshing first for clean bone binding, and inputs under ~300K polygons — budget the retopology step. Drop the 'heavily stylized art styles increase artifacts' quote; I could not find it in any reachable Meshy doc, and their current marketing claims the opposite.\n\nFALLBACK RIGGING: Rigify is free, bundled with Blender, GPL, metarig-based — keep it as the answer to 'what if the auto-rigger rejects our character.' Auto-Rig Pro is now price-verified at $40. Note that the cgdive comparison does NOT actually discuss cartoon proportions, limb-segment options, or Mixamo bone naming and retargeting — that reasoning is sound but uncited, so present it as judgment. Reallusion AccuRIG remains a legitimate option: its EULA verbatim grants 'The right to export generated models and/or animations to external software and include them in your games, applications, web services, or other interactive projects' and permits selling assets 'only when embedded within games' — exactly your case. Two footnotes: that document is Reallusion's general EULA and never names AccuRIG or ActorCore, and §3.6 bars distributing Reallusion proprietary-format content on third-party marketplaces. Its cartoon-proportion support remains untested marketing."
+      },
+      {
+        "dimension": "references",
+        "checked": [
+          {
+            "name": "pmndrs/ecctrl",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up. LICENSE at main reads verbatim \"MIT License / Copyright (c) 2023-2026 Erdong Chen\"; npm ecctrl@2.0.1 license field is \"MIT\". 786 stars confirmed. \"Actively maintained\" confirmed — most recent commit on main is 17 Aug 2026 (tag 2.0.1). Minor naming correction: the current repo documents the touch components as `Joystick` and `VirtualButton`; `EcctrlJoystick` was the v1 name and does not appear in current docs. `EcctrlAnimationStateController` and the react-three-rapier peer dependency are confirmed."
+          },
+          {
+            "name": "three.js official example: games_fps",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Substantively holds up. examples/games_fps.html exists on dev and contains exactly what was claimed: worldOctree.fromGraphNode(gltf.scene), new Capsule(...), worldOctree.capsuleIntersect(playerCollider), GLTFLoader loading collision-world.glb, document.body.requestPointerLock(), and throwBall() with 100 spheres. No touch input — confirmed. three@0.185.1 npm license field is \"MIT\". Size correction: the file is ~14-15KB, not 12KB."
+          },
+          {
+            "name": "pmndrs/racing-game",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "MATERIAL ERROR — the central caveat is false. A licence file DOES exist: pmndrs/racing-game/LICENSE.md on main, reading \"# The MIT License / Copyright 2021 pmdrs, contributors\" followed by the standard MIT grant, and GitHub's sidebar shows \"MIT license\". The finding's claim of a 404 on the LICENSE, the caveat \"the MIT grant rests on package.json alone\", and the corresponding entry in the risks list are all wrong and should be deleted. package.json does also declare \"license\": \"MIT\" for @pmndrs/racing-game, and the README's \"100% open source... CC0 assets only\" line is verified. Secondary correction to the folder claim: src/ contains controls, effects, models and ui — there is no src/utils folder; the zustand store lives elsewhere. \"Last major activity is old\" verified: newest commit on main is 23 Feb 2023."
+          },
+          {
+            "name": "mohsenheydari/three-fps",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up entirely. LICENSE reads \"The MIT License (MIT)\" / \"Copyright (c) 2021 Mohsen Heydari\". README confirms ammo.js, three-pathfinding, ES6 + Webpack, entity/component architecture, root-motion NPC animation and basic AI. 230 stars and 19 commits on master confirmed. No mobile or touch support mentioned — confirmed. The Mixamo warning is well founded: the README credits the character as \"Mutant\" from mixamo.com."
+          },
+          {
+            "name": "instructa/viber3d",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up. LICENSE reads \"MIT License\" / \"Copyright (c) Nuxt Project\" — an odd copyright holder for this project but verbatim what the file says, and MIT either way. README confirms React 19, react-three-fiber, drei, Vite, TailwindCSS, Zustand, react-three-rapier, TypeScript and the koota ECS, plus the spacewars demo at viber3d-spacewars.kevinkern.dev."
+          },
+          {
+            "name": "wass08/r3f-vite-starter",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up exactly as quoted. LICENSE begins \"Creative Commons Legal Code / CC0 1.0 Universal\" — public domain dedication, commercial use permitted, no attribution required."
+          },
+          {
+            "name": "WesUnwin/three-game-engine",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up. LICENSE reads \"MIT License\" / \"Copyright (c) 2023 Wes Unwin\". README confirms JSON-described games and scenes, a GameObject system wrapping a Three.js Group with optional Rapier RigidBody, and three-mesh-ui for in-world 3D UI — so the caveat about three-mesh-ui is accurate. Adds context for the bus-factor caveat: 112 stars."
+          },
+          {
+            "name": "brunosimon/my-room-in-3d",
+            "urlReachable": true,
+            "licenseConfirmed": false,
+            "correction": "Holds up, and is now stronger than stated. Confirmed: no LICENSE file anywhere in the repo, no licence shown in GitHub's sidebar, root contains only bundler/, src/, static/, .gitignore, package-lock.json, package.json, readme.md. Additional corroborating evidence the finding did not have: package.json declares \"license\": \"UNLICENSED\". 4.5k stars confirmed. licenseConfirmed is marked false because commercial reuse is NOT permitted — which is precisely what the finding says. Treat as read-only; imitate the baked-atlas technique, copy nothing."
+          },
+          {
+            "name": "Hubs (Hubs-Foundation/hubs)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up. GitHub sidebar shows \"MPL-2.0 license\". README confirms \"We use 16.16.0 on our build servers\" and points self-hosters to Hubs Community Edition, and describes a multi-user WebRTC 3D collaboration platform for desktop, mobile and VR. The 2024 wind-down is not stated in the README but is confirmed externally: Mozilla shut down hubs.mozilla.com, subscriptions and community resources on 31 May 2024, with the codebase passing to the Hubs Foundation. MPL-2.0 file-level copyleft characterisation is correct."
+          },
+          {
+            "name": "matthias-schuetz/THREE-BasicThirdPersonGame",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up. LICENSE reads \"Copyright (C) 2012 Matthias Schuetz\" followed by the standard MIT permission grant. 2012 vintage confirmed."
+          },
+          {
+            "name": "Telegram-Mini-Apps/reactjs-template",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Licence and sibling-template warnings hold up. LICENSE file present, GitHub sidebar shows \"MIT license\", no archive banner. Sibling claims verified precisely: js-template and js-tsdk-template both carry the exact README line \"This template is archived and is more likely to be out of date\", both were archived by the owner on 7 Jan 2025, and neither has a LICENSE file; nextjs-template also has no LICENSE file and no licence in the sidebar — though note it is NOT archived and carries no warning, so only the licence half of the objection applies to it. One correction to the stack description: package.json on master pins react ^18.3.1 (not 19) and depends on @tma.js/sdk-react ^3.0.8 rather than @telegram-apps/sdk-react — the SDK is mid-rename, so pin deliberately. @telegram-apps/telegram-ui, @tonconnect/ui-react, vite ^6.3.5 and typescript ^5.9.2 are all confirmed."
+          },
+          {
+            "name": "@telegram-apps/init-data-node",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up. npm registry entry for @telegram-apps/init-data-node@2.0.10 has \"license\": \"MIT\", description \"TypeScript Node library to operate with Telegram init data\", repository github.com/Telegram-Mini-Apps/telegram-apps under packages/init-data-node. The named repo URL resolves."
+          },
+          {
+            "name": "HabitRPG/habitica — cron.js and scoreTask.js",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Formulas and grace mechanisms verified in source; two additions. LICENSE states \"This Source Code is subject to the terms of the GNU General Public License, v. 3.0\" — GPL-3.0 confirmed, copyleft warning correct. In website/common/script/ops/scoreTask.js, verified verbatim: `let nextDelta = (0.9747 ** currVal) * (direction === 'down' ? -1 : 1);` and `const hpMod = delta * conBonus * task.priority * 2;`. The finding omitted that conBonus is itself derived: `let conBonus = 1 - statsComputed(user).con / 250;` clamped to a floor of 0.1. In website/server/libs/cron.js all four grace mechanisms are confirmed present: `user.preferences.sleep` (line 247), `const multiDaysCountAsOneDay = true;` (line 163), `CRON_SAFE_MODE` and `CRON_SEMI_SAFE_MODE` (lines 17-18). Issue #3161 exists with the exact title \"Missed dailies do massive amounts of damage\" and matches the description. NOT independently verified: the streak-bonus `currStreak/100 + 1` and the 21-day `task.streak % 21` achievement — plausible but treat as unconfirmed. IMPORTANT ADDITION the finding missed: the same LICENSE file licenses Habitica's own art assets CC-BY-NC-SA 3.0 — non-commercial — and Mozilla BrowserQuest assets CC-BY-SA 3.0. So Habitica's assets are unusable in a commercial game independently of the GPL code question."
+          },
+          {
+            "name": "iSoron/uhabits (Loop Habit Tracker) — Score.kt",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Formula verified verbatim. At the given master path, Score.kt carries the GPL-3.0 header (\"Copyright (C) 2016-2021 Álinson Santos Xavier... GNU General Public License... either version 3\") and contains exactly `val multiplier = 0.5.pow(sqrt(frequency) / 13.0)` followed by `var score = previousScore * multiplier`. Note the path is branch-sensitive: it exists on master but returns 404 on dev. Sourcing correction: the 80%/96%/99% progression figures are real and correctly quoted, but they come from the project FAQ hosted as GitHub Discussion #689, not from the README as the finding implies — the README only says \"A few missed days after a long streak... will not completely destroy your progress.\" The derived arithmetic (0.5^(1/13) ≈ 0.9477, ~5.2%/day, 13-day half-life, ~31% for a lost week) checks out against the verified formula."
+          },
+          {
+            "name": "IvarK/AntimatterDimensionsSourceCode",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up. GitHub sidebar shows \"MIT license\" and a LICENSE file is present. Vue-based confirmed (vue.config.js). Scale context: 387 stars, 281 forks, 12,166 commits — genuinely long-lived, though \"large\" refers to code volume rather than stars. The caveat about bundled art/audio possibly not being covered by the code licence is sound practice and worth keeping."
+          },
+          {
+            "name": "pmotschmann/Evolve",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Holds up. LICENSE at master is titled \"Mozilla Public License Version 2.0\". File-level copyleft characterisation is correct."
+          },
+          {
+            "name": "Duolingo Engineering/Design blog — \"Improving the streak\" and streak-freeze posts",
+            "urlReachable": true,
+            "licenseConfirmed": false,
+            "correction": "Mostly verified, but ONE STATISTIC IS INVERTED and one is attributed to the wrong post. blog.duolingo.com/improving-the-streak/ (Anton Yu, 19 Nov 2020) confirms verbatim: \"a 3.3% increase in Day 14 retention\", \"a 1% increase in our overall daily active learners\", \"a 10.5% increase in the percentage of daily learners on a streak\", \"increased the percentage of daily learners on a streak by 19%\", and \"just over half of our daily learners have a streak at least 7 days long, compared to about a third... a year ago\". INVERTED CLAIM: the finding says \"nearly 40% of consistently active users with 'intense' daily goals had no streak at all\". The post actually says \"almost 40% of learners active two days in a row with no streak had the 'intense' daily goal\" — the conditional runs the other way (40% of the streakless were intense-goal users, not 40% of intense-goal users were streakless). The argument for leniency survives; the statistic must be restated. MISATTRIBUTION: the +0.38% two-streak-freezes figure is NOT in improving-the-streak; it is in blog.duolingo.com/how-duolingo-streak-builds-habit/ — cite that URL. blog.duolingo.com/protecting-streaks-from-site-issues/ is real (1 Nov 2021) and describes the \"Big Red Button\" outage tool that has \"protected over 2 million streaks\" — excellent support for the kill-switch recommendation. licenseConfirmed false only in the sense that this is all-rights-reserved editorial, exactly as the finding states."
+          },
+          {
+            "name": "Anthony Pecorella, \"The Math of Idle Games\" Parts I–III (Game Developer / Kongregate)",
+            "urlReachable": true,
+            "licenseConfirmed": false,
+            "correction": "Part I and Part III verified; PART II's URL IS WRONG. Part I resolves at the given URL (Anthony Pecorella, 13 Oct 2016) and states its own structure: \"Part I discusses core ideas of growth, cost, prestige, and generator balancing. [Part II] will look into alternate growth methods (especially derivative-based). Part III will look at prestige cycles and balance.\" Part III resolves at gamedeveloper.com/design/the-math-of-idle-games-part-iii (1 Feb 2017, prestige mechanics, with spreadsheet models). Part II is NOT under /design/ — that URL redirects to the Design section index. The correct URL is https://www.gamedeveloper.com/game-platforms/the-math-of-idle-games-part-ii (mirrored at kongregate.com/en/pages/the-math-of-idle-games-part-ii). The Dec 2016 date for Part II was not confirmed. licenseConfirmed false = proprietary editorial, read-only, as the finding correctly states."
+          },
+          {
+            "name": "\"Playing to Wait: A Taxonomy of Idle Games\" (CHI 2018)",
+            "urlReachable": false,
+            "licenseConfirmed": false,
+            "correction": "The paper is real and the DOI is correct, but the ACM Digital Library URL returned HTTP 403 to automated fetch, so I could not load it directly — marked unreachable on that basis, not because it does not exist. Verified via Monash University research portal, Semantic Scholar and ResearchGate: \"Playing to Wait: A Taxonomy of Idle Games\", Sultan A. Alharthi, Olaa Alsaedi, Phoebe O. Toups Dugas, Theresa Jean Tanenbaum, Jessica Hammer, CHI '18 Proceedings, pp. 1-15, doi 10.1145/3173574.3174195. The method described (grounded-theory analysis of 66 idle games across play, mechanics, rewards, interactivity, progress rate and UI) matches the finding's characterisation. Companion paper DOI 10.1145/3311350.3347180 (\"It Started as a Joke\") also resolves to a real ACM entry. Free preprints are available on ResearchGate and Semantic Scholar — use those. The \"skip unless you want the conceptual map\" caveat is sound."
+          },
+          {
+            "name": "UX Magazine — \"The Psychology of Hot Streak Game Design\"",
+            "urlReachable": true,
+            "licenseConfirmed": false,
+            "correction": "Article exists and the design guidance is accurate, but ONE CITED FIGURE IS WRONG. Confirmed at the given URL: \"The Psychology of Hot Streak Game Design: How to Keep Players Coming Back Every Day Without Shame\", Montgomery Singman, 14 Oct 2025. Verified content: streak freezes (+0.38% daily active learners), \"Earn Back\" recovery through extra lessons rather than payment, a dedicated confirmshaming section quoting \"Are you really going to give up now?\", and ramping down external motivation rather than hard resets. Weekend Amulets \"4% more likely to return a week later and 5% less likely to lose their streak\" and Friend Streaks \"22% more likely to complete their daily lesson\" both confirmed verbatim. FALSE CLAIM: the finding attributes to this article \"separating streaks from daily goals raised 7+ day streaks by over 40%\". The article contains no such figure. What it actually says about 7-day streaks is \"learners with streaks of 7 days or more are 2.4 times more likely to return the next day\" — a correlation about streak holders, not an experiment result about decoupling. Drop the 40% claim; the real decoupling numbers are the verified ones in improving-the-streak."
+          }
+        ],
+        "survivingRecommendation": "SURVIVING RECOMMENDATION (post-verification). Every licence claim was checked against the actual LICENSE file or npm registry entry. One finding was materially wrong in a way that *loosened* a constraint (racing-game is properly MIT-licensed), two secondary statistics were misstated, and one URL was wrong. Nothing collapsed; the architecture stands.\n\nWHAT CHANGED FROM THE ORIGINAL\n- pmndrs/racing-game IS properly MIT-licensed. LICENSE.md exists at main (\"The MIT License / Copyright 2021 pmdrs, contributors\") and GitHub's sidebar confirms it. The \"no LICENSE file, 404, get written clarity before lifting code\" caveat and its matching entry in the risk list are both wrong — delete them. You may copy from this repo freely under MIT. (Its src/ has controls, effects, models, ui — no utils folder; the store is elsewhere.)\n- Duolingo's 40% statistic must be restated: \"almost 40% of learners active two days in a row with no streak had the 'intense' daily goal\" — not \"40% of intense-goal users had no streak\". The leniency conclusion is unaffected.\n- The +0.38% two-streak-freezes figure lives in blog.duolingo.com/how-duolingo-streak-builds-habit/, not improving-the-streak.\n- Drop the UX Magazine \"7+ day streaks up over 40%\" claim entirely — that figure does not exist in the article. Its real 7-day number is a 2.4x next-day return correlation.\n- Pecorella Part II is at gamedeveloper.com/game-platforms/the-math-of-idle-games-part-ii (the /design/ path 404s to an index).\n- NEW LEGAL FACT: Habitica's LICENSE licenses its own art assets CC-BY-NC-SA 3.0 (non-commercial) and BrowserQuest assets CC-BY-SA 3.0. Habitica assets are off-limits for a commercial game independently of the GPL code issue.\n\n1) SHELL — CONFIRMED. Fork Telegram-Mini-Apps/reactjs-template (LICENSE file present, MIT, not archived). Validate initData server-side with @telegram-apps/init-data-node@2.0.10 (npm licence field: MIT). Avoid the siblings, verified: js-template and js-tsdk-template were both archived by the owner on 7 Jan 2025, both carry the literal README line \"This template is archived and is more likely to be out of date\", and neither has a LICENSE file; nextjs-template has no LICENSE either (it is not archived, but unlicensed is disqualifying on its own). Pin your SDK deliberately — the template's package.json currently uses @tma.js/sdk-react ^3.0.8 with React ^18.3.1, mid-rename from @telegram-apps.\n\n2) SCENE + CHARACTER — CONFIRMED, skip the physics engine. three.js examples/games_fps.html is real and does exactly what was claimed: worldOctree.fromGraphNode(gltf.scene), Capsule player, worldOctree.capsuleIntersect(), GLTFLoader on collision-world.glb, pointer lock, throwable spheres. It is ~14-15KB (not 12KB) of plain JS with no WASM. three@0.185.1 is MIT. It has zero touch input — you write the joystick. Take the joystick→store→controller wiring from pmndrs/ecctrl (MIT, \"Copyright (c) 2023-2026 Erdong Chen\", npm ecctrl@2.0.1 MIT, 786 stars, last commit Aug 2026 so genuinely maintained) — but note the current API names the components Joystick and VirtualButton, not EcctrlJoystick. Use ecctrl as a dependency only if you have already committed to R3F and accept Rapier's WASM. Equipment interaction via proximity triggers to named empties in the GLB, not physics. Imitate brunosimon/my-room-in-3d's baked-atlas / no-realtime-lights technique only — verified: no LICENSE file, no sidebar licence, and package.json explicitly declares \"license\": \"UNLICENSED\". All rights reserved. Copy nothing from it.\n\n3) UI + STATE — CONFIRMED and now legally clean. Copy pmndrs/racing-game's src/ split (ui, models, effects, controls) under its verified MIT licence, with HUD, stats screen and supplement shop as a DOM/HTML overlay driven by a zustand store, not in-world 3D UI. WesUnwin/three-game-engine (MIT, \"Copyright (c) 2023 Wes Unwin\", 112 stars) is a fine pattern reference for declaring props as JSON data, but it does bundle three-mesh-ui — confirmed — which is the wrong choice for readable mobile UI. Pattern only, not a dependency.\n\n4) DECAY MECHANIC — VERIFIED IN SOURCE, unchanged. Loop Habit Tracker's curve is real, quoted exactly right: Score.kt on master contains `val multiplier = 0.5.pow(sqrt(frequency) / 13.0)` and `var score = previousScore * multiplier`, under a GPL-3.0 file header. For a daily habit that is ~5.2% loss per idle day, a 13-day half-life, symmetric recovery; the 80%/96%/99% one-/two-/three-month figures are genuine but come from the project FAQ in GitHub Discussion #689, not the README. Layer on Habitica's three shipped grace mechanisms, all four confirmed present in website/server/libs/cron.js: user.preferences.sleep (rest mode), multiDaysCountAsOneDay (per-absence cap), and CRON_SAFE_MODE / CRON_SEMI_SAFE_MODE (operator kill-switch). Habitica's diminishing-punishment idea is confirmed verbatim in scoreTask.js: `nextDelta = (0.9747 ** currVal) * (direction === 'down' ? -1 : 1)`, with damage `hpMod = delta * conBonus * task.priority * 2` where conBonus = 1 - con/250 floored at 0.1. Issue #3161 \"Missed dailies do massive amounts of damage\" exists with that exact title and is the argument for the cap.\n\n5) HOW LENIENT — CONFIRMED with the statistic restated. Set the decay-stopping bar absurdly low (one set on one machine); track the ambitious workout as a separate rewarded layer. Verified Duolingo results from improving-the-streak: +3.3% Day-14 retention, +1% DAU, +10.5% daily learners on a streak, +19% streak rate, and \"just over half of our daily learners have a streak at least 7 days long, compared to about a third a year ago\". The supporting observation is that almost 40% of learners active two days running WITHOUT a streak had the \"intense\" daily goal — i.e. hard goals were suppressing streaks. Add 1-2 equippable \"protein shake\" freezes (+0.38% DAU when Duolingo allowed two, per how-duolingo-streak-builds-habit) and effort-based earn-back rather than paid restore.\n\n6) ECONOMY CURVES — CONFIRMED with a URL fix. Pecorella's Part I (13 Oct 2016) and Part III (1 Feb 2017) are live at the /design/ paths; Part II is at /game-platforms/the-math-of-idle-games-part-ii. Proprietary editorial — read and apply, do not republish.\n\n7) SERVER-SIDE DECAY — unchanged and reinforced. Compute decay from server time on the droplet. Duolingo's outage tool (\"Big Red Button\", blog.duolingo.com/protecting-streaks-from-site-issues/, verified, \"has protected over 2 million streaks\") is direct precedent for shipping a global decay-suspension switch and retroactive forgiveness window in v1.\n\nLEGAL LINE TO HOLD (revised). GPL-3.0 verified on both Habitica (LICENSE: \"subject to the terms of the GNU General Public License, v. 3.0\") and uhabits (GPL-3.0 header in Score.kt). Read them, extract the maths, reimplement clean, and keep a repo note recording which formulas were independently reimplemented and from what published description. Code you actually ship may come from: three.js (MIT), ecctrl (MIT), racing-game (MIT — now confirmed, not a risk), reactjs-template (MIT), init-data-node (MIT), r3f-vite-starter (CC0), viber3d (MIT), three-game-engine (MIT), AntimatterDimensions (MIT). MPL-2.0 confirmed on Hubs and Evolve — file-level copyleft, mine for technique only. Nothing at all may be shipped from my-room-in-3d (UNLICENSED). Audit bundled assets separately from code licences in every case: three-fps ships a Mixamo \"Mutant\" character (confirmed in its README) that its MIT code licence does not launder, and Habitica's own art is CC-BY-NC-SA 3.0 — non-commercial.\n\nRISKS THAT SURVIVE UNCHANGED: missing-licence traps (my-room-in-3d, the three Telegram sibling templates — but NOT racing-game); Mixamo and bundled assets; mobile budget blowout from ammo.js/Rapier WASM in a one-room game; dated references (THREE-BasicThirdPersonGame is 2012 with MIT confirmed, three-fps is 2021 at 19 commits, racing-game's last commit is Feb 2023, Hubs pins Node 16.16.0 and Mozilla shut down the hosted service on 31 May 2024 with the codebase passing to the Hubs Foundation); punishing decay churning a crypto audience; client-clock cheating and outage-induced false decay; no single forkable reference for the exact combination; and the continuous muscle morph having no reference game — though the engine-level three.js examples do exist and were verified individually: webgl_morphtargets.html, webgl_morphtargets_face.html and webgl_morphtargets_horse.html are all present on the dev branch (MIT), so the Blender shape key → glTF morph target → single 0..1 influence pipeline is at least demonstrated at the engine level. Prototype it before committing the art budget."
+      },
+      {
+        "dimension": "backend",
+        "checked": [
+          {
+            "name": "Telegram Mini Apps — official initData validation spec",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": ""
+          },
+          {
+            "name": "@telegram-apps/init-data-node (npm)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "MAJOR: THE PACKAGE IS DEPRECATED. registry.npmjs.org returns a deprecation string on the latest version (2.0.10): 'This package is not supported anymore. Use @tma.js/init-data-node instead'. Version 2.0.10 / published 2025-06-27 / MIT / deps error-kid+@telegram-apps/types+@telegram-apps/transformers are all exactly as claimed — but that is a package frozen for over a year. The live successor is @tma.js/init-data-node: latest 2.0.8, published 2026-06-20, MIT, not deprecated, same author and same repo (Telegram-Mini-Apps/telegram-apps monorepo, directory tma.js/init-data-node). This also explains the docs-path rot the researcher noticed — the live docs page is /packages/tma-js-init-data-node/validating because the package was RENAMED, not because docs moved arbitrarily. Everything the researcher verified about the API holds on the successor, confirmed from that live docs page: validate(initData, botToken, {expiresIn, tokenHashed}); throws AuthDateInvalidError, SignatureMissingError, SignatureInvalidError, ExpiredError; 'The default expiration duration is set to 1 day (86,400 seconds)' with 0 disabling it; validate3rd, parse and signData all present (plus non-throwing isValid/isValid3rd, which the researcher missed). One dependency correction: the successor's deps are NOT the same tiny set — @tma.js/init-data-node 2.0.8 pulls better-promises, error-kid ^2, fp-ts ^2.16.11, @tma.js/toolkit, @tma.js/transformers, @tma.js/types. Still pure JS with no native code, but fp-ts is a heavier dependency than the 'tiny' characterisation implies. The npmjs.com HTML page 403s to automated fetchers (I reproduced this on jose and zod too, so it is bot-blocking, not a broken link); package existence and all metadata verified against registry.npmjs.org, which the researcher correctly identified as the reliable source."
+          },
+          {
+            "name": "init-data-golang",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": ""
+          },
+          {
+            "name": "Fastify 5",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up exactly. Registry confirms 5.12.1 published 2026-08-18, license MIT, not deprecated; repo LICENSE reads 'MIT License, Copyright (c) 2016-present The Fastify team'. The Hono alternative in the caveat also checks out: 4.13.5, MIT, published 2026-08-26."
+          },
+          {
+            "name": "better-sqlite3",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up. Registry confirms 13.0.3 published 2026-08-05, MIT; repo LICENSE reads 'The MIT License (MIT), Copyright (c) 2017 Joshua Wise'. Two additions that strengthen the native-addon caveat: package engines require node >=22, and the only runtime dependency is node-addon-api ^8, so the prebuild/Node-major pinning advice is exactly the right concern."
+          },
+          {
+            "name": "node:sqlite (Node.js built-in)",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Version history and stability verified word-for-word from the official docs: added v22.5.0, 'SQLite is no longer behind --experimental-sqlite but still experimental' in v23.4.0 and v22.13.0, and 'SQLite is now a release candidate' at v25.7.0, Stability 1.2. BUT THE CAVEAT IS FACTUALLY WRONG on capabilities: node:sqlite is NOT missing backup or extension loading. The docs document a module-level sqlite.backup(sourceDb, path[, options]) with source/target/rate/progress options returning a promise of pages copied, plus DatabaseSync's allowExtension constructor option, database.loadExtension(path[, entryPoint]) and database.enableLoadExtension(allow). Drop 'lacks better-sqlite3's ecosystem maturity around backup and extension loading' — the honest and still-sufficient reason to prefer better-sqlite3 is the Release-Candidate stability level alone."
+          },
+          {
+            "name": "Litestream",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "License confirmed Apache-2.0 from benbjohnson/litestream LICENSE (full Apache License Version 2.0 text). Site confirms the exact quoted string 'v0.5.x - Latest - Actively maintained with new features and bug fixes'. The DigitalOcean Spaces claim also checks out — the guides index lists DigitalOcean Spaces alongside S3, Backblaze B2 and Azure as replica destinations. Note the site itself states no license; that came from the repo, as the researcher said."
+          },
+          {
+            "name": "Caddy 2",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up verbatim. Docs confirm 'By default, Caddy serves all sites over HTTPS', both Let's Encrypt and ZeroSSL enabled with failover ('if Caddy cannot get a certificate from Let's Encrypt, it will try with ZeroSSL'), 'Caddy keeps all managed certificates renewed', and the exact requirement list: A/AAAA records point to your server, ports 80 and 443 open externally, Caddy can bind to those ports, data directory writeable and persistent, domain name appears in the config. License confirmed Apache-2.0 from caddyserver/caddy LICENSE."
+          },
+          {
+            "name": "systemd (as the process manager)",
+            "urlReachable": false,
+            "correction": "URL IS DEAD FOR THIS PURPOSE: https://www.freedesktop.org/wiki/Software/systemd/ returns 403/418 to both curl and WebFetch and is in any case the legacy wiki page. Replace with https://systemd.io/ (verified 200) or the systemd/systemd repo. The license claim itself is CORRECT and I verified it at source: the systemd README states 'LGPL-2.1-or-later for all code, exceptions noted in LICENSES/README.md'. The reasoning also holds — using systemd as an OS service manager creates no licensing obligation for a separate proprietary backend process.",
+            "licenseConfirmed": true
+          },
+          {
+            "name": "PM2",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "The flag is correct and worth keeping. Registry confirms pm2 7.0.4 published 2026-08-24 with license field 'AGPL-3.0'; the repo LICENSE file is a pointer reading 'GNU-AGPL-3.0.txt'. AGPL-3.0 does permit commercial use — the researcher's framing (avoidable copyleft near a commercial product, for functionality systemd already provides) is the accurate characterisation, not a claim that it is unusable."
+          },
+          {
+            "name": "jose",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up. Registry confirms 6.2.10 published 2026-08-21, MIT, repo panva/jose. The npmjs.com HTML page 403s to automated fetchers — same bot-blocking seen across all npm package pages, not a broken link."
+          },
+          {
+            "name": "zod 4",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Held up. Registry confirms 4.5.4 published 2026-08-29, MIT, repo colinhacks/zod. Same npmjs.com bot-block on the HTML page."
+          },
+          {
+            "name": "Drizzle ORM",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "License and version confirmed: drizzle-orm 0.45.2 published 2026-03-27, Apache-2.0 on both the registry and the repo LICENSE. The 'check for newer releases' caveat resolves concretely: the stable `latest` tag really is still 0.45.2 from March 2026, but the project is actively shipping a 1.0 line — the `rc` tag is 1.0.0-rc.4 with rc.5 builds published as recently as 2026-08-12. So the package is NOT stale, it is mid-major-version; you are choosing between a six-month-old stable and an in-flight 1.0 RC. Also note drizzle-kit — the migration runner that is the actual reason to adopt this — is a SEPARATE package under a DIFFERENT license: drizzle-kit 0.31.10, published 2026-03-17, MIT (not Apache-2.0). Both permit commercial use."
+          },
+          {
+            "name": "DigitalOcean Basic Droplet sizing",
+            "urlReachable": true,
+            "licenseConfirmed": true,
+            "correction": "Every tier verified exactly against the live pricing page: $4 = 1 vCPU / 512 MiB / 10 GB / 500 GB; $6 = 1 / 1 GB / 25 GB / 1,000 GB; $12 = 1 / 2 GB / 50 GB / 2,000 GB; $18 = 2 / 2 GB / 60 GB / 3,000 GB; $24 = 2 / 4 GB / 80 GB / 4,000 GB. The 130k-cold-loads arithmetic also checks out (2,000,000 MB / 15 MB = 133,333). Not a licensing question, as stated."
+          }
+        ],
+        "survivingRecommendation": "WHAT SURVIVED: 13 of 14 findings hold up on the facts. One package is deprecated and must be swapped, one caveat is factually wrong, one URL is dead. Nothing here is hallucinated and every license claim is correct and verified at source — no legal exposure found. Every component is MIT, Apache-2.0, or (systemd only, used as an OS service, not linked) LGPL-2.1-or-later. All permit commercial use.\n\nTHE ONE SUBSTANTIVE SWAP. @telegram-apps/init-data-node is DEPRECATED — the npm registry attaches 'This package is not supported anymore. Use @tma.js/init-data-node instead' to its latest version, which has not been republished since June 2025. Use @tma.js/init-data-node (2.0.8, published 2026-06-20, MIT, same author, same monorepo). This is a rename, not a rewrite: validate(), validate3rd(), parse() and signData() all carry over with identical semantics, and the 86400-second expiresIn default the researcher correctly flagged is unchanged, so the 'set expiresIn to 3600 explicitly' instruction stands as written. Two things change in practice: the import specifier, and the dependency tree — the successor pulls fp-ts, better-promises and the @tma.js/* packages rather than the three tiny ones, so the 'dependencies are tiny' selling point is weaker (still pure JS, no native code). The successor also exposes non-throwing isValid()/isValid3rd() variants, which are cleaner than try/catch in a Fastify preHandler.\n\nTHE ONE FACTUAL CORRECTION. node:sqlite does NOT lack backup and extension loading — core ships sqlite.backup(sourceDb, path, {source, target, rate, progress}) and DatabaseSync's allowExtension / loadExtension() / enableLoadExtension(). Drop that reason. The real and sufficient reason to still default to better-sqlite3 in 2026 stands: node:sqlite is Stability 1.2 Release Candidate as of v25.7.0, not Stable, and API churn across Node majors is genuine friction for a solo operator.\n\nTHE ONE DEAD LINK. Replace the systemd URL https://www.freedesktop.org/wiki/Software/systemd/ (403s, legacy wiki) with https://systemd.io/. The LGPL-2.1-or-later claim itself is correct — verified from the systemd README — and the reasoning that supervising a separate proprietary process creates no licensing obligation is sound.\n\nSTACK (unchanged, all verified): Ubuntu 24.04 droplet at $12/mo — 1 vCPU / 2 GiB / 50 GB SSD / 2 TB transfer, confirmed exactly on DigitalOcean's live pricing page → Caddy 2 (Apache-2.0) for automatic TLS and static hosting; the docs confirm HTTPS on by default, Let's Encrypt and ZeroSSL both enabled with automatic failover, background renewal, and the precise requirements of A/AAAA records, ports 80 and 443 open, a writable persistent data dir and the domain named in the config → Node.js 24 LTS 'Krypton' (v24.20.0 confirmed as the current LTS, released 2026-08-26) running Fastify 5.12.1 (MIT, 2026-08-18) → better-sqlite3 13.0.3 (MIT, 2026-08-05) in WAL mode → Litestream v0.5.x (Apache-2.0, site confirms 'Actively maintained', DigitalOcean Spaces confirmed as a supported backend) → systemd, NOT PM2. The PM2 flag is correct and worth keeping: 7.0.4 is AGPL-3.0 on both the registry and the repo. AGPL does permit commercial use, so this is a deliberate avoidance of unnecessary copyleft rather than a prohibition. Auth is @tma.js/init-data-node plus jose 6.2.10 (MIT, 2026-08-21); request validation is zod 4.5.4 (MIT, 2026-08-29) or Fastify's built-in JSON Schema.\n\nMIGRATIONS: Drizzle remains optional and the caveat sharpens rather than falls. drizzle-orm's stable `latest` is genuinely still 0.45.2 from March 2026, but that is because a 1.0 line is in flight — rc builds shipped as recently as 2026-08-12. You are choosing between a six-month-old stable and an in-flight RC, not adopting an abandoned package. Note that drizzle-kit, the migration runner that is the actual reason to adopt this, is a separate package under MIT (0.31.10, 2026-03-17), not Apache-2.0. Both permit commercial use. The fallback advice stands: if you skip it, keep numbered .sql migration files and a schema_version row.\n\nTHE TELEGRAM SPEC SECTION IS FULLY CORRECT AND IS THE MOST LOAD-BEARING PART OF THIS DOCUMENT. Verified line by line against core.telegram.org/bots/webapps: data-check-string is all received fields except hash, sorted alphabetically, as key=<value> joined by line feeds; the secret key is 'HMAC-SHA-256 signature of the bot's token with the constant string WebAppData used as a key' — confirming the researcher's emphasised point that the bot token is the MESSAGE and 'WebAppData' is the KEY, which is the reversal that breaks most hand-rolled implementations; auth_date is explicitly recommended as a staleness check; the WebAppInitData field list is exactly as stated. The Ed25519 third-party flow is confirmed too, including both public keys verbatim (production e7bf03a2fa4602af4580703d88dda5bb59f32ed8b02a56c187fe7d34caed242d, test 40055058a4ee38156a06562e52eece92a771bcd8346a8c4615cb7376eddf72ec) and the <bot_id>:WebAppData check-string prefix — and the researcher is right that you own the bot, so you use the HMAC path.\n\nThe auth flow, the lazy-checkpoint exponential decay design, the streak/timezone-freezing logic, the intents-only anti-cheat posture, the append-only ledger, the idempotency keys, and every entry in the risks list are design judgement rather than verifiable external claims. Nothing I checked contradicts any of them, and the two risks that ARE factual claims — the 86400 expiresIn default, and the 2 TB transfer ceiling working out to roughly 130k cold loads of a 15 MB bundle — both verify. Apply the swap to @tma.js/init-data-node and the recommendation stands as written."
+      }
+    ]
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Research"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 3,
+      "title": "Plan"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "research:assets",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a360bb81adceeb6a0",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1788411228159,
+      "lastProgressAt": 1788411228159,
+      "cached": true,
+      "resultPreview": "{\"dimension\":\"assets\",\"findings\":[{\"name\":\"Low Poly Gym Set [+70 Models] — VNB-Leo (itch.io)\",\"url\":\"https://vnbp.itch.io/low-poly-gym-set\",\"license\":\"Creative Commons Attribution v4.0 International (CC BY 4.0) — stated in itch.io's structured \\\"Asset license\\\" field, verified in page HTML. Commercial use explicitly allowed: \\\"You're welcome to use any of the models in this pack on any commercial …",
+      "promptPreview": "PROJECT: \"KEVIN'S GYM\" — a browser-based 3D gym game for a crypto memecoin community.\n\nART TARGET: bold 2D cartoon. Thick uniform black outlines, flat cel-shaded colour,\nsaturated reds and creams, no photorealism. The 3D must LOOK like a hand-drawn\ncartoon, not like a Unity asset store demo. Think Borderlands/Jet Set Radio outline\nstyle but flatter and more cartoonish.\n\nGAMEPLAY: you enter a gym, …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "research:environments",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a440ca77cf3b03589",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1788411228160,
+      "lastProgressAt": 1788411228160,
+      "cached": true,
+      "resultPreview": "{\"dimension\":\"environments\",\"findings\":[{\"name\":\"Kenney \\\"Mini\\\" series room shell (Mini Market / Mini Arcade / Mini Skate)\",\"url\":\"https://kenney.nl/assets/mini-market\",\"license\":\"CC0 1.0 Universal. Verified by reading the License.txt shipped inside the downloaded zip: \\\"License: (Creative Commons Zero, CC0) ... You can use this content for personal, educational, and commercial purposes.\\\" Attrib…",
+      "promptPreview": "PROJECT: \"KEVIN'S GYM\" — a browser-based 3D gym game for a crypto memecoin community.\n\nART TARGET: bold 2D cartoon. Thick uniform black outlines, flat cel-shaded colour,\nsaturated reds and creams, no photorealism. The 3D must LOOK like a hand-drawn\ncartoon, not like a Unity asset store demo. Think Borderlands/Jet Set Radio outline\nstyle but flatter and more cartoonish.\n\nGAMEPLAY: you enter a gym, …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "research:engine",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a0429617da0a06854",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1788411228161,
+      "lastProgressAt": 1788411228161,
+      "cached": true,
+      "resultPreview": "{\"dimension\":\"engine\",\"findings\":[{\"name\":\"three.js (r185 / npm 0.185.1)\",\"url\":\"https://github.com/mrdoob/three.js\",\"license\":\"MIT (verified in node_modules/three/LICENSE: \\\"The MIT License, Copyright © 2010-2026 three.js authors\\\"). Commercial use allowed, no attribution requirement beyond keeping the notice.\",\"whatItGives\":\"MEASURED, not quoted: I installed three@0.185.1 and bundled a realistic…",
+      "promptPreview": "PROJECT: \"KEVIN'S GYM\" — a browser-based 3D gym game for a crypto memecoin community.\n\nART TARGET: bold 2D cartoon. Thick uniform black outlines, flat cel-shaded colour,\nsaturated reds and creams, no photorealism. The 3D must LOOK like a hand-drawn\ncartoon, not like a Unity asset store demo. Think Borderlands/Jet Set Radio outline\nstyle but flatter and more cartoonish.\n\nGAMEPLAY: you enter a gym, …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "research:shading",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a26dbcac1d4627a33",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1788411230454,
+      "queuedAt": 1788411228162,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "shading — flat cartoon look + thick black outlines in a mob…",
+      "promptPreview": "PROJECT: \"KEVIN'S GYM\" — a browser-based 3D gym game for a crypto memecoin community.\n\nART TARGET: bold 2D cartoon. Thick uniform black outlines, flat cel-shaded colour,\nsaturated reds and creams, no photorealism. The 3D must LOOK like a hand-drawn\ncartoon, not like a Unity asset store demo. Think Borderlands/Jet Set Radio outline\nstyle but flatter and more cartoonish.\n\nGAMEPLAY: you enter a gym, …",
+      "lastProgressAt": 1788411766748,
+      "tokens": 100173,
+      "toolCalls": 48,
+      "durationMs": 536292,
+      "resultPreview": "{\"dimension\":\"shading — flat cartoon look + thick black outlines in a mobile browser\",\"findings\":[{\"name\":\"three.js OutlineEffect (inverted-hull) — verified source read\",\"url\":\"https://github.com/mrdoob/three.js/blob/dev/examples/jsm/effects/OutlineEffect.js\",\"license\":\"MIT (three.js LICENSE, verified at https://raw.githubusercontent.com/mrdoob/three.js/dev/LICENSE). Commercial use allowed.\",\"what…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "research:character",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "ab47ee61d1a288385",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1788411230483,
+      "queuedAt": 1788411228163,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "character",
+      "promptPreview": "PROJECT: \"KEVIN'S GYM\" — a browser-based 3D gym game for a crypto memecoin community.\n\nART TARGET: bold 2D cartoon. Thick uniform black outlines, flat cel-shaded colour,\nsaturated reds and creams, no photorealism. The 3D must LOOK like a hand-drawn\ncartoon, not like a Unity asset store demo. Think Borderlands/Jet Set Radio outline\nstyle but flatter and more cartoonish.\n\nGAMEPLAY: you enter a gym, …",
+      "lastProgressAt": 1788411903443,
+      "tokens": 102708,
+      "toolCalls": 66,
+      "durationMs": 672206,
+      "resultPreview": "{\"dimension\":\"character\",\"findings\":[{\"name\":\"glTF 2.0 morph targets (the muscle mechanism)\",\"url\":\"https://raw.githubusercontent.com/KhronosGroup/glTF/main/specification/2.0/Specification.adoc\",\"license\":\"Khronos glTF 2.0 specification — open royalty-free standard, commercial use unrestricted\",\"whatItGives\":\"The actual continuous-muscle mechanism. Spec (section 'Morph Targets'): final POSITION = …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "research:references",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "ac8f09dceff8f84b4",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1788411769997,
+      "queuedAt": 1788411228163,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "references",
+      "promptPreview": "PROJECT: \"KEVIN'S GYM\" — a browser-based 3D gym game for a crypto memecoin community.\n\nART TARGET: bold 2D cartoon. Thick uniform black outlines, flat cel-shaded colour,\nsaturated reds and creams, no photorealism. The 3D must LOOK like a hand-drawn\ncartoon, not like a Unity asset store demo. Think Borderlands/Jet Set Radio outline\nstyle but flatter and more cartoonish.\n\nGAMEPLAY: you enter a gym, …",
+      "lastProgressAt": 1788412416033,
+      "tokens": 93344,
+      "toolCalls": 52,
+      "durationMs": 646034,
+      "resultPreview": "{\"dimension\":\"references\",\"findings\":[{\"name\":\"pmndrs/ecctrl\",\"url\":\"https://github.com/pmndrs/ecctrl\",\"license\":\"MIT (LICENSE file: \\\"MIT License, Copyright (c) 2023-2026 Erdong Chen\\\"; npm ecctrl@2.0.1 license: MIT). Commercial use allowed.\",\"whatItGives\":\"The single closest thing to a drop-in player for this game: a physics-driven character controller for react-three-fiber + react-three-rapier,…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 7,
+      "label": "research:backend",
+      "phaseIndex": 1,
+      "phaseTitle": "Research",
+      "agentId": "a54a74d47f239d088",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1788411906198,
+      "queuedAt": 1788411228163,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "backend",
+      "promptPreview": "PROJECT: \"KEVIN'S GYM\" — a browser-based 3D gym game for a crypto memecoin community.\n\nART TARGET: bold 2D cartoon. Thick uniform black outlines, flat cel-shaded colour,\nsaturated reds and creams, no photorealism. The 3D must LOOK like a hand-drawn\ncartoon, not like a Unity asset store demo. Think Borderlands/Jet Set Radio outline\nstyle but flatter and more cartoonish.\n\nGAMEPLAY: you enter a gym, …",
+      "lastProgressAt": 1788412231193,
+      "tokens": 59910,
+      "toolCalls": 24,
+      "durationMs": 324994,
+      "resultPreview": "{\"dimension\":\"backend\",\"findings\":[{\"name\":\"Telegram Mini Apps — official initData validation spec\",\"url\":\"https://core.telegram.org/bots/webapps\",\"license\":\"Documentation/specification, not software. No license required to implement; commercial use of the Bot API and Mini Apps platform is permitted and standard.\",\"whatItGives\":\"The authoritative algorithm. Verified directly from the page: build t…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 8,
+      "label": "verify:assets",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "ab506eade403a9256",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1788412234000,
+      "queuedAt": 1788411228166,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "assets",
+      "promptPreview": "You are fact-checking another researcher's findings for the \"assets\" dimension of a 3D browser game build.\n\nFINDINGS:\n{\n  \"dimension\": \"assets\",\n  \"findings\": [\n    {\n      \"name\": \"Low Poly Gym Set [+70 Models] — VNB-Leo (itch.io)\",\n      \"url\": \"https://vnbp.itch.io/low-poly-gym-set\",\n      \"license\": \"Creative Commons Attribution v4.0 International (CC BY 4.0) — stated in itch.io's structured \\…",
+      "lastProgressAt": 1788412519942,
+      "tokens": 69264,
+      "toolCalls": 29,
+      "durationMs": 285940,
+      "resultPreview": "{\"dimension\":\"assets\",\"checked\":[{\"name\":\"Low Poly Gym Set [+70 Models] — VNB-Leo (itch.io)\",\"urlReachable\":true,\"licenseConfirmed\":true,\"correction\":\"Holds up. The itch.io structured \\\"Asset license\\\" field literally contains 'Creative Commons Attribution v4.0 International' (verified in raw page HTML), 70+ models, Standard FBX zip 5.3 MB / Unity package 1.3 MB, name-your-own-price. The commercia…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 9,
+      "label": "verify:environments",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a1ba4e541c8a097dd",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1788412419084,
+      "queuedAt": 1788411228167,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "environments",
+      "promptPreview": "You are fact-checking another researcher's findings for the \"environments\" dimension of a 3D browser game build.\n\nFINDINGS:\n{\n  \"dimension\": \"environments\",\n  \"findings\": [\n    {\n      \"name\": \"Kenney \\\"Mini\\\" series room shell (Mini Market / Mini Arcade / Mini Skate)\",\n      \"url\": \"https://kenney.nl/assets/mini-market\",\n      \"license\": \"CC0 1.0 Universal. Verified by reading the License.txt shi…",
+      "lastProgressAt": 1788412594354,
+      "tokens": 64112,
+      "toolCalls": 24,
+      "durationMs": 175269,
+      "resultPreview": "{\"dimension\":\"environments\",\"checked\":[{\"name\":\"Kenney \\\"Mini\\\" series room shell (Mini Market / Mini Arcade / Mini Skate)\",\"urlReachable\":true,\"licenseConfirmed\":true,\"correction\":\"Held up. kenney.nl/assets/mini-market, /mini-arcade and /mini-skate all resolve, all state Creative Commons CC0, all are 3D, ~20 files each; Mini Arcade is 2024 v1.2, Mini Skate v1.2 with character rigs — consistent wi…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 10,
+      "label": "verify:engine",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a56e5b964ea8bef50",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1788412522686,
+      "queuedAt": 1788411228168,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "engine",
+      "promptPreview": "You are fact-checking another researcher's findings for the \"engine\" dimension of a 3D browser game build.\n\nFINDINGS:\n{\n  \"dimension\": \"engine\",\n  \"findings\": [\n    {\n      \"name\": \"three.js (r185 / npm 0.185.1)\",\n      \"url\": \"https://github.com/mrdoob/three.js\",\n      \"license\": \"MIT (verified in node_modules/three/LICENSE: \\\"The MIT License, Copyright © 2010-2026 three.js authors\\\"). Commercial…",
+      "lastProgressAt": 1788412831107,
+      "tokens": 74103,
+      "toolCalls": 34,
+      "durationMs": 308420,
+      "resultPreview": "{\"dimension\":\"engine\",\"checked\":[{\"name\":\"three.js (r185 / npm 0.185.1)\",\"urlReachable\":true,\"licenseConfirmed\":true,\"correction\":\"\"},{\"name\":\"Babylon.js 9.23.0 (@babylonjs/core + @babylonjs/loaders + @babylonjs/materials)\",\"urlReachable\":true,\"licenseConfirmed\":true,\"correction\":\"\"},{\"name\":\"PlayCanvas Engine 2.21.4\",\"urlReachable\":true,\"licenseConfirmed\":true,\"correction\":\"\"},{\"name\":\"Godot 4.6-…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 11,
+      "label": "verify:shading",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "ad268781edd582f7f",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1788412597272,
+      "queuedAt": 1788411768593,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "shading — flat cartoon look + thick black outlines in a mob…",
+      "promptPreview": "You are fact-checking another researcher's findings for the \"shading\" dimension of a 3D browser game build.\n\nFINDINGS:\n{\n  \"dimension\": \"shading — flat cartoon look + thick black outlines in a mobile browser\",\n  \"findings\": [\n    {\n      \"name\": \"three.js OutlineEffect (inverted-hull) — verified source read\",\n      \"url\": \"https://github.com/mrdoob/three.js/blob/dev/examples/jsm/effects/OutlineEff…",
+      "lastProgressAt": 1788413030960,
+      "tokens": 88075,
+      "toolCalls": 46,
+      "durationMs": 433687,
+      "resultPreview": "{\"dimension\":\"shading — flat cartoon look + thick black outlines in a mobile browser\",\"checked\":[{\"name\":\"three.js OutlineEffect (inverted-hull)\",\"urlReachable\":true,\"licenseConfirmed\":true,\"correction\":\"Holds up. Fetched the raw source: calculateOutline() is `vec4 pos2 = projectionMatrix * modelViewMatrix * vec4(skinned.xyz + normal, 1.0); vec4 norm = normalize(pos - pos2); return pos + norm * th…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 12,
+      "label": "verify:character",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "aa97be5769745a8b1",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1788412833807,
+      "queuedAt": 1788411904768,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "character",
+      "promptPreview": "You are fact-checking another researcher's findings for the \"character\" dimension of a 3D browser game build.\n\nFINDINGS:\n{\n  \"dimension\": \"character\",\n  \"findings\": [\n    {\n      \"name\": \"glTF 2.0 morph targets (the muscle mechanism)\",\n      \"url\": \"https://raw.githubusercontent.com/KhronosGroup/glTF/main/specification/2.0/Specification.adoc\",\n      \"license\": \"Khronos glTF 2.0 specification — ope…",
+      "lastProgressAt": 1788413200128,
+      "tokens": 89850,
+      "toolCalls": 44,
+      "durationMs": 366320,
+      "resultPreview": "{\"dimension\":\"character\",\"checked\":[{\"name\":\"glTF 2.0 morph targets (the muscle mechanism)\",\"urlReachable\":true,\"licenseConfirmed\":true,\"correction\":\"\"},{\"name\":\"three.js morph target runtime API\",\"urlReachable\":true,\"licenseConfirmed\":true,\"correction\":\"Substance holds; one file-path error. src/objects/Mesh.js is reachable and declares morphTargetInfluences ('An array of weights typically in the …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 13,
+      "label": "verify:backend",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a860312d75308c771",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1788413033954,
+      "queuedAt": 1788412232398,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "backend",
+      "promptPreview": "You are fact-checking another researcher's findings for the \"backend\" dimension of a 3D browser game build.\n\nFINDINGS:\n{\n  \"dimension\": \"backend\",\n  \"findings\": [\n    {\n      \"name\": \"Telegram Mini Apps — official initData validation spec\",\n      \"url\": \"https://core.telegram.org/bots/webapps\",\n      \"license\": \"Documentation/specification, not software. No license required to implement; commercia…",
+      "lastProgressAt": 1788413255724,
+      "tokens": 66781,
+      "toolCalls": 24,
+      "durationMs": 221769,
+      "resultPreview": "{\"dimension\":\"backend\",\"checked\":[{\"name\":\"Telegram Mini Apps — official initData validation spec\",\"urlReachable\":true,\"licenseConfirmed\":true,\"correction\":\"\"},{\"name\":\"@telegram-apps/init-data-node (npm)\",\"urlReachable\":true,\"licenseConfirmed\":true,\"correction\":\"MAJOR: THE PACKAGE IS DEPRECATED. registry.npmjs.org returns a deprecation string on the latest version (2.0.10): 'This package is not s…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 14,
+      "label": "verify:references",
+      "phaseIndex": 2,
+      "phaseTitle": "Verify",
+      "agentId": "a966b8531fd64c6ad",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1788413202962,
+      "queuedAt": 1788412417556,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "references",
+      "promptPreview": "You are fact-checking another researcher's findings for the \"references\" dimension of a 3D browser game build.\n\nFINDINGS:\n{\n  \"dimension\": \"references\",\n  \"findings\": [\n    {\n      \"name\": \"pmndrs/ecctrl\",\n      \"url\": \"https://github.com/pmndrs/ecctrl\",\n      \"license\": \"MIT (LICENSE file: \\\"MIT License, Copyright (c) 2023-2026 Erdong Chen\\\"; npm ecctrl@2.0.1 license: MIT). Commercial use allowed…",
+      "lastProgressAt": 1788413525702,
+      "tokens": 84475,
+      "toolCalls": 66,
+      "durationMs": 322738,
+      "resultPreview": "{\"dimension\":\"references\",\"checked\":[{\"name\":\"pmndrs/ecctrl\",\"urlReachable\":true,\"licenseConfirmed\":true,\"correction\":\"Holds up. LICENSE at main reads verbatim \\\"MIT License / Copyright (c) 2023-2026 Erdong Chen\\\"; npm ecctrl@2.0.1 license field is \\\"MIT\\\". 786 stars confirmed. \\\"Actively maintained\\\" confirmed — most recent commit on main is 17 Aug 2026 (tag 2.0.1). Minor naming correction: the c…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 15,
+      "label": "build-plan",
+      "phaseIndex": 3,
+      "phaseTitle": "Plan",
+      "agentId": "a0ed08635280a0a2c",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1788413528876,
+      "queuedAt": 1788413527075,
+      "attempt": 1,
+      "lastToolName": "mcp__github__search_code",
+      "lastToolSummary": "muscle repo:makehumancommunity/mpfb2",
+      "promptPreview": "PROJECT: \"KEVIN'S GYM\" — a browser-based 3D gym game for a crypto memecoin community.\n\nART TARGET: bold 2D cartoon. Thick uniform black outlines, flat cel-shaded colour,\nsaturated reds and creams, no photorealism. The 3D must LOOK like a hand-drawn\ncartoon, not like a Unity asset store demo. Think Borderlands/Jet Set Radio outline\nstyle but flatter and more cartoonish.\n\nGAMEPLAY: you enter a gym, …",
+      "lastProgressAt": 1788413888611,
+      "tokens": 119002,
+      "toolCalls": 5,
+      "durationMs": 359734,
+      "resultPreview": "# KEVIN'S GYM — BUILD PLAN\n\n**Verdict up front:** commit. This is buildable in roughly three months by one developer. The technology risk is low and well-understood; the two real risks are the character pipeline and whether the art actually looks hand-drawn. Both are testable in week one, cheaply, before you spend money on art. If you take one thing from this document, take the week-one plan in §5…"
+    }
+  ],
+  "totalTokens": 1011797,
+  "totalToolCalls": 462
+}

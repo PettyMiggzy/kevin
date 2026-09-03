@@ -27,8 +27,10 @@ import { readFile as rf, writeFile as wf } from 'node:fs/promises';
 const run = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RAW = join(ROOT, 'assets/stickers/raw');
+const BRAND_YELLOW = 'FFE500';
 const STILLS = join(ROOT, 'assets/stickers/stills');
 const OUT = join(ROOT, 'assets/stickers/animated');
+const PNG = join(ROOT, 'assets/stickers/png');
 const FFMPEG = process.env.FFMPEG_PATH || ['/usr/bin/ffmpeg'].find((p) => existsSync(p)) || 'ffmpeg';
 
 const BRANCH = process.env.REF_BRANCH || 'claude/kevin-crypto-art-website-ymq79j';
@@ -69,7 +71,7 @@ const HOLD =
 
 export const STICKERS = [
   {
-    slug: 'wagmi', src: '01-hero-portrait.jpg', word: 'WAGMI',
+    slug: 'wagmi', src: '01-hero-portrait.jpg', word: 'WAGMI', start: 1.5,
     edit: 'Dress him in a red and yellow fast-food crew uniform with a matching visor cap, giving a big thumbs up with one hand. Add the word "WAGMI" in huge bold black cartoon letters across the bottom of the image',
     action: 'His WHOLE BODY bounces up and down on his feet with the beat, head bobbing, torso twisting side to side, hood and dreadlocks swinging with the motion, thumb pumping. Everything moves together — head, body, arms, legs',
   },
@@ -216,7 +218,11 @@ async function wordPlate(word, out) {
  * frame. The word is typeset on afterwards, so the lettering is identical
  * across the pack and cannot be lost when the generator reframes.
  */
-async function toSticker(src, out, { word = null, start = 0.3, dur = 3 } = {}) {
+async function toSticker(src, out, opts = {}) {
+  // Some clips open on a close-up and pull out to a wide shot. Where the
+  // costume IS the joke, start after the pull-out so the outfit is visible.
+  const { word = null, dur = 3 } = opts;
+  const start = opts.start ?? 0.3;
   const probe = await run(FFMPEG, ['-v', 'error', '-ss', String(start), '-i', src,
     '-vf', 'crop=8:8:0:0,scale=1:1', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'],
     { encoding: 'buffer', maxBuffer: 1 << 20 });
@@ -242,7 +248,7 @@ async function toSticker(src, out, { word = null, start = 0.3, dur = 3 } = {}) {
   if (box && box.w > 60 && box.h > 60) {
     const cx = box.x + box.w / 2;
     const cy = box.y + box.h / 2;
-    const side = Math.min(bh, Math.max(box.w, box.h) * 1.22);
+    const side = Math.min(bh, Math.max(box.w, box.h) * (opts.wide ? 1.5 : 1.22));
     const x = Math.max(0, Math.min(bw - side, cx - side / 2));
     const y = Math.max(0, Math.min(bh - side, cy - side / 2));
     crop = `${trim}crop=${Math.round(side)}:${Math.round(side)}:${Math.round(x)}:${Math.round(y)}`;
@@ -274,6 +280,28 @@ async function toSticker(src, out, { word = null, start = 0.3, dur = 3 } = {}) {
   return { size: (await stat(out)).size, crf: 52, fps: 16, crop };
 }
 
+/**
+ * The webm is the sticker. The site also wants a still and a loop that plays
+ * where transparent VP9 doesn't — X and Discord. Both fall straight out of the
+ * finished webm, so they are derived here rather than generated separately.
+ *
+ *   png — one frame, alpha kept
+ *   gif — the loop flattened onto the brand yellow, because a GIF only has
+ *         one bit of transparency and keying it looks like a bad cutout
+ */
+async function derive(webm, slug) {
+  await mkdir(PNG, { recursive: true });
+  await run(FFMPEG, ['-y', '-v', 'error', '-c:v', 'libvpx-vp9', '-i', webm,
+    '-vf', 'select=eq(n\\,4),scale=512:512', '-vframes', '1', '-pix_fmt', 'rgba',
+    join(PNG, `${slug}.png`)]);
+  await run(FFMPEG, ['-y', '-v', 'error', '-c:v', 'libvpx-vp9', '-i', webm,
+    '-filter_complex',
+    `color=c=0x${BRAND_YELLOW}:s=512x512[bg];[bg][0:v]overlay=shortest=1,fps=14,` +
+    'scale=320:-1:flags=lanczos,split[a][b];' +
+    '[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4',
+    '-loop', '0', join(OUT, `${slug}.gif`)]);
+}
+
 async function main() {
   if (has('list')) {
     for (const s of STICKERS) console.log(`  ${(s.word || s.slug).padEnd(14)} ${s.src.padEnd(24)} ${s.edit.slice(0, 58)}…`);
@@ -289,7 +317,9 @@ async function main() {
     for (const s of list) {
       const raw = join(RAW, `${s.slug}.mp4`);
       if (!existsSync(raw)) { console.log(`  ${s.slug.padEnd(16)} no raw, skipped`); continue; }
-      const { size, crf, fps } = await toSticker(raw, join(OUT, `${s.slug}.webm`), { word: s.word });
+      const webm = join(OUT, `${s.slug}.webm`);
+      const { size, crf, fps } = await toSticker(raw, webm, { word: s.word, wide: s.wide, start: s.start });
+      await derive(webm, s.slug);
       console.log(`  ${s.slug.padEnd(16)} ${(size / 1024).toFixed(0).padStart(4)}KB (crf ${crf}${fps < 30 ? `, ${fps}fps` : ''})`);
     }
     return;
@@ -362,7 +392,8 @@ async function main() {
       const mp4 = await retrieve(key, { model: MODEL, queue_id: id });
       const rawPath = await save(mp4, RAW, `${s.slug}.mp4`);
       const webm = join(OUT, `${s.slug}.webm`);
-      const { size, crf, fps } = await toSticker(rawPath, webm, { word: s.word });
+      const { size, crf, fps } = await toSticker(rawPath, webm, { word: s.word, wide: s.wide, start: s.start });
+      await derive(webm, s.slug);
       console.log(`\r  ${s.slug.padEnd(16)} ${(size / 1024).toFixed(0).padStart(4)}KB (crf ${crf}${fps < 30 ? `, ${fps}fps` : ''})       `);
     } catch (e) {
       console.log(`\r  ${s.slug.padEnd(16)} FAILED — ${e.message.split('\n')[0].slice(0, 80)}`);

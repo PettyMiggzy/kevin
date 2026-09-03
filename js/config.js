@@ -4,7 +4,8 @@
    ========================================================================== */
 
 window.KEVIN = {
-  // The Click. 3:41 PM on a Thursday, 2009. The grudge clock counts from here.
+  // Clock-in. 3:41 PM on a Thursday. The shift counter on the site counts up
+  // from here and has never been reset, because he has never clocked out.
   theClick: '2009-05-14T15:41:00',
 
   // The burn. The creator's own auction allocation gets destroyed.
@@ -48,8 +49,8 @@ window.KEVIN = {
   // Where people actually buy. Auction lives on the kekfun launchpad.
   links: {
     launchpad: 'https://kekfun.xyz',
-    telegram: null,
-    x: null,
+    telegram: 'https://t.me/kevinRBH',
+    x: 'https://x.com/Iamkevinonrh',
     chart: null,
     docs: 'docs/LORE.md',
   },
@@ -69,10 +70,10 @@ window.KEVIN = {
     {
       key: 'weth',
       ticker: 'WETH',
-      nickname: 'The Gas',
+      nickname: 'The Plumbing',
       weight: 46,
       blurb:
-        "The honest one. It doesn't believe in anything — it's the plumbing, the fee, the wrapped-up unit of actually getting somewhere. Belief without settlement is a screenshot.",
+        "The honest one. It doesn't believe in anything — it's the pipe, the fee, the wrapped-up unit of actually getting somewhere. Belief without settlement is a screenshot.",
       note: 'The biggest slice, because the boring thing has to work first.',
     },
     {
@@ -81,67 +82,51 @@ window.KEVIN = {
       nickname: 'The Laugh',
       weight: 36,
       blurb:
-        'The oldest exit. Kek is the sound the void makes when it agrees with you — the laugh at the funeral, in the elevator, when the chart does the thing.',
+        'The oldest exit. Kek is the sound the storeroom makes when it agrees with you — the laugh in the walk-in freezer, at 2am, when the chart does the thing.',
       note: 'Locked by the pad at a 10% minimum. This one is not going anywhere.',
     },
     {
       key: 'gme',
       ticker: 'GME',
-      nickname: 'The Grudge',
+      nickname: 'The Point',
       weight: 18,
       blurb:
-        'Not a joke. Colder. Made of everyone told no by a system that later got caught telling itself yes. Made of buy buttons that stopped working. Made of receipts.',
-      note: 'The smallest slice and the entire reason any of this is funny.',
+        'Not a joke. Flatter than that. A GME pool on Robinhood Chain, opened by a fry cook who walked in with a briefcase that had his name on it and did not explain why.',
+      note: 'The smallest slice. The loudest joke. He is not discussing it.',
     },
   ],
 
   // Marquee lines. Keep them petty.
   ticker: [
-    'TOLD NO. STAYED ANYWAY',
-    'NOBODY CLICKED YES',
+    'I WORK THE FRYER',
+    'I HAVE WIFI',
+    'ONE OF THESE IS GOING TO WORK OUT',
+    'LAUNCHING AS SOON AS MY SHIFT IS OVER',
+    'BIG DREAMS \u2192 MCDONALD\u2019S \u2192 FREEDOM',
     'A GME POOL ON ROBINHOOD CHAIN',
-    'THE WONK IS LOAD-BEARING',
-    'HE IS LOOKING LEFT OF YOU',
-    'NO MARKETING. ONLY GRUDGES',
-    'STILL WAITING ON GTA 6',
-    'RECEIPTS OR IT DIDN\u2019T HAPPEN',
+    'EMPLOYEE OF THE MONTH',
+    'CEO OF CHAOS',
+    '\u2611 LAUNCH \u2611 MOON \u2611 LAMBO \u2610 SLEEP',
+    'NO PAIN, ONLY KEVIN',
     'WETH / KEK / GME',
-    'SAVED AT 3:41 PM',
-    'HE REMEMBERS WHAT YOU SAID IN MARCH',
   ],
 
-  // Animated stickers. .webm is the Telegram video sticker (VP9 + alpha,
-  // under 256KB); .gif is the same loop on the void, for X and Discord.
+  // The sticker pack. Every one of these has three files:
+  //   assets/stickers/png/<slug>.png       transparent still
+  //   assets/stickers/animated/<slug>.webm transparent VP9, Telegram-ready
+  //   assets/stickers/animated/<slug>.gif  same loop on the yellow
   animated: [
-    { slug: 'petty', name: 'Petty' },
-    { slug: 'noted', name: 'Noted' },
-    { slug: 'kek', name: 'Kek' },
-    { slug: 'laser', name: 'Send It' },
-    { slug: 'rekt', name: 'Rekt' },
-    { slug: 'wen', name: 'Wen' },
+    { slug: 'wagmi', name: 'WAGMI' },
     { slug: 'gm', name: 'GM' },
-    { slug: 'cope', name: 'Cope' },
-  ],
-
-  // The sticker pack. Files live in assets/stickers/.
-  stickers: [
-    { slug: 'petty', name: 'Petty' },
-    { slug: 'og', name: 'OG' },
-    { slug: 'noted', name: 'Noted' },
-    { slug: 'receipts', name: 'Receipts' },
-    { slug: 'told-no', name: 'Told No' },
-    { slug: 'laser', name: 'Send It' },
-    { slug: 'rekt', name: 'Rekt' },
-    { slug: 'smoothbrain', name: 'Smoothbrain' },
-    { slug: 'chad', name: 'No Comment' },
-    { slug: 'thinking', name: 'Hmmm' },
-    { slug: 'cope', name: 'Cope' },
-    { slug: 'gm', name: 'GM' },
+    { slug: 'lfg', name: 'LFG' },
+    { slug: 'buy', name: 'Buy' },
+    { slug: 'hodl', name: 'HODL' },
+    { slug: 'pump-it', name: 'Pump It' },
+    { slug: 'send-it', name: 'Send It' },
+    { slug: 'printer-go-brrr', name: 'Printer Go Brrr' },
+    { slug: 'ceo-of-chaos', name: 'CEO of Chaos' },
     { slug: 'wen', name: 'Wen' },
-    { slug: 'diamond', name: 'Still Here' },
-    { slug: 'mine', name: 'Mine Now' },
-    { slug: 'fine', name: "I'm Fine" },
-    { slug: 'kek', name: 'Kek' },
-    { slug: 'ngmi', name: 'Ngmi' },
+    { slug: 'rekt', name: 'Rekt' },
+    { slug: 'ngmi', name: 'NGMI' },
   ],
 };

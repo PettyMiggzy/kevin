@@ -119,22 +119,8 @@
   if (auction.startsAt) setInterval(renderCountdown, 1000);
 
   // --- stickers -----------------------------------------------------------
-  var grid = $('#sticker-grid');
-  if (grid && K.stickers) {
-    grid.innerHTML = K.stickers
-      .map(function (s) {
-        var src = 'assets/stickers/' + s.slug + '.png';
-        return (
-          '<a class="sticker" href="' + src + '" download title="Download ' + s.name + ' Kevin">' +
-          '<img src="' + src + '" alt="' + s.name + ' Kevin" loading="lazy" width="512" height="512">' +
-          '<b>' + s.name + '</b></a>'
-        );
-      })
-      .join('');
-  }
-
-  // --- animated stickers --------------------------------------------------
-  // The webm is the deliverable; it autoplays inline as its own preview.
+  // One grid. The webm autoplays inline as its own preview; png / webm / gif
+  // are the three things anybody actually wants to download.
   var anim = $('#animated-grid');
   if (anim && K.animated) {
     anim.innerHTML = K.animated
@@ -146,6 +132,7 @@
           'aria-label="' + a.name + ' Kevin, animated"></video>' +
           '<b>' + a.name + '</b>' +
           '<span class="sticker__dl">' +
+          '<a href="assets/stickers/png/' + a.slug + '.png" download>png</a>' +
           '<a href="' + base + '.webm" download>webm</a>' +
           '<a href="' + base + '.gif" download>gif</a>' +
           '</span></div>'
