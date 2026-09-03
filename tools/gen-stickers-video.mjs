@@ -105,7 +105,6 @@ export const STICKERS = [
   },
   {
     slug: 'rekt', src: '01-hero-portrait.jpg', word: 'REKT',
-    overlay: true,
     edit: 'He is flat on his back on the ground, limbs sprawled out, both eyes replaced with simple black X shapes, tongue lolling out. Do not add any text or lettering anywhere in the image',
     action: 'His WHOLE BODY twitches and spasms once on the ground, a leg kicking up and flopping down, torso jerking, head rolling to the side, tongue flopping, then everything goes limp and still',
   },
@@ -141,62 +140,70 @@ const only = args.filter((a) => !a.startsWith('--'));
  * is a flat-backed cartoon, so the corner is the background colour by
  * definition, which beats hardcoding a hex that changes per image.
  */
-async function toSticker(src, out, { key = true } = {}) {
-  const probe = await run(FFMPEG, ['-v', 'error', '-i', src, '-vf', 'crop=8:8:0:0,scale=1:1', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']
-    , { encoding: 'buffer', maxBuffer: 1 << 20 });
+/** Render a word as a transparent overlay strip, once, in the brand face. */
+async function wordPlate(word, out) {
+  await withBrowser(async (browser) => {
+    const page = await browser.newPage({ viewport: { width: 512, height: 512 } });
+    const font = (await rf(join(ROOT, 'assets/fonts/luckiest-guy-400.woff2'))).toString('base64');
+    await page.setContent(`<style>
+      @font-face{font-family:'LG';src:url(data:font/woff2;base64,${font}) format('woff2')}
+      *{margin:0;padding:0}
+      html,body{width:512px;height:512px;background:transparent;overflow:hidden}
+      b{position:absolute;left:0;right:0;bottom:14px;text-align:center;
+        font-family:'LG',sans-serif;font-weight:400;line-height:1;
+        color:#fff;-webkit-text-stroke:16px #0B0B0B;paint-order:stroke fill;
+        font-size:${word.length > 8 ? 62 : word.length > 5 ? 84 : 104}px;letter-spacing:1px}
+    </style><b>${word}</b>`, { waitUntil: 'load' });
+    await page.evaluate(() => document.fonts.ready);
+    await wf(out, await page.screenshot({ omitBackground: true }));
+    await page.close();
+  });
+}
+
+/**
+ * Cut a raw clip down to a Telegram video sticker.
+ *
+ * Two things the generator does that have to be undone here. It reframes over
+ * the first second or so — widening the shot and scrolling the baked-in word
+ * out of view — so the trim starts after that settles. And because the word is
+ * gone by then, it gets typeset back on afterwards, which also means the
+ * lettering is identical across the whole pack instead of varying per clip.
+ *
+ * The backdrop is keyed by sampling the clip's own top-left pixel: every
+ * source is a flat-backed cartoon, so the corner is the background by
+ * definition, and that stays true as sources change.
+ */
+async function toSticker(src, out, { word = null, start = 1.4 } = {}) {
+  const probe = await run(FFMPEG, ['-v', 'error', '-ss', String(start), '-i', src,
+    '-vf', 'crop=8:8:0:0,scale=1:1', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'],
+    { encoding: 'buffer', maxBuffer: 1 << 20 });
   const [r, g, b] = probe.stdout;
   const hex = `0x${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 
-  // square centre crop -> 512 -> 3 seconds, then key the flat backdrop
-  const chain = [
-    'crop=ih:ih:(iw-ih)/2:0',
-    'scale=512:512:flags=lanczos',
-    key ? `colorkey=${hex}:0.18:0.05` : null,
-    'format=yuva420p',
-  ].filter(Boolean).join(',');
+  let plate = null;
+  if (word) {
+    plate = join(RAW, `_word_${word.replace(/[^A-Z0-9]/gi, '')}.png`);
+    await wordPlate(word, plate);
+  }
 
-  // crf alone is not always enough — a busy clip with a lot of motion can sit
-  // over Telegram's 256KB even at crf 52. Dropping frames is the second lever,
-  // and 20fps is still smooth for a 3-second loop.
+  const base = `crop=ih:ih:(iw-ih)/2:0,scale=512:512:flags=lanczos,colorkey=${hex}:0.18:0.05`;
+
   for (const fps of [30, 24, 20, 16]) {
     for (const crf of [34, 40, 46, 52]) {
-      const vf = fps === 30 ? chain : `fps=${fps},${chain}`;
-      await run(FFMPEG, ['-y', '-v', 'error', '-t', '3', '-i', src, '-vf', vf,
-        '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-auto-alt-ref', '0',
-        '-crf', String(crf), '-b:v', '0', '-an', out]);
+      const args = ['-y', '-v', 'error', '-ss', String(start), '-t', '3', '-i', src];
+      if (plate) args.push('-i', plate);
+      const chain = fps === 30 ? base : `fps=${fps},${base}`;
+      args.push('-filter_complex',
+        plate ? `[0:v]${chain}[k];[k][1:v]overlay=0:0,format=yuva420p`
+              : `[0:v]${chain},format=yuva420p`);
+      args.push('-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-auto-alt-ref', '0',
+        '-crf', String(crf), '-b:v', '0', '-an', out);
+      await run(FFMPEG, args);
       const { size } = await stat(out);
       if (size <= 240 * 1024) return { size, crf, fps, hex };
     }
   }
   return { size: (await stat(out)).size, crf: 52, fps: 16, hex };
-}
-
-/**
- * Composite a word onto a still. Used where the model refuses to spell a
- * deliberate misspelling — it "corrects" REKT to RECT or REXT every time, so
- * that one gets set in type instead of generated.
- */
-async function overlayWord(pngPath, word) {
-  const b64 = (await rf(pngPath)).toString('base64');
-  await withBrowser(async (browser) => {
-    const page = await browser.newPage({ viewport: { width: 1024, height: 1024 } });
-    const font = (await rf(join(ROOT, 'assets/fonts/luckiest-guy-400.woff2'))).toString('base64');
-    await page.setContent(`<style>
-      @font-face{font-family:'LG';src:url(data:font/woff2;base64,${font}) format('woff2')}
-      *{margin:0;padding:0}
-      html,body{width:1024px;height:1024px;overflow:hidden}
-      #w{position:relative;width:1024px;height:1024px}
-      img{width:100%;height:100%;display:block}
-      b{position:absolute;left:0;right:0;bottom:52px;text-align:center;
-        font-family:'LG',sans-serif;font-weight:400;font-size:200px;line-height:1;
-        color:#0B0B0B;letter-spacing:2px}
-    </style><div id="w"><img src="data:image/png;base64,${b64}"><b>${word}</b></div>`,
-      { waitUntil: 'load' });
-    await page.evaluate(() => document.fonts.ready);
-    const shot = await page.screenshot();
-    await wf(pngPath, shot);
-    await page.close();
-  });
 }
 
 async function main() {
@@ -205,8 +212,22 @@ async function main() {
     return;
   }
 
-  const key = await loadKey();
   const list = only.length ? STICKERS.filter((s) => only.includes(s.slug)) : STICKERS;
+
+  // Re-cutting is free — the raws are already paid for. Never regenerate to
+  // change a trim, a crop or a caption.
+  if (has('recut')) {
+    await mkdir(OUT, { recursive: true });
+    for (const s of list) {
+      const raw = join(RAW, `${s.slug}.mp4`);
+      if (!existsSync(raw)) { console.log(`  ${s.slug.padEnd(16)} no raw, skipped`); continue; }
+      const { size, crf, fps } = await toSticker(raw, join(OUT, `${s.slug}.webm`), { word: s.word });
+      console.log(`  ${s.slug.padEnd(16)} ${(size / 1024).toFixed(0).padStart(4)}KB (crf ${crf}${fps < 30 ? `, ${fps}fps` : ''})`);
+    }
+    return;
+  }
+
+  const key = await loadKey();
 
   const each = await quote(key, { model: MODEL, duration: '5s', resolution: '720p', aspect_ratio: '16:9' });
   console.log(`model ${MODEL} · $${each.toFixed(2)} per clip · ${list.length} clips = $${(each * list.length).toFixed(2)}\n`);
@@ -264,7 +285,7 @@ async function main() {
       const mp4 = await retrieve(key, { model: MODEL, queue_id: id });
       const rawPath = await save(mp4, RAW, `${s.slug}.mp4`);
       const webm = join(OUT, `${s.slug}.webm`);
-      const { size, crf, fps } = await toSticker(rawPath, webm);
+      const { size, crf, fps } = await toSticker(rawPath, webm, { word: s.word });
       console.log(`\r  ${s.slug.padEnd(16)} ${(size / 1024).toFixed(0).padStart(4)}KB (crf ${crf}${fps < 30 ? `, ${fps}fps` : ''})       `);
     } catch (e) {
       console.log(`\r  ${s.slug.padEnd(16)} FAILED — ${e.message.split('\n')[0].slice(0, 80)}`);
