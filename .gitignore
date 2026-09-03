@@ -19,3 +19,5 @@ package-lock.json
 contracts/lib/
 contracts/out/
 contracts/cache/
+
+dist/

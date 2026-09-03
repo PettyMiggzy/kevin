@@ -272,8 +272,14 @@ function applyMuscle(kev, m) {
  * which character you are — the avatar extrudes straight into the body, so
  * there is exactly one art pipeline for the NFT and the game.
  */
+// A single-file build inlines everything and sets window.__KEVIN_ASSETS, since
+// an artifact page cannot fetch. Served normally, this is undefined and the
+// game loads from disk as usual.
+const INLINE = typeof window !== 'undefined' ? window.__KEVIN_ASSETS : null;
+
 let CREW = null;
 async function loadCrew() {
+  if (INLINE?.grids) { CREW = INLINE.grids; return CREW; }
   try {
     const r = await fetch('../assets/crew/grids.json');
     if (!r.ok) return null;
@@ -346,6 +352,10 @@ async function init() {
   const need = [...new Set([...STATIONS.map((s) => s.prop), ...SCENERY.map((s) => s[0])])];
   const loaded = await Promise.all(need.map(async (name) => {
     try {
+      if (INLINE?.props?.[name]) {
+        const g = await loader.parseAsync(INLINE.props[name], '');
+        return [name, g.scene];
+      }
       const g = await loader.loadAsync(`./assets/props/${name}.glb`);
       return [name, g.scene];
     } catch {
