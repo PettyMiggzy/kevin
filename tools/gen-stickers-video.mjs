@@ -18,12 +18,14 @@ import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { existsSync } from 'node:fs';
-import { loadKey } from './lib/venice.mjs';
+import { loadKey, edit, toBase64 } from './lib/venice.mjs';
+import { readFile } from 'node:fs/promises';
 import { quote, queue, retrieve, save } from './lib/video.mjs';
 
 const run = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RAW = join(ROOT, 'assets/stickers/raw');
+const STILLS = join(ROOT, 'assets/stickers/stills');
 const OUT = join(ROOT, 'assets/stickers/animated');
 const FFMPEG = process.env.FFMPEG_PATH || ['/usr/bin/ffmpeg'].find((p) => existsSync(p)) || 'ffmpeg';
 
@@ -33,23 +35,89 @@ const BASE = `https://raw.githubusercontent.com/PettyMiggzy/kevin/${BRANCH}/asse
 const MODEL = process.env.VIDEO_MODEL || 'wan-3-0-image-to-video';
 
 // Keep the framing and the backdrop nailed down; the model only animates.
+const EDIT_HOLD =
+  'Keep the character exactly as he is — same design, same proportions, same ' +
+  'colours, same heavy black line art. Keep the whole character in frame, ' +
+  'centred, with margin around him, and keep the background a flat solid ' +
+  'single colour with nothing else in it. Do not crop in on his face.';
+
 const HOLD =
   'Keep the character design, colours, proportions and black line art exactly ' +
   'as they are in the source image. Keep the background a completely flat, ' +
   'uniform, unchanging solid colour with no shadows, no gradient and no ' +
   'texture. Keep the camera perfectly still. Smooth 2D cartoon animation.';
 
+/**
+ * Each sticker is a two-stage build:
+ *   1. EDIT one of the reference images — new outfit, prop, pose and the word
+ *      itself — which preserves the character, where generating a fresh still
+ *      drifts off-model.
+ *   2. ANIMATE that edited still.
+ *
+ * `word` is baked into the art rather than overlaid, the way the references
+ * do it. `edit` describes the still; `action` describes what then moves.
+ */
 export const STICKERS = [
-  { slug: 'laugh',    src: '01-hero-portrait.jpg', action: 'He throws his head back and laughs hard, eyes squeezing shut and opening again, whole body shaking with the laugh, arms waving' },
-  { slug: 'yes',      src: '01-hero-portrait.jpg', action: 'He nods enthusiastically, over and over, grinning wider each time, hands pumping in front of him' },
-  { slug: 'no',       src: '01-hero-portrait.jpg', action: 'He shakes his head slowly and firmly side to side, mouth flat, arms folding across his chest' },
-  { slug: 'printer',  src: '08-money-printer.jpg', action: 'He leans back further in the chair and kicks his feet up, cash spraying faster out of the machine and fluttering down around him' },
-  { slug: 'chomp',    src: '09-eating-candle.jpg', action: 'He bites down on the giant green candle and chews, cheeks bulging, green crumbs flying, head bobbing' },
-  { slug: 'summit',   src: '10-candle-summit.jpg', action: 'He plants his feet, throws both arms up in victory on top of the candle, wind blowing past him, clouds drifting behind' },
-  { slug: 'star',     src: '11-star-power.jpg',    action: 'He punches upward and grabs the star, sparkles bursting out, then pumps his fist as he lands' },
-  { slug: 'scream',   src: '07-moon-action.jpg',   action: 'He runs frantically toward the camera, legs pumping, arms flailing, mouth open screaming, debris streaking past' },
-  { slug: 'boss',     src: '06-toxic-graffiti.jpg', action: 'He unfolds his arms slowly and points straight at the camera, chin lifting, paint dripping down the wall behind him' },
-  { slug: 'crunch',   src: '05-cereal.jpg',        action: 'He shovels a huge spoonful of green cereal into his mouth and chews happily, milk splashing, eyes wide' },
+  {
+    slug: 'wagmi', src: '01-hero-portrait.jpg', word: 'WAGMI',
+    edit: 'Dress him in a red and yellow fast-food crew uniform with a matching visor cap, giving a big thumbs up with one hand. Add the word "WAGMI" in huge bold black cartoon letters across the bottom of the image',
+    action: 'He pumps his thumbs-up hand up and down and bounces on his feet, grinning wider',
+  },
+  {
+    slug: 'gm', src: '01-hero-portrait.jpg', word: 'GM',
+    edit: 'Give him a big steaming white coffee mug held in both hands, eyes half closed and sleepy, hair messy. Add the word "GM" in huge bold black cartoon letters across the bottom',
+    action: 'He slowly lifts the mug, takes a sip, and his eyes blink open wider, steam curling upward',
+  },
+  {
+    slug: 'lfg', src: '01-hero-portrait.jpg', word: 'LFG',
+    edit: 'Both fists thrown up in the air, mouth wide open mid-shout, eyes blazing with excitement. Add the word "LFG" in huge bold black cartoon letters across the bottom',
+    action: 'He punches both fists up and down repeatedly, jumping, shouting',
+  },
+  {
+    slug: 'buy', src: '01-hero-portrait.jpg', word: 'BUY',
+    edit: 'He is slamming his hand down on an enormous glossy green arcade BUY button on a stand in front of him. Add the word "BUY" in huge bold black cartoon letters across the bottom',
+    action: 'He slams his hand onto the green button over and over, the button squashing under each hit',
+  },
+  {
+    slug: 'send-it', src: '01-hero-portrait.jpg', word: 'SEND IT',
+    edit: 'Glowing bright red laser beams shooting from both of his eyes, leaning forward aggressively, mouth open in a yell. Add the words "SEND IT" in huge bold black cartoon letters across the bottom',
+    action: 'The laser beams flare brighter and sweep sideways as he leans further into the camera',
+  },
+  {
+    slug: 'hodl', src: '09-eating-candle.jpg', word: 'HODL',
+    edit: 'He is hugging the giant green candlestick bar tightly with both arms wrapped around it, eyes clenched shut, refusing to let go. Add the word "HODL" in huge bold black cartoon letters across the bottom',
+    action: 'He squeezes the candle tighter and shakes his head, clinging harder',
+  },
+  {
+    slug: 'ngmi', src: '01-hero-portrait.jpg', word: 'NGMI',
+    edit: 'He is pointing straight at the viewer with one hand and laughing hard, head tipped back, other hand on his belly. Add the word "NGMI" in huge bold black cartoon letters across the bottom',
+    action: 'He points repeatedly at the camera while laughing, shoulders bouncing',
+  },
+  {
+    slug: 'rekt', src: '01-hero-portrait.jpg', word: 'REKT',
+    edit: 'He is flat on his back on the ground, limbs sprawled out, both eyes replaced with simple black X shapes, tongue out. Add the word "REKT" in huge bold black cartoon letters across the bottom',
+    action: 'He twitches once, a leg flops, then he goes still',
+  },
+  {
+    slug: 'wen', src: '01-hero-portrait.jpg', word: 'WEN',
+    edit: 'He is tapping an oversized wristwatch on his wrist impatiently, one eyebrow raised, mouth a flat line. Add the word "WEN" in huge bold black cartoon letters across the bottom',
+    action: 'He taps the watch face repeatedly and looks up at the camera, tapping his foot',
+  },
+  {
+    slug: 'pump-it', src: '10-candle-summit.jpg', word: 'PUMP IT',
+    edit: 'He is riding the giant green candlestick like a rocket, arms raised in triumph, cape of red hair streaming behind him. Add the words "PUMP IT" in huge bold black cartoon letters across the bottom',
+    action: 'The candle surges upward beneath him, wind streaking past, his arms punching the air',
+  },
+  {
+    slug: 'printer-go-brrr', src: '08-money-printer.jpg', word: 'BRRRR',
+    edit: 'Cash exploding out of the money machine in a huge spray, him leaning back with both arms behind his head, feet up, laughing. Add the word "BRRRR" in huge bold black cartoon letters across the bottom',
+    action: 'Cash sprays faster and faster out of the machine, notes fluttering everywhere, him rocking back laughing',
+  },
+  {
+    slug: 'ceo-of-chaos', src: '08-money-printer.jpg', word: 'CEO OF CHAOS',
+    edit: 'Put a golden crown on his head and a royal fur-trimmed cape on his shoulders, sitting back like a king on the office chair, fingers steepled. Add the words "CEO OF CHAOS" in bold black cartoon letters across the bottom',
+    action: 'He leans slowly back in the chair, steepling his fingers, crown glinting, giving a slow satisfied nod',
+  },
 ];
 
 const args = process.argv.slice(2);
@@ -88,7 +156,7 @@ async function toSticker(src, out, { key = true } = {}) {
 
 async function main() {
   if (has('list')) {
-    for (const s of STICKERS) console.log(`  ${s.slug.padEnd(10)} ${s.src.padEnd(24)} ${s.action.slice(0, 60)}…`);
+    for (const s of STICKERS) console.log(`  ${(s.word || s.slug).padEnd(14)} ${s.src.padEnd(24)} ${s.edit.slice(0, 58)}…`);
     return;
   }
 
@@ -100,26 +168,60 @@ async function main() {
 
   await mkdir(RAW, { recursive: true });
   await mkdir(OUT, { recursive: true });
+  await mkdir(STILLS, { recursive: true });
 
+  // Stage 1: edit every reference into its sticker still, then push, because
+  // the video stage can only read the still over a public URL.
+  const pending = [];
   for (const s of list) {
-    process.stdout.write(`  ${s.slug.padEnd(10)} queueing…`);
+    const still = join(STILLS, `${s.slug}.png`);
+    if (existsSync(still) && !has('redo-stills')) { pending.push(s); continue; }
+    process.stdout.write(`  ${s.slug.padEnd(16)} editing still…`);
+    try {
+      const src = await readFile(join(ROOT, 'assets/refs', s.src));
+      const out = await edit(key, {
+        image: toBase64(src),
+        prompt: `${s.edit}. ${EDIT_HOLD}`,
+        aspect_ratio: '1:1',
+      });
+      await save(out, STILLS, `${s.slug}.png`);
+      console.log(`\r  ${s.slug.padEnd(16)} still ok        `);
+      pending.push(s);
+    } catch (e) {
+      console.log(`\r  ${s.slug.padEnd(16)} STILL FAILED — ${e.message.slice(0, 70)}`);
+    }
+  }
+
+  if (has('stills-only')) {
+    console.log('\nstills in assets/stickers/stills/ — review, then run again to animate');
+    return;
+  }
+
+  await run('git', ['add', 'assets/stickers/stills'], { cwd: ROOT }).catch(() => {});
+  await run('git', ['-c', 'user.email=bahmed3170@gmail.com', '-c', 'user.name=PettyMiggzy',
+    'commit', '-q', '-m', 'Add sticker stills'], { cwd: ROOT }).catch(() => {});
+  await run('git', ['push', '-q', 'origin', BRANCH], { cwd: ROOT }).catch(() => {});
+
+  // Stage 2: animate each still.
+  for (const s of pending) {
+    process.stdout.write(`  ${s.slug.padEnd(16)} queueing…`);
     try {
       const id = await queue(key, {
         model: MODEL,
-        image_url: `${BASE}/${s.src}`,
+        image_url: `https://raw.githubusercontent.com/PettyMiggzy/kevin/${BRANCH}/assets/stickers/stills/${s.slug}.png`,
         prompt: `${s.action}. ${HOLD}`,
         duration: '5s',
         resolution: '720p',
         aspect_ratio: '16:9',
       });
-      process.stdout.write(`\r  ${s.slug.padEnd(10)} rendering…   `);
+      process.stdout.write(`\r  ${s.slug.padEnd(16)} rendering…      `);
       const mp4 = await retrieve(key, { model: MODEL, queue_id: id });
       const rawPath = await save(mp4, RAW, `${s.slug}.mp4`);
       const webm = join(OUT, `${s.slug}.webm`);
       const { size, crf } = await toSticker(rawPath, webm);
-      console.log(`\r  ${s.slug.padEnd(10)} ${(size / 1024).toFixed(0).padStart(4)}KB (crf ${crf})     `);
+      console.log(`\r  ${s.slug.padEnd(16)} ${(size / 1024).toFixed(0).padStart(4)}KB (crf ${crf})       `);
     } catch (e) {
-      console.log(`\r  ${s.slug.padEnd(10)} FAILED — ${e.message.split('\n')[0].slice(0, 90)}`);
+      console.log(`\r  ${s.slug.padEnd(16)} FAILED — ${e.message.split('\n')[0].slice(0, 80)}`);
     }
   }
   console.log(`\n${(await readdir(OUT)).length} stickers in assets/stickers/animated/`);
