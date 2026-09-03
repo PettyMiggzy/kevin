@@ -1,0 +1,16 @@
+{
+  "name": "kevin",
+  "private": true,
+  "type": "module",
+  "description": "KEVIN — site, art pipeline, and the gym.",
+  "scripts": {
+    "props": "node tools/gen-props.mjs",
+    "props:optimize": "node tools/optimize-props.mjs",
+    "crew": "node tools/gen-crew.mjs",
+    "serve": "python3 -m http.server 8899"
+  },
+  "devDependencies": {
+    "@gltf-transform/cli": "^4.5.0",
+    "three": "0.169.0"
+  }
+}

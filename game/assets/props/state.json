@@ -1,0 +1,62 @@
+{
+  "bench": {
+    "prompt": "a flat weight-lifting bench with a black padded top and red steel frame",
+    "id": "479e03e0-c9b4-471c-8a96-8c95af1d362d",
+    "at": "2026-09-03T07:11:05.174Z"
+  },
+  "dumbbell-rack": {
+    "prompt": "a two-tier gym dumbbell rack holding rows of black dumbbells",
+    "id": "a7d2cc4c-7032-488d-aace-d4e6d963c8a2",
+    "at": "2026-09-03T07:11:16.699Z"
+  },
+  "dumbbell": {
+    "prompt": "a single chunky black gym dumbbell",
+    "id": "d19f6bd1-389d-444d-981b-f85045f80dd4",
+    "at": "2026-09-03T07:11:17.396Z"
+  },
+  "treadmill": {
+    "prompt": "a gym treadmill with a running belt, side rails and a small console",
+    "id": "b732d56b-a4b3-4341-a84e-67629675c41b",
+    "at": "2026-09-03T07:11:17.921Z"
+  },
+  "squat-rack": {
+    "prompt": "a red steel squat rack with a loaded barbell resting on it",
+    "id": "ce8cd1c8-dbb4-4737-8277-9ef3d8678fc3",
+    "at": "2026-09-03T07:11:18.385Z"
+  },
+  "plate-tree": {
+    "prompt": "a weight plate tree stacked with round black and red weight plates",
+    "id": "33be7b3f-8326-4a25-aefb-57240208840b",
+    "at": "2026-09-03T07:11:59.850Z"
+  },
+  "protein-tub": {
+    "prompt": "a large plastic protein powder tub with a screw lid",
+    "id": "7b09656f-da1a-4c1e-a458-c3f2ed0f9151",
+    "at": "2026-09-03T07:12:00.532Z"
+  },
+  "water-cooler": {
+    "prompt": "a water cooler with a blue bottle on top",
+    "id": "bbce9053-685f-4bbc-99c2-512ab4e43e10",
+    "at": "2026-09-03T07:12:01.104Z"
+  },
+  "locker": {
+    "prompt": "a tall narrow metal gym locker with a vent and a handle",
+    "id": "caf5e90f-8555-450a-940e-1e70fa3e81c9",
+    "at": "2026-09-03T07:12:06.813Z"
+  },
+  "bucket": {
+    "prompt": "an upturned plastic mop bucket",
+    "id": "74baabcb-8f04-4590-8163-842ecd6f8b04",
+    "at": "2026-09-03T07:12:07.445Z"
+  },
+  "speaker": {
+    "prompt": "a chunky square gym wall speaker",
+    "id": "55bf0eb7-2881-40e1-847a-2744b5aca7f8",
+    "at": "2026-09-03T07:16:43.337Z"
+  },
+  "gym-mirror": {
+    "prompt": "a large rectangular wall mirror with a simple frame",
+    "id": "77c44f88-5a62-4be9-8b10-d75753d41843",
+    "at": "2026-09-03T07:16:44.384Z"
+  }
+}

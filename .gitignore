@@ -10,3 +10,12 @@ tools/.venice.key
 .venice.key
 tools/.tripo.key
 .tripo.key
+
+# Tripo output before optimisation — big, and re-derivable from state.json
+game/assets/props/raw/
+package-lock.json
+
+# Foundry deps — restored with `forge install`, not committed
+contracts/lib/
+contracts/out/
+contracts/cache/
