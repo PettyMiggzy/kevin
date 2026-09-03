@@ -13,7 +13,7 @@
 //   node tools/gen-stickers-video.mjs               # all
 //
 import { mkdir, rm, stat, readdir } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -129,6 +129,38 @@ export const STICKERS = [
     slug: 'ceo-of-chaos', src: '08-money-printer.jpg', word: 'CEO OF CHAOS',
     edit: 'Put a golden crown on his head and a royal fur-trimmed cape on his shoulders, sitting back like a king on the office chair, fingers steepled. Add the words "CEO OF CHAOS" in bold black cartoon letters across the bottom',
     action: 'His WHOLE BODY settles back into the throne with authority, torso reclining, shoulders rolling, head tilting up and giving a slow deliberate nod, cape and dreadlocks shifting with the movement, fingers steepling',
+  },
+  // --- the fryer set ------------------------------------------------------
+  // He works the fryer. It is the whole character, so it gets its own batch.
+  {
+    slug: 'time-to-cook', src: '01-hero-portrait.jpg', word: 'TIME TO COOK', start: 1.5,
+    edit: 'Dress him in a red and yellow fast-food crew uniform with a matching visor cap, sleeves pushed up, gripping the handle of a stainless steel deep-fryer basket in both hands and lowering it in front of him, golden fries tumbling in the basket, a big puff of white steam rising around it. Add the words "TIME TO COOK" in bold black cartoon letters across the bottom',
+    action: 'His WHOLE BODY dips down as he lowers the basket, knees bending, torso leaning forward over it, head dropping to watch, dreadlocks swinging forward — then he rises back up, chest lifting, head snapping up with a grin, the steam billowing and the fries jumping in the basket',
+  },
+  {
+    slug: 'let-him-cook', src: '01-hero-portrait.jpg', word: 'LET HIM COOK', start: 1.5,
+    edit: 'Dress him in a red and yellow fast-food crew uniform with a matching visor cap, both hands gripping a stainless steel fryer basket over a fryer vat, eyes narrowed in total concentration, tongue poking out of one corner of his mouth, orange flames licking up around the vat. Add the words "LET HIM COOK" in bold black cartoon letters across the bottom',
+    action: 'His WHOLE BODY shakes the basket in tight fast bursts, arms juddering, shoulders and torso vibrating with it, legs braced and bouncing, head locked in place staring down, dreadlocks trembling, the flames flaring up higher with each shake',
+  },
+  {
+    slug: 'fried', src: '01-hero-portrait.jpg', word: 'FRIED', start: 1.5,
+    edit: 'Dress him in a red and yellow fast-food crew uniform that is scorched and blackened with soot, thin wisps of smoke curling off his shoulders, his face smudged black, eyes wide and completely blank in a thousand-yard stare, holding one empty fryer basket limply at his side. Add the word "FRIED" in huge bold black cartoon letters across the bottom',
+    action: 'His WHOLE BODY sags and sways very slowly on the spot, shoulders slumping lower, head drooping forward then lolling back up, torso swaying, knees wobbling, dreadlocks hanging limp and swinging gently, the smoke curling upward, a single slow blink',
+  },
+  {
+    slug: 'shift-over', src: '01-hero-portrait.jpg', word: 'SHIFT OVER', start: 1.5,
+    edit: 'Dress him in a red and yellow fast-food crew uniform, mid-stride walking forward, tearing the visor cap off his head with one hand and flinging it away, the apron strings flying loose off his shoulders, mouth open in a huge triumphant grin. Add the words "SHIFT OVER" in bold black cartoon letters across the bottom',
+    action: 'His WHOLE BODY strides forward on the spot, legs pumping, torso twisting with each step, one arm whipping the cap away over his head and the other punching forward, head thrown back laughing, dreadlocks and apron strings flying behind him',
+  },
+  {
+    slug: 'order-up', src: '01-hero-portrait.jpg', word: 'ORDER UP', start: 1.5,
+    edit: 'Dress him in a red and yellow fast-food crew uniform with a matching visor cap, thrusting a red fast-food fry carton up above his head in one hand, mouth wide open shouting, other arm raised. The carton is packed with tall bright green glowing stock-market candlestick bars sticking straight up out of it instead of fries — flat green rectangles with thin wicks, not potato fries. There is no counter, no table and no furniture anywhere in the picture. Add the words "ORDER UP" in bold black cartoon letters across the bottom',
+    action: 'His WHOLE BODY drives upward thrusting the carton higher, legs straightening onto his toes, torso stretching up, head thrown back to shout, dreadlocks flying, then dropping back down into a squash and driving up again, the green candles bouncing and springing in the carton',
+  },
+  {
+    slug: 'on-break', src: '01-hero-portrait.jpg', word: 'ON BREAK', start: 1.5,
+    edit: 'Dress him in a red and yellow fast-food crew uniform with the visor cap pushed up off his forehead, sitting hunched over on an upturned plastic bucket, both hands cupping a phone close to his face, the phone screen throwing a bright green glow up onto his face, expression completely flat and deadpan. Add the words "ON BREAK" in bold black cartoon letters across the bottom',
+    action: 'His WHOLE BODY hunches tighter over the phone, shoulders creeping up, torso curling in, head lowering closer to the screen, one thumb scrolling, knees bouncing — then his head snaps up to the camera for a single flat stare and drops straight back down to the phone',
   },
 ];
 
@@ -262,22 +294,32 @@ async function toSticker(src, out, opts = {}) {
 
   const base = `${crop},scale=512:512:flags=lanczos,colorkey=${hex}:0.18:0.05`;
 
-  for (const fps of [30, 24, 20, 16]) {
-    for (const crf of [34, 40, 46, 52]) {
-      const args = ['-y', '-v', 'error', '-ss', String(start), '-t', String(dur), '-i', src];
-      if (plate) args.push('-i', plate);
-      const chain = fps === 30 ? base : `fps=${fps},${base}`;
-      args.push('-filter_complex',
-        plate ? `[0:v]${chain}[k];[k][1:v]overlay=0:0,format=yuva420p`
-              : `[0:v]${chain},format=yuva420p`);
-      args.push('-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-auto-alt-ref', '0',
-        '-crf', String(crf), '-b:v', '0', '-an', out);
-      await run(FFMPEG, args);
-      const { size } = await stat(out);
-      if (size <= 240 * 1024) return { size, crf, fps, crop };
+  // Telegram rejects a video sticker over 256KB. Give up frame rate and
+  // quality first, because both degrade gracefully; give up seconds last,
+  // because a clip cut short loses the end of the gag. A busy clip — steam,
+  // flames, cash, a whole body moving — can need every rung of this.
+  let last = null;
+  for (const secs of [dur, dur * 0.8, dur * 0.65]) {
+    for (const fps of [30, 24, 20, 16, 12]) {
+      for (const crf of [34, 40, 46, 52, 58, 63]) {
+        const args = ['-y', '-v', 'error', '-ss', String(start), '-t', secs.toFixed(2), '-i', src];
+        if (plate) args.push('-i', plate);
+        const chain = fps === 30 ? base : `fps=${fps},${base}`;
+        args.push('-filter_complex',
+          plate ? `[0:v]${chain}[k];[k][1:v]overlay=0:0,format=yuva420p`
+                : `[0:v]${chain},format=yuva420p`);
+        args.push('-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-auto-alt-ref', '0',
+          '-crf', String(crf), '-b:v', '0', '-an', out);
+        await run(FFMPEG, args);
+        const { size } = await stat(out);
+        last = { size, crf, fps, secs, crop };
+        if (size <= 240 * 1024) return last;
+      }
     }
   }
-  return { size: (await stat(out)).size, crf: 52, fps: 16, crop };
+  // Nothing fit. Say so loudly — publishing would fail at Telegram instead.
+  console.log(`  ! ${basename(out)} is ${(last.size / 1024).toFixed(0)}KB, over the 256KB ceiling`);
+  return { ...last, oversize: true };
 }
 
 /**

@@ -7,6 +7,11 @@
 //   TG_BOT_TOKEN=123:ABC node tools/publish-stickers.mjs
 //   TG_BOT_TOKEN=123:ABC node tools/publish-stickers.mjs --add   # add to existing
 //
+// Name slugs to act on just those — otherwise it takes every webm in the
+// directory, which on --add would re-add the ones already in the pack:
+//
+//   TG_BOT_TOKEN=123:ABC node tools/publish-stickers.mjs --add fried on-break
+//
 // The pack is created for TG_USER_ID, so it shows up as yours and you can
 // manage it in @Stickers afterwards.
 import { readdir, readFile } from 'node:fs/promises';
@@ -26,7 +31,14 @@ const EMOJI = {
   wagmi: '🤝', gm: '☕', lfg: '🚀', buy: '🟢', 'send-it': '🔥',
   hodl: '💎', ngmi: '😹', rekt: '💀', wen: '⏰', 'pump-it': '📈',
   'printer-go-brrr': '🖨️', 'ceo-of-chaos': '👑',
+  // the fryer set
+  'time-to-cook': '🍟', 'let-him-cook': '🍳', fried: '🥵',
+  'shift-over': '🏃', 'order-up': '🛎️', 'on-break': '📱',
 };
+
+// Telegram rejects a video sticker over 256KB, so catch it here rather than
+// halfway through uploading a batch.
+const MAX_BYTES = 256 * 1024;
 
 const api = async (method, form) => {
   // A POST with an empty body comes back empty through the proxy, so calls
@@ -56,7 +68,13 @@ async function main() {
   // Telegram requires the pack short name to end in _by_<botusername>
   const shortName = `${NAME}_by_${me.username}`;
 
-  const files = (await readdir(DIR)).filter((f) => f.endsWith('.webm')).sort();
+  const only = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+  let files = (await readdir(DIR)).filter((f) => f.endsWith('.webm')).sort();
+  if (only.length) {
+    const missing = only.filter((slug) => !files.includes(`${slug}.webm`));
+    if (missing.length) throw new Error(`no webm for: ${missing.join(', ')}`);
+    files = only.map((slug) => `${slug}.webm`);
+  }
   if (!files.length) throw new Error(`no .webm in ${DIR}`);
 
   const add = process.argv.includes('--add');
@@ -66,10 +84,17 @@ async function main() {
   const uploaded = [];
   for (const f of files) {
     const slug = basename(f, '.webm');
+    const bytes = await readFile(join(DIR, f));
+    if (bytes.length > MAX_BYTES) {
+      throw new Error(
+        `${slug} is ${(bytes.length / 1024).toFixed(0)}KB, over Telegram's 256KB ` +
+        'ceiling — re-cut it smaller before publishing'
+      );
+    }
     const form = new FormData();
     form.append('user_id', USER_ID);
     form.append('sticker_format', 'video');
-    form.append('sticker', new Blob([await readFile(join(DIR, f))], { type: 'video/webm' }), f);
+    form.append('sticker', new Blob([bytes], { type: 'video/webm' }), f);
     const res = await api('uploadStickerFile', form);
     uploaded.push({ slug, file_id: res.file_id });
     console.log(`  uploaded ${slug}`);
