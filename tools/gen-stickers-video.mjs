@@ -51,21 +51,22 @@ const EDIT_HOLD =
   'background with nothing else in it. Do not crop in on his face.';
 
 const HOLD =
+  'ABSOLUTELY DO NOT change the framing. The camera must not zoom, pan, dolly, ' +
+  'push in or pull back at any point. The character must stay the exact same ' +
+  'size and the exact same position in the frame for every single frame, at ' +
+  'the same crop as the source image. The lettering must stay exactly where it ' +
+  'is, the same size, fully visible, unchanged and unmoving, for the whole ' +
+  'clip. ' +
+  'Animate him IN PLACE: every part of his body moves — head, torso, arms, ' +
+  'legs and hair all moving together as one connected mass with weight, squash ' +
+  'and stretch — but he does not get smaller, does not get bigger, and does ' +
+  'not move out of his position. "Animate the whole character" means every ' +
+  'part of him moves, NOT that the shot widens to reveal more of him. ' +
   'Keep the character design, colours, proportions and black line art exactly ' +
   'as they are in the source image. Keep the background a completely flat, ' +
   'uniform, unchanging solid colour with no shadows, no gradient and no ' +
-  'texture. Keep the camera perfectly still. Smooth 2D cartoon animation.';
+  'texture. Smooth 2D cartoon animation.';
 
-/**
- * Each sticker is a two-stage build:
- *   1. EDIT one of the reference images — new outfit, prop, pose and the word
- *      itself — which preserves the character, where generating a fresh still
- *      drifts off-model.
- *   2. ANIMATE that edited still.
- *
- * `word` is baked into the art rather than overlaid, the way the references
- * do it. `edit` describes the still; `action` describes what then moves.
- */
 export const STICKERS = [
   {
     slug: 'wagmi', src: '01-hero-portrait.jpg', word: 'WAGMI',
@@ -154,14 +155,20 @@ async function toSticker(src, out, { key = true } = {}) {
     'format=yuva420p',
   ].filter(Boolean).join(',');
 
-  for (const crf of [34, 40, 46, 52]) {
-    await run(FFMPEG, ['-y', '-v', 'error', '-t', '3', '-i', src, '-vf', chain,
-      '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-auto-alt-ref', '0',
-      '-crf', String(crf), '-b:v', '0', '-an', out]);
-    const { size } = await stat(out);
-    if (size <= 240 * 1024) return { size, crf, hex };
+  // crf alone is not always enough — a busy clip with a lot of motion can sit
+  // over Telegram's 256KB even at crf 52. Dropping frames is the second lever,
+  // and 20fps is still smooth for a 3-second loop.
+  for (const fps of [30, 24, 20, 16]) {
+    for (const crf of [34, 40, 46, 52]) {
+      const vf = fps === 30 ? chain : `fps=${fps},${chain}`;
+      await run(FFMPEG, ['-y', '-v', 'error', '-t', '3', '-i', src, '-vf', vf,
+        '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-auto-alt-ref', '0',
+        '-crf', String(crf), '-b:v', '0', '-an', out]);
+      const { size } = await stat(out);
+      if (size <= 240 * 1024) return { size, crf, fps, hex };
+    }
   }
-  return { size: (await stat(out)).size, crf: 52, hex };
+  return { size: (await stat(out)).size, crf: 52, fps: 16, hex };
 }
 
 /**
@@ -257,8 +264,8 @@ async function main() {
       const mp4 = await retrieve(key, { model: MODEL, queue_id: id });
       const rawPath = await save(mp4, RAW, `${s.slug}.mp4`);
       const webm = join(OUT, `${s.slug}.webm`);
-      const { size, crf } = await toSticker(rawPath, webm);
-      console.log(`\r  ${s.slug.padEnd(16)} ${(size / 1024).toFixed(0).padStart(4)}KB (crf ${crf})       `);
+      const { size, crf, fps } = await toSticker(rawPath, webm);
+      console.log(`\r  ${s.slug.padEnd(16)} ${(size / 1024).toFixed(0).padStart(4)}KB (crf ${crf}${fps < 30 ? `, ${fps}fps` : ''})       `);
     } catch (e) {
       console.log(`\r  ${s.slug.padEnd(16)} FAILED — ${e.message.split('\n')[0].slice(0, 80)}`);
     }
