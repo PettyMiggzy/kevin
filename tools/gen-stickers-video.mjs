@@ -21,6 +21,8 @@ import { existsSync } from 'node:fs';
 import { loadKey, edit, toBase64 } from './lib/venice.mjs';
 import { readFile } from 'node:fs/promises';
 import { quote, queue, retrieve, save } from './lib/video.mjs';
+import { withBrowser } from './lib/render.mjs';
+import { readFile as rf, writeFile as wf } from 'node:fs/promises';
 
 const run = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -35,11 +37,18 @@ const BASE = `https://raw.githubusercontent.com/PettyMiggzy/kevin/${BRANCH}/asse
 const MODEL = process.env.VIDEO_MODEL || 'wan-3-0-image-to-video';
 
 // Keep the framing and the backdrop nailed down; the model only animates.
+// Drift shows up first in the head: the hair goes spiky, the muzzle narrows,
+// the eyes shrink. Naming those parts specifically holds them far better than
+// a general "keep the character the same".
 const EDIT_HOLD =
-  'Keep the character exactly as he is — same design, same proportions, same ' +
-  'colours, same heavy black line art. Keep the whole character in frame, ' +
-  'centred, with margin around him, and keep the background a flat solid ' +
-  'single colour with nothing else in it. Do not crop in on his face.';
+  'CRITICAL — keep the character IDENTICAL to the source image: the same ' +
+  'smooth rounded red hood shape with the same thick blunt dreadlock spikes ' +
+  '(never spiky, never messy, never human hair), the same TWO ENORMOUS white ' +
+  'oval eyes at the same size cutting up into the hood, the same wide pale ' +
+  'cream muzzle at the same width, the same heavy black line art, the same ' +
+  'flat colours. Change only what is asked for. Keep the whole character in ' +
+  'frame, centred, with margin on all sides, on a flat solid single-colour ' +
+  'background with nothing else in it. Do not crop in on his face.';
 
 const HOLD =
   'Keep the character design, colours, proportions and black line art exactly ' +
@@ -95,7 +104,8 @@ export const STICKERS = [
   },
   {
     slug: 'rekt', src: '01-hero-portrait.jpg', word: 'REKT',
-    edit: 'He is flat on his back on the ground, limbs sprawled out, both eyes replaced with simple black X shapes, tongue out. Add the word "REKT" in huge bold black cartoon letters across the bottom',
+    overlay: true,
+    edit: 'He is flat on his back on the ground, limbs sprawled out, both eyes replaced with simple black X shapes, tongue lolling out. Do not add any text or lettering anywhere in the image',
     action: 'He twitches once, a leg flops, then he goes still',
   },
   {
@@ -154,6 +164,34 @@ async function toSticker(src, out, { key = true } = {}) {
   return { size: (await stat(out)).size, crf: 52, hex };
 }
 
+/**
+ * Composite a word onto a still. Used where the model refuses to spell a
+ * deliberate misspelling — it "corrects" REKT to RECT or REXT every time, so
+ * that one gets set in type instead of generated.
+ */
+async function overlayWord(pngPath, word) {
+  const b64 = (await rf(pngPath)).toString('base64');
+  await withBrowser(async (browser) => {
+    const page = await browser.newPage({ viewport: { width: 1024, height: 1024 } });
+    const font = (await rf(join(ROOT, 'assets/fonts/luckiest-guy-400.woff2'))).toString('base64');
+    await page.setContent(`<style>
+      @font-face{font-family:'LG';src:url(data:font/woff2;base64,${font}) format('woff2')}
+      *{margin:0;padding:0}
+      html,body{width:1024px;height:1024px;overflow:hidden}
+      #w{position:relative;width:1024px;height:1024px}
+      img{width:100%;height:100%;display:block}
+      b{position:absolute;left:0;right:0;bottom:52px;text-align:center;
+        font-family:'LG',sans-serif;font-weight:400;font-size:200px;line-height:1;
+        color:#0B0B0B;letter-spacing:2px}
+    </style><div id="w"><img src="data:image/png;base64,${b64}"><b>${word}</b></div>`,
+      { waitUntil: 'load' });
+    await page.evaluate(() => document.fonts.ready);
+    const shot = await page.screenshot();
+    await wf(pngPath, shot);
+    await page.close();
+  });
+}
+
 async function main() {
   if (has('list')) {
     for (const s of STICKERS) console.log(`  ${(s.word || s.slug).padEnd(14)} ${s.src.padEnd(24)} ${s.edit.slice(0, 58)}…`);
@@ -184,8 +222,9 @@ async function main() {
         prompt: `${s.edit}. ${EDIT_HOLD}`,
         aspect_ratio: '1:1',
       });
-      await save(out, STILLS, `${s.slug}.png`);
-      console.log(`\r  ${s.slug.padEnd(16)} still ok        `);
+      const stillPath = await save(out, STILLS, `${s.slug}.png`);
+      if (s.overlay && s.word) await overlayWord(stillPath, s.word);
+      console.log(`\r  ${s.slug.padEnd(16)} still ok${s.overlay ? ' (word set in type)' : ''}        `);
       pending.push(s);
     } catch (e) {
       console.log(`\r  ${s.slug.padEnd(16)} STILL FAILED — ${e.message.slice(0, 70)}`);
