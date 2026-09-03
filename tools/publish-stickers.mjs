@@ -23,7 +23,9 @@ const DIR = join(ROOT, 'assets/stickers/animated');
 
 const TOKEN = process.env.TG_BOT_TOKEN;
 const USER_ID = process.env.TG_USER_ID || '6820752140';
-const NAME = process.env.TG_PACK_NAME || 'kevin_pack';
+// The live pack is https://t.me/addstickers/kevin_by_robinlabsbot — this has
+// to match it exactly or addStickerToSet comes back STICKERSET_INVALID.
+const NAME = process.env.TG_PACK_NAME || 'kevin';
 const TITLE = process.env.TG_PACK_TITLE || 'KEVIN';
 
 // Emoji shown under each sticker in the picker. Order matches the slugs.
