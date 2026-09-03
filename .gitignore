@@ -8,3 +8,5 @@ tools/_*.mjs
 # Venice API key — never commit this
 tools/.venice.key
 .venice.key
+tools/.tripo.key
+.tripo.key
