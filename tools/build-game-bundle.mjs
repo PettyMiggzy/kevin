@@ -26,6 +26,7 @@ const MODULES = {
   'three/addons/effects/OutlineEffect.js': 'game/vendor/addons/effects/OutlineEffect.js',
   'kevin/save.js': 'game/js/save.js',
   'kevin/voxel.js': 'game/js/voxel.js',
+  'kevin/gear.js': 'game/js/gear.js',
   'kevin/reps.js': 'game/js/reps.js',
   'kevin/audio.js': 'game/js/audio.js',
   'kevin/main.js': 'game/js/main.js',

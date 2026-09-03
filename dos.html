@@ -813,7 +813,9 @@ async function run(instant){
       }
     }
     if(instant && s < script.length - 1){
-      await sleep(1900, t);
+      /* reduced-motion path: no typing, so hold each screen long enough to
+         actually read the table on it */
+      await sleep(6500, t);
       if(t !== token) return;
     }
   }

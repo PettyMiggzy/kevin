@@ -146,6 +146,12 @@ export function buildCrewBody(grid, { unit = 0.027, material } = {}) {
   const armH = torsoH * 0.95;
 
   const g = new THREE.Group();
+  // An inner rig, so a pose can tilt the body in its OWN frame while the outer
+  // group keeps owning world position and facing. Rotating the outer group for
+  // both fights itself — you get a figure lying at an angle to the bench it is
+  // supposed to be on.
+  const rig = new THREE.Group();
+  g.add(rig);
 
   const legs = [];
   for (const sx of [-1, 1]) {
@@ -157,7 +163,7 @@ export function buildCrewBody(grid, { unit = 0.027, material } = {}) {
     const shoe = box(unit * 7, unit * 2.4, unit * 8.4, '#FFFFFF', mat);
     shoe.position.set(0, -legH + unit, unit * 1.1);
     leg.add(shoe);
-    g.add(leg);
+    rig.add(leg);
     legs.push(leg);
   }
 
@@ -166,7 +172,7 @@ export function buildCrewBody(grid, { unit = 0.027, material } = {}) {
   const torsoMesh = box(unit * 16, torsoH, unit * 8, shirt, mat);
   torsoMesh.position.y = torsoH / 2;
   torso.add(torsoMesh);
-  g.add(torso);
+  rig.add(torso);
 
   const arms = [];
   for (const sx of [-1, 1]) {
@@ -178,14 +184,14 @@ export function buildCrewBody(grid, { unit = 0.027, material } = {}) {
     const hand = box(unit * 5, unit * 3.8, unit * 5, '#FFFFFF', mat);
     hand.position.y = -armH;
     arm.add(hand);
-    g.add(arm);
+    rig.add(arm);
     arms.push(arm);
   }
 
   head.position.y = legH + torsoH;
-  g.add(head);
+  rig.add(head);
 
-  return { group: g, head, torso, arms, legs, unit, headH, torsoH, legH };
+  return { group: g, rig, head, torso, arms, legs, unit, headH, torsoH, legH };
 }
 
 /**
