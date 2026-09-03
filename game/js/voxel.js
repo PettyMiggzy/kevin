@@ -167,31 +167,78 @@ export function buildCrewBody(grid, { unit = 0.027, material } = {}) {
     legs.push(leg);
   }
 
+  // The torso is segmented, and that is the whole point. A single slab can only
+  // get bigger — scale it and you have a wider box, which is what "square"
+  // looks like. Split into chest, waist and shoulder caps, growth can be spent
+  // where it changes the OUTLINE: nearly all of it above the ribs, almost none
+  // at the waist. That difference is the V, and the V is what reads as strong.
   const torso = new THREE.Group();
   torso.position.y = legH;
-  const torsoMesh = box(unit * 16, torsoH, unit * 8, shirt, mat);
-  torsoMesh.position.y = torsoH / 2;
-  torso.add(torsoMesh);
+
+  const waist = box(unit * 11.2, torsoH * 0.40, unit * 7.0, shirt, mat);
+  waist.position.y = torsoH * 0.20;
+  torso.add(waist);
+
+  const chest = box(unit * 14.4, torsoH * 0.48, unit * 8.2, shirt, mat);
+  chest.position.y = torsoH * 0.70;
+  torso.add(chest);
+
+  // Lats. The chest alone cannot show a taper — from the front it simply
+  // overhangs the waist and hides it, so the silhouette stays a rectangle with
+  // a wide top. These are the diagonal that makes the V a V.
+  const lats = [];
+  for (const sx of [-1, 1]) {
+    const l = box(unit * 3.0, torsoH * 0.46, unit * 7.0, shirt, mat);
+    l.position.set(sx * unit * 6.2, torsoH * 0.52, 0);
+    l.rotation.z = sx * 0.30;
+    torso.add(l);
+    lats.push(l);
+  }
+
+  // Deltoid caps. These do the most work of anything here: shoulders are what
+  // the eye measures a silhouette by.
+  const delts = [];
+  for (const sx of [-1, 1]) {
+    const d = box(unit * 4.6, unit * 4.6, unit * 7.4, shirt, mat);
+    d.position.set(sx * unit * 7.6, torsoH * 0.94, 0);
+    torso.add(d);
+    delts.push(d);
+  }
+
+  // Traps, filling the gap between shoulders and head as he grows.
+  const neck = box(unit * 5.2, unit * 2.6, unit * 5.2, hood, mat);
+  neck.position.y = torsoH * 1.02;
+  torso.add(neck);
+
   rig.add(torso);
 
   const arms = [];
+  const biceps = [];
+  const forearms = [];
   for (const sx of [-1, 1]) {
     const arm = new THREE.Group();
     arm.position.set(sx * unit * 9.6, legH + torsoH * 0.94, 0);
-    const upper = box(unit * 4.2, armH, unit * 5, shirt, mat);
-    upper.position.y = -armH / 2;
-    arm.add(upper);
+    // Split at the elbow so the upper arm can outgrow the forearm. One tapered
+    // limb that scales uniformly reads as a thicker stick, not a bicep.
+    const bicep = box(unit * 4.4, armH * 0.56, unit * 5.2, shirt, mat);
+    bicep.position.y = -armH * 0.28;
+    arm.add(bicep);
+    const fore = box(unit * 3.8, armH * 0.44, unit * 4.6, shirt, mat);
+    fore.position.y = -armH * 0.78;
+    arm.add(fore);
     const hand = box(unit * 5, unit * 3.8, unit * 5, '#FFFFFF', mat);
     hand.position.y = -armH;
     arm.add(hand);
     rig.add(arm);
     arms.push(arm);
+    biceps.push(bicep);
+    forearms.push(fore);
   }
 
   head.position.y = legH + torsoH;
   rig.add(head);
 
-  return { group: g, rig, head, torso, arms, legs, unit, headH, torsoH, legH };
+  return { group: g, rig, head, torso, chest, waist, lats, delts, neck, arms, biceps, forearms, legs, unit, headH, torsoH, legH };
 }
 
 /**
@@ -201,11 +248,39 @@ export function buildCrewBody(grid, { unit = 0.027, material } = {}) {
  */
 export function applyCrewMuscle(body, t) {
   const m = Math.min(1, Math.max(0, t));
-  body.torso.scale.set(1 + m * 0.55, 1 + m * 0.08, 1 + m * 0.40);
-  for (const a of body.arms) a.scale.set(1 + m * 0.85, 1 + m * 0.10, 1 + m * 0.85);
-  for (const l of body.legs) l.scale.set(1 + m * 0.45, 1, 1 + m * 0.45);
-  // The arms have to swing wider as they thicken or they clip through the chest.
-  for (let i = 0; i < body.arms.length; i++) {
-    body.arms[i].position.x = (i === 0 ? -1 : 1) * body.unit * (9.6 + m * 3.4);
+
+  // Spend the growth where it changes the outline. The chest and shoulders take
+  // almost all of it and the waist takes almost none, which is the V-taper; the
+  // head takes none at all, which is what sells the rest of him getting bigger.
+  body.chest.scale.set(1 + m * 0.58, 1 + m * 0.08, 1 + m * 0.42);
+  body.waist.scale.set(1 + m * 0.06, 1, 1 + m * 0.12);   // stays put: the taper is the point
+  body.neck.scale.set(1 + m * 0.80, 1 + m * 0.45, 1 + m * 0.80);
+
+  for (let i = 0; i < body.lats.length; i++) {
+    const sx = i === 0 ? -1 : 1;
+    body.lats[i].scale.set(1 + m * 1.6, 1 + m * 0.15, 1 + m * 0.35);
+    body.lats[i].position.x = sx * body.unit * (6.2 + m * 2.4);
+    body.lats[i].rotation.z = sx * (0.30 + m * 0.22);
   }
+
+  for (let i = 0; i < body.delts.length; i++) {
+    const sx = i === 0 ? -1 : 1;
+    body.delts[i].scale.setScalar(1 + m * 1.05);
+    body.delts[i].position.x = sx * body.unit * (7.6 + m * 3.2);
+    body.delts[i].position.y = body.torsoH * (0.94 + m * 0.04);
+  }
+
+  for (let i = 0; i < body.arms.length; i++) {
+    const sx = i === 0 ? -1 : 1;
+    body.arms[i].position.x = sx * body.unit * (9.6 + m * 6.2);
+    // Lats push the arms out and away. Without enough flare the arm merges into
+    // the chest that has grown past it and the whole top half reads as one mass;
+    // the daylight between arm and torso is what keeps them separate limbs.
+    body.arms[i].rotation.z = sx * m * 0.52;
+    body.biceps[i].scale.set(1 + m * 1.20, 1, 1 + m * 1.20);
+    body.forearms[i].scale.set(1 + m * 0.50, 1, 1 + m * 0.50);
+  }
+
+  for (const l of body.legs) l.scale.set(1 + m * 0.45, 1, 1 + m * 0.45);
 }
+
