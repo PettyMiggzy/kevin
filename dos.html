@@ -28,11 +28,11 @@
   --cream:#fff6c8;
 
   /* phosphor: amber. committed. */
-  --amber:#ffb01a;
-  --amber-hi:#ffe08a;
-  --amber-dim:#a4670a;
-  --p-red:#ff4038;
-  --p-green:#4ade7a;
+  --amber:#ffbe38;
+  --amber-hi:#fff0b8;
+  --amber-dim:#b87a12;
+  --p-red:#ff5348;
+  --p-green:#5ceb8c;
   --tube-bg:#100a03;
 
   --cols:80;
@@ -99,8 +99,8 @@ body{
   padding:calc(var(--fs) * var(--pady)) calc(var(--fs) * var(--padx));
   overflow:hidden;
   box-shadow:
-    inset 0 0 0 2px rgba(0,0,0,.9),
-    inset 0 0 42px 14px rgba(0,0,0,.95),
+    inset 0 0 0 2px rgba(0,0,0,.75),
+    inset 0 0 70px 8px rgba(0,0,0,.55),
     0 0 0 3px rgba(0,0,0,.25);
   isolation:isolate;
 }
@@ -119,14 +119,14 @@ pre{
   letter-spacing:0;
   font-variant-ligatures:none;
   color:var(--amber);
-  text-shadow:0 0 1px currentColor, 0 0 .45em rgba(255,150,0,.42);
+  text-shadow:0 0 1px currentColor, 0 0 .38em rgba(255,160,20,.55);
   tab-size:8;
 }
 #screen{position:relative;z-index:2;}
 .bloom{
   position:absolute;left:0;top:0;z-index:1;
-  filter:blur(calc(var(--fs) * .16)) saturate(1.5);
-  opacity:.6;
+  filter:blur(calc(var(--fs) * .13)) saturate(1.45);
+  opacity:.5;
   mix-blend-mode:screen;
   pointer-events:none;
 }
@@ -155,35 +155,35 @@ pre{
   z-index:5;
   background:repeating-linear-gradient(
     to bottom,
-    rgba(0,0,0,.34) 0px,
-    rgba(0,0,0,.34) 1px,
+    rgba(0,0,0,.30) 0px,
+    rgba(0,0,0,.30) 1px,
     rgba(0,0,0,0) 2px,
     rgba(0,0,0,0) 3px);
-  opacity:.75;
+  opacity:.68;
 }
 .fx-mask{
   z-index:6;
   background:repeating-linear-gradient(
     to right,
-    rgba(255,140,0,.05) 0px,
-    rgba(255,140,0,.05) 1px,
-    rgba(0,0,0,.06) 2px,
-    rgba(0,0,0,.06) 3px);
+    rgba(255,150,20,.04) 0px,
+    rgba(255,150,20,.04) 1px,
+    rgba(0,0,0,.035) 2px,
+    rgba(0,0,0,.035) 3px);
 }
 .fx-vig{
   z-index:7;
   background:
-    radial-gradient(120% 100% at 50% 46%, rgba(0,0,0,0) 48%, rgba(0,0,0,.42) 78%, rgba(0,0,0,.86) 100%);
+    radial-gradient(118% 104% at 50% 47%, rgba(0,0,0,0) 56%, rgba(0,0,0,.26) 82%, rgba(0,0,0,.72) 100%);
 }
 .fx-shine{
   z-index:8;
   background:
-    linear-gradient(160deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.045) 22%, rgba(255,255,255,0) 46%),
-    radial-gradient(60% 34% at 26% 12%, rgba(255,255,255,.10), rgba(255,255,255,0) 70%);
+    linear-gradient(162deg, rgba(255,255,255,.075) 0%, rgba(255,255,255,.02) 18%, rgba(255,255,255,0) 40%),
+    radial-gradient(52% 26% at 24% 10%, rgba(255,255,255,.055), rgba(255,255,255,0) 72%);
 }
 .fx-roll{
   z-index:9;
-  background:linear-gradient(to bottom, rgba(255,190,90,0) 0%, rgba(255,190,90,.10) 45%, rgba(255,190,90,.16) 50%, rgba(255,190,90,.10) 55%, rgba(255,190,90,0) 100%);
+  background:linear-gradient(to bottom, rgba(255,200,110,0) 0%, rgba(255,200,110,.045) 45%, rgba(255,200,110,.085) 50%, rgba(255,200,110,.045) 55%, rgba(255,200,110,0) 100%);
   height:22%;
   top:-22%;
   mix-blend-mode:screen;
@@ -191,7 +191,7 @@ pre{
 }
 @keyframes roll{0%{transform:translateY(0)}100%{transform:translateY(560%)}}
 
-.fx-flick{z-index:10;background:rgba(255,170,40,.035);animation:flick 3.1s steps(2,end) infinite;}
+.fx-flick{z-index:10;background:rgba(255,180,60,.022);animation:flick 3.1s steps(2,end) infinite;}
 @keyframes flick{0%,92%{opacity:.25}93%{opacity:.75}94%{opacity:.15}96%{opacity:.6}100%{opacity:.25}}
 
 /* power-on smear */

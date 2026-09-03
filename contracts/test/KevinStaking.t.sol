@@ -513,10 +513,7 @@ contract KevinStakingTest is Test {
             "alice: half then two thirds"
         );
         assertApproxEqAbs(
-            staking.earned(bob),
-            bobAtMidpoint + secondHalf / 3,
-            1e12,
-            "bob: half then one third"
+            staking.earned(bob), bobAtMidpoint + secondHalf / 3, 1e12, "bob: half then one third"
         );
     }
 

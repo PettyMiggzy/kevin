@@ -31,10 +31,7 @@ contract Handler is Test {
         owner = o;
 
         actors = [
-            makeAddr("inv_alice"),
-            makeAddr("inv_bob"),
-            makeAddr("inv_carol"),
-            makeAddr("inv_dave")
+            makeAddr("inv_alice"), makeAddr("inv_bob"), makeAddr("inv_carol"), makeAddr("inv_dave")
         ];
 
         for (uint256 i; i < actors.length; ++i) {
@@ -132,6 +129,7 @@ contract Handler is Test {
         uint256[] memory ids = new uint256[](1);
         ids[0] = 10 * idx + (which % 4);
         vm.prank(owner);
+        // forge-lint: disable-next-line(unsafe-typecast)
         staking.setTokenTiers(ids, uint16(tierSeed % 3));
     }
 
@@ -214,9 +212,8 @@ contract KevinStakingInvariantTest is StdInvariant, Test {
     function invariant_EffectiveBalanceIsExactlyBalanceTimesAppliedBoost() public view {
         for (uint256 i; i < handler.actorCount(); ++i) {
             address a = handler.actors(i);
-            uint256 expected =
-                (staking.balanceOf(a) * (staking.BPS() + staking.appliedBoostBps(a)))
-                    / staking.BPS();
+            uint256 expected = (staking.balanceOf(a) * (staking.BPS() + staking.appliedBoostBps(a)))
+                / staking.BPS();
             assertEq(staking.effectiveBalanceOf(a), expected, "effective balance is not derived");
         }
     }

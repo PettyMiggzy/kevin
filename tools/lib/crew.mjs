@@ -449,3 +449,27 @@ export function crewSVG(t, { scale = 1 } = {}) {
     title: `KEVIN'S CREW #${String(t.id).padStart(3, '0')}`,
   });
 }
+
+/**
+ * The same character as a grid the game can extrude into voxels.
+ *
+ * This is the whole reason the collection is pixels rather than paintings: a
+ * 32x32 grid turns into a 3D head mechanically, so the token somebody owns IS
+ * the character they play, and nobody has to model, rig or skin anything.
+ *
+ * Returns a palette plus one index per cell (-1 for empty), which keeps the
+ * whole set small enough to ship as one JSON file.
+ */
+export function crewGrid(t) {
+  const c = drawCrew(t);
+  const palette = [];
+  const index = new Map();
+  const cells = new Array(c.w * c.h);
+  for (let i = 0; i < cells.length; i++) {
+    const col = c.px[i];
+    if (col === null) { cells[i] = -1; continue; }
+    if (!index.has(col)) { index.set(col, palette.length); palette.push(col); }
+    cells[i] = index.get(col);
+  }
+  return { id: t.id, w: c.w, h: c.h, palette, cells, traits: t };
+}

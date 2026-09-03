@@ -18,6 +18,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
 import { load, save, settle, workout, projectedLoss, DECAY_PER_DAY } from './save.js';
+import { buildCrewBody, applyCrewMuscle } from './voxel.js';
 
 const $ = (s) => document.querySelector(s);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -258,11 +259,36 @@ function buildKevin() {
 
 /** One number, 0..1, and the whole body reads as bigger. */
 function applyMuscle(kev, m) {
+  if (kev.unit) return applyCrewMuscle(kev, m);      // voxel body
   const t = clamp(m, 0, 1);
   kev.torso.scale.set(1 + t * 0.55, 1 + t * 0.10, 1 + t * 0.45);
   for (const a of kev.arms) a.scale.set(1 + t * 0.75, 1 + t * 0.12, 1 + t * 0.75);
   for (const l of kev.legs) l.scale.set(1 + t * 0.40, 1, 1 + t * 0.40);
   // the head does NOT scale — that is what sells the rest of him getting bigger
+}
+
+/**
+ * Load the crew and build the player from one of them. Which token you hold is
+ * which character you are — the avatar extrudes straight into the body, so
+ * there is exactly one art pipeline for the NFT and the game.
+ */
+let CREW = null;
+async function loadCrew() {
+  try {
+    const r = await fetch('../assets/crew/grids.json');
+    if (!r.ok) return null;
+    CREW = await r.json();
+    return CREW;
+  } catch {
+    return null;                                     // fall back to primitives
+  }
+}
+
+function makePlayer(gridIndex = 0) {
+  if (!CREW?.crew?.length) return buildKevin();
+  const mat = toon('#FFFFFF', { vertexColors: true });
+  mat.userData.outlineParameters = { thickness: 0.010, color: [0, 0, 0], alpha: 1 };
+  return buildCrewBody(CREW.crew[gridIndex % CREW.crew.length], { material: mat });
 }
 
 // --- boot -------------------------------------------------------------------
@@ -309,7 +335,8 @@ async function init() {
 
   buildRoom(scene);
 
-  kevin = buildKevin();
+  await loadCrew();
+  kevin = makePlayer(state.crewId ?? 0);
   kevin.group.position.set(0, 0, 3.6);
   scene.add(kevin.group);
 

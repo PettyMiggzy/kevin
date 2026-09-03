@@ -23,13 +23,25 @@ WASD or the on-screen stick to move, **E** or the button to work a station.
 
 ## The two decisions worth knowing about
 
-**Muscle is bone scale, not a morph target.** The obvious approach — model a
-skinny Kevin and a buff Kevin and blend between them — cannot work. The glTF
-spec requires every morph target to have the same vertex count *and ordering*
-as the base primitive, so two separately-authored meshes will not load, never
-mind look bad. Scaling limbs on one body has no such constraint and is one
-number. `applyMuscle()` is four lines, and the head deliberately does not scale
-— that is what sells the rest of him getting bigger.
+**The character IS the NFT.** `js/voxel.js` extrudes a KEVIN'S CREW avatar
+straight out of its 32×32 grid into a playable body — the token somebody owns
+is the character they walk around as, with one art pipeline instead of two.
+
+This started as a convenience and turned out to delete the riskiest item in the
+whole plan. The character pipeline was budgeted at 8–15 days and rated highest
+risk, because of two things that can force a redo of weeks of work: an
+auto-rigger that may simply refuse a stylised body, and glTF's rule that every
+morph target must share vertex count *and ordering* with the base primitive —
+so a separately-modelled skinny Kevin and buff Kevin do not merely look bad
+together, they will not load.
+
+A voxel body assembled from separate groups has no skeleton, no skin weights
+and no shared-topology rule. There is nothing to rig and nothing to refuse.
+Animation is rotating a group. Muscle is `group.scale`, and the head
+deliberately does not grow — that is what sells the rest of him getting bigger.
+
+Heads merge to a single draw call: same-coloured cells in a row become one box
+before anything reaches the GPU.
 
 **The props are normalised, not used as delivered.** Tripo returns photoreal
 PBR at ~500,000 triangles and 2048px maps — about 11MB a prop, 154MB for a gym.
@@ -74,8 +86,13 @@ a compliance and security problem before anyone knows whether the game works.
   plus value, derived lazily on read, with the client sending intents ("I used
   the bench") rather than results ("my muscle is 90"). `save.js` says the same
   thing where somebody changing it will read it.
-- **Kevin is primitives, not a rigged character.** Good enough to prove the
-  loop and the look. A real rig is the next real piece of work.
+- **The props and the character are two art directions.** Props come from
+  Tripo and are smooth; the character is blocky. It reads acceptably as toys in
+  a room, but it is a real decision and not yet made: voxelise the props, or
+  keep the contrast deliberately.
+- Only the head extrudes from the grid. The body is procedural boxes coloured
+  by the shirt trait, because the avatar is a portrait and stops at the
+  shoulders.
 - `plate-tree` is over the 6,000-triangle budget at 7,302. The optimiser flags
   it rather than raising the budget to hide it.
 - No sound at all.

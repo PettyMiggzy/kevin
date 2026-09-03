@@ -1,0 +1,47 @@
+{
+  "manifest": "assets/crew/crew.json",
+  "generatedFrom": "20 minted",
+  "tierIds": [
+    1,
+    2,
+    3
+  ],
+  "tierBps": [
+    500,
+    1500,
+    3000
+  ],
+  "tierLabels": [
+    "Crew",
+    "Crew, seasoned",
+    "Shift lead"
+  ],
+  "tokenIdsByTier": [
+    [
+      1,
+      2,
+      3,
+      5,
+      6,
+      7,
+      11,
+      12,
+      14,
+      15,
+      17,
+      20
+    ],
+    [
+      8,
+      9,
+      10,
+      13,
+      16,
+      18,
+      19
+    ],
+    [
+      4
+    ]
+  ]
+}

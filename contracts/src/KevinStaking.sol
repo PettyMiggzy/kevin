@@ -251,7 +251,9 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
     event EmergencyWithdrawn(address indexed account, uint256 amount, uint256 rewardsForfeited);
     event NftsStaked(address indexed account, uint256[] tokenIds);
     event NftsWithdrawn(address indexed account, uint256[] tokenIds);
-    event EffectiveBalanceSynced(address indexed account, uint256 boostBps, uint256 effectiveBalance);
+    event EffectiveBalanceSynced(
+        address indexed account, uint256 boostBps, uint256 effectiveBalance
+    );
     event RewardAdded(uint256 reward, uint256 rate, uint256 periodFinish);
     event RewardToppedUp(uint256 reward, uint256 rate, uint256 periodFinish);
     event RewardsDurationUpdated(uint256 duration);
@@ -778,8 +780,10 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
         if (c.epoch == boostEpoch) return c.rawBps;
 
         uint256 sum = _computeRawBoostBps(account);
-        // Bounded: MAX_STAKED_NFTS * type(uint16).max fits in uint192 many
-        // times over, so this cast cannot truncate.
+        // casting to 'uint192' is safe because the sum is at most
+        // MAX_STAKED_NFTS (32) * type(uint16).max, i.e. ~2.1e6, and every
+        // addend is a uint16 read out of `tierBoostBps`.
+        // forge-lint: disable-next-line(unsafe-typecast)
         _boostCache[account] = BoostCache({epoch: boostEpoch, rawBps: uint192(sum)});
         return sum;
     }
