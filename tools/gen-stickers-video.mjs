@@ -121,7 +121,7 @@ export const STICKERS = [
     action: 'His WHOLE BODY rides upward with the candle, legs bending and straightening to absorb the surge, torso arching back, head thrown up, arms punching the sky, hood and dreadlocks streaming down behind him in the wind',
   },
   {
-    slug: 'printer-go-brrr', src: '08-money-printer.jpg', word: 'BRRRR',
+    slug: 'printer-go-brrr', src: '08-money-printer.jpg', word: 'BRRRR', nudgeY: 0.20,
     edit: 'Cash exploding out of the money machine in a huge spray, him leaning back with both arms behind his head, feet up, laughing. Add the word "BRRRR" in huge bold black cartoon letters across the bottom',
     action: 'His WHOLE BODY rocks back in the chair laughing, torso heaving, legs kicking up and down, head tipping back, dreadlocks swinging, the chair rocking under him as cash sprays everywhere',
   },
@@ -188,14 +188,6 @@ const only = args.filter((a) => !a.startsWith('--'));
  * definition, and that stays true as sources change.
  */
 /**
- * Find the character's bounding box across the clip.
- *
- * A centre crop is wrong: the generator does not centre him, so a fixed centre
- * square slices his head off and leaves a laser looking like a smear from
- * nowhere. Keying the flat backdrop to alpha and running cropdetect over the
- * whole clip gives the box he actually occupies.
- */
-/**
  * Some clips come back with a black letterbox bar baked into the frame. It is
  * not the keyed backdrop colour, so the keyer leaves it and the content
  * detector counts it as part of the character — which drags the crop down and
@@ -211,6 +203,14 @@ async function blackBars(src, start, dur) {
   return { w, h, x, y };
 }
 
+/**
+ * Find the character's bounding box across the clip.
+ *
+ * A centre crop is wrong: the generator does not centre him, so a fixed centre
+ * square slices his head off and leaves a laser looking like a smear from
+ * nowhere. Keying the flat backdrop to alpha and running cropdetect over the
+ * whole clip gives the box he actually occupies.
+ */
 async function contentBox(src, hex, start, dur, bars) {
   const pre = bars ? `crop=${bars.w}:${bars.h}:${bars.x}:${bars.y},` : '';
   const { stderr } = await run(FFMPEG, ['-v', 'info', '-ss', String(start), '-t', String(dur), '-i', src,
@@ -222,7 +222,14 @@ async function contentBox(src, hex, start, dur, bars) {
   return { w: last[0], h: last[1], x: last[2], y: last[3] };
 }
 
-/** Render a word as a transparent overlay strip, once, in the brand face. */
+/**
+ * Render a word as a transparent overlay strip, once, in the brand face.
+ *
+ * The word has to FIT. The old version picked a size from the letter count and
+ * sat 12px off the bottom with a 15px stroke — so the stroke was clipped by the
+ * frame on every sticker and the longer words ran edge to edge. Measure and
+ * shrink instead, and give the stroke room to be a stroke.
+ */
 async function wordPlate(word, out) {
   await withBrowser(async (browser) => {
     const page = await browser.newPage({ viewport: { width: 512, height: 512 } });
@@ -231,12 +238,29 @@ async function wordPlate(word, out) {
       @font-face{font-family:'LG';src:url(data:font/woff2;base64,${font}) format('woff2')}
       *{margin:0;padding:0}
       html,body{width:512px;height:512px;background:transparent;overflow:hidden}
-      b{position:absolute;left:0;right:0;bottom:12px;text-align:center;
-        font-family:'LG',sans-serif;font-weight:400;line-height:1;
-        color:#fff;-webkit-text-stroke:15px #0B0B0B;paint-order:stroke fill;
-        font-size:${word.length > 8 ? 58 : word.length > 5 ? 78 : 96}px;letter-spacing:1px}
-    </style><b>${word}</b>`, { waitUntil: 'load' });
+      #row{position:absolute;left:0;right:0;bottom:18px;text-align:center}
+      #w{display:inline-block;font-family:'LG',sans-serif;font-weight:400;line-height:1.04;
+        color:#fff;paint-order:stroke fill;white-space:nowrap}
+    </style><div id="row"><span id="w">${word}</span></div>`, { waitUntil: 'load' });
     await page.evaluate(() => document.fonts.ready);
+
+    // Shrink only if the word genuinely does not fit. The element has to be
+    // inline-block to be measurable at all — a full-width block reports 512px
+    // whatever it contains, so the loop shrank every word to the floor.
+    await page.evaluate(() => {
+      const el = document.getElementById('w');
+      const AVAILABLE = 512 - 26 * 2;
+      for (let size = 106; size > 30; size -= 2) {
+        el.style.fontSize = `${size}px`;
+        // The stroke straddles the glyph edge, so half sits outside the measured
+        // box on each side. Count it, or the widest letters clip.
+        const stroke = Math.round(size * 0.155);
+        el.style.webkitTextStroke = `${stroke}px #0B0B0B`;
+        el.style.letterSpacing = size > 74 ? '1px' : '0px';
+        if (el.getBoundingClientRect().width + stroke <= AVAILABLE) break;
+      }
+    });
+
     await wf(out, await page.screenshot({ omitBackground: true }));
     await page.close();
   });
@@ -245,10 +269,15 @@ async function wordPlate(word, out) {
 /**
  * Cut a raw clip down to a Telegram video sticker.
  *
- * Uses the START of the clip, where the character is closest to the source
- * still, and crops to where he actually is rather than to the middle of the
- * frame. The word is typeset on afterwards, so the lettering is identical
- * across the pack and cannot be lost when the generator reframes.
+ * Two things the generator does that have to be undone here. It reframes over
+ * the first second or so — widening the shot and scrolling the baked-in word
+ * out of view — so the trim starts after that settles. And because the word is
+ * gone by then, it gets typeset back on afterwards, which also means the
+ * lettering is identical across the whole pack instead of varying per clip.
+ *
+ * The backdrop is keyed by sampling the clip's own top-left pixel: every
+ * source is a flat-backed cartoon, so the corner is the background by
+ * definition, and that stays true as sources change.
  */
 async function toSticker(src, out, opts = {}) {
   // Some clips open on a close-up and pull out to a wide shot. Where the
@@ -276,13 +305,25 @@ async function toSticker(src, out, opts = {}) {
   const trim = bars ? `crop=${bw}:${bh}:${bx}:${by},` : '';
 
   const box = await contentBox(src, hex, start, dur, bars);
-  let crop = `${trim}crop=${bh}:${bh}:${Math.round((bw - bh) / 2)}:0`;
+  // The fallback centre crop has to honour nudgeY as well — this clip takes
+  // this branch, not the content-box one, which is why lifting the crop
+  // appeared to do nothing however far it was pushed.
+  const fbSide = Math.round(bh * (1 - (opts.nudgeY ?? 0)));
+  let crop = `${trim}crop=${fbSide}:${fbSide}:${Math.round((bw - fbSide) / 2)}:0`;
   if (box && box.w > 60 && box.h > 60) {
     const cx = box.x + box.w / 2;
     const cy = box.y + box.h / 2;
-    const side = Math.min(bh, Math.max(box.w, box.h) * (opts.wide ? 1.5 : 1.22));
+    // A full-frame-height crop has nowhere to move, so nudgeY has to buy its own
+    // headroom by taking the crop in first — otherwise the clamp below pins y
+    // to 0 and the lift silently does nothing.
+    const room = bh * (1 - (opts.nudgeY ?? 0));
+    const side = Math.min(room, Math.max(box.w, box.h) * (opts.wide ? 1.5 : 1.22));
     const x = Math.max(0, Math.min(bw - side, cx - side / 2));
-    const y = Math.max(0, Math.min(bh - side, cy - side / 2));
+    // nudgeY lifts the crop off the bottom of the frame. Some clips keep the
+    // generator's own baked-in lettering down there, and it ghosts through
+    // underneath the typeset plate; lifting the crop leaves it outside.
+    const ny = cy - side / 2 - side * (opts.nudgeY ?? 0);
+    const y = Math.max(0, Math.min(bh - side, ny));
     crop = `${trim}crop=${Math.round(side)}:${Math.round(side)}:${Math.round(x)}:${Math.round(y)}`;
   }
 
@@ -360,7 +401,7 @@ async function main() {
       const raw = join(RAW, `${s.slug}.mp4`);
       if (!existsSync(raw)) { console.log(`  ${s.slug.padEnd(16)} no raw, skipped`); continue; }
       const webm = join(OUT, `${s.slug}.webm`);
-      const { size, crf, fps } = await toSticker(raw, webm, { word: s.word, wide: s.wide, start: s.start });
+      const { size, crf, fps } = await toSticker(raw, webm, { word: s.word, wide: s.wide, start: s.start, nudgeY: s.nudgeY });
       await derive(webm, s.slug);
       console.log(`  ${s.slug.padEnd(16)} ${(size / 1024).toFixed(0).padStart(4)}KB (crf ${crf}${fps < 30 ? `, ${fps}fps` : ''})`);
     }
@@ -434,7 +475,7 @@ async function main() {
       const mp4 = await retrieve(key, { model: MODEL, queue_id: id });
       const rawPath = await save(mp4, RAW, `${s.slug}.mp4`);
       const webm = join(OUT, `${s.slug}.webm`);
-      const { size, crf, fps } = await toSticker(rawPath, webm, { word: s.word, wide: s.wide, start: s.start });
+      const { size, crf, fps } = await toSticker(rawPath, webm, { word: s.word, wide: s.wide, start: s.start, nudgeY: s.nudgeY });
       await derive(webm, s.slug);
       console.log(`\r  ${s.slug.padEnd(16)} ${(size / 1024).toFixed(0).padStart(4)}KB (crf ${crf}${fps < 30 ? `, ${fps}fps` : ''})       `);
     } catch (e) {

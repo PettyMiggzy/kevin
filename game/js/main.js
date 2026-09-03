@@ -370,41 +370,153 @@ function makePlayer(gridIndex = 0) {
 // on a loop, and they cost almost nothing: the same voxel builder, the same
 // shared material, no AI beyond a timer and a waypoint.
 
-const NPC_SPOTS = [
-  { x: -7.4, z: -3.2, ry: 0.9, mode: 'curl' },
-  { x: 3.2, z: -4.8, ry: -0.4, mode: 'press' },
-  { x: 7.0, z: 0.2, ry: -1.5, mode: 'idle' },
-  { x: -2.2, z: -3.4, ry: 2.6, mode: 'curl' },
-  { x: 6.2, z: 5.2, ry: 2.4, mode: 'idle' },
-  { x: -7.8, z: -1.6, ry: 1.6, mode: 'press' },
+// Places worth standing, and what you do when you get there. These are AT the
+// equipment on purpose — a figure doing curls in the middle of the floor reads
+// as a mannequin, the same figure doing them at the rack reads as a person.
+const SPOTS = [
+  { x: 5.0, z: -3.4, ry: -Math.PI / 2, mode: 'run', label: 'treadmill' },
+  { x: -6.9, z: -3.0, ry: 0, mode: 'curl', label: 'rack' },
+  { x: -1.0, z: -4.2, ry: 0, mode: 'press', label: 'squat rack' },
+  { x: 6.9, z: 2.6, ry: -Math.PI / 2, mode: 'drink', label: 'cooler' },
+  { x: -3.0, z: 2.4, ry: Math.PI, mode: 'curl', label: 'mat' },
+  { x: -5.6, z: 3.4, ry: Math.PI * 0.8, mode: 'stretch', label: 'mat' },
+  { x: 2.2, z: 3.2, ry: Math.PI, mode: 'idle', label: 'floor' },
+  { x: 7.2, z: -1.2, ry: -Math.PI / 2, mode: 'stretch', label: 'mirror' },
+  { x: -8.0, z: 4.6, ry: Math.PI / 2, mode: 'idle', label: 'lockers' },
 ];
 
-function makeNpc(grid, spot, mat) {
+/**
+ * Give them somewhere to go.
+ *
+ * Six figures bolted to six fixed spots looping the same animation read as
+ * furniture. The fix is not better animation — it is that people in a gym
+ * finish a set, walk somewhere else, and start another one. So each one claims
+ * a spot, walks to it, works for a while, then gives it up and picks another.
+ *
+ * No pathfinding: the room is one rectangle and they walk in a straight line.
+ * A* here would be engineering for a problem that does not exist.
+ */
+function makeNpc(grid, mat, startSpot) {
   const body = buildCrewBody(grid, { material: mat });
-  body.group.position.set(spot.x, 0, spot.z);
-  body.group.rotation.y = spot.ry;
-  applyCrewMuscle(body, 0.15 + Math.random() * 0.6);
-  const phase = Math.random() * 10;
-  const rate = 0.6 + Math.random() * 0.5;
+  body.group.rotation.order = 'YXZ';
+  const strength = 0.12 + Math.random() * 0.7;
+  applyCrewMuscle(body, strength);
+
+  const st = {
+    spot: null,
+    state: 'idle',
+    timer: 0.6 + Math.random() * 2.5,
+    phase: Math.random() * 10,
+    rate: 0.72 + Math.random() * 0.5,
+    speed: 1.5 + Math.random() * 0.9,
+  };
+
+  const claim = (spot) => {
+    if (st.spot) st.spot.taken = false;
+    st.spot = spot;
+    if (spot) spot.taken = true;
+  };
+  claim(startSpot);
+  if (startSpot) {
+    body.group.position.set(startSpot.x, 0, startSpot.z);
+    body.group.rotation.y = startSpot.ry;
+    st.state = 'work';
+    st.timer = 4 + Math.random() * 9;
+  }
+
+  const pickSpot = () => {
+    const free = SPOTS.filter((sp) => !sp.taken);
+    return free.length ? free[Math.floor(Math.random() * free.length)] : null;
+  };
+
+  const rest = () => {
+    for (const a of body.arms) a.rotation.set(0, 0, a.rotation.z);
+    for (const l of body.legs) l.rotation.x = 0;
+    body.group.position.y = 0;
+  };
 
   body.tick = (dt, now) => {
-    const t = now / 1000 * rate + phase;
-    if (spot.mode === 'curl') {
-      const p = Math.sin(t * 2.2) * 0.5 + 0.5;
-      for (const a of body.arms) a.rotation.x = -p * 1.5;
-      body.group.position.y = p * 0.03;
-    } else if (spot.mode === 'press') {
-      const p = Math.sin(t * 1.7) * 0.5 + 0.5;
-      for (const a of body.arms) a.rotation.x = -0.3 - p * 1.4;
-      body.torso.rotation.x = p * 0.1;
-    } else {
-      // Idling still moves. A motionless figure reads as a prop, not a person.
-      const b = Math.sin(t * 1.1);
-      body.group.position.y = Math.abs(b) * 0.02;
-      for (const a of body.arms) a.rotation.x = b * 0.12;
-      body.head.rotation.y = Math.sin(t * 0.4) * 0.4;
+    st.timer -= dt;
+    const t = now / 1000 * st.rate + st.phase;
+
+    if (st.state === 'walk') {
+      const dx = st.spot.x - body.group.position.x;
+      const dz = st.spot.z - body.group.position.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 0.12) {
+        body.group.position.set(st.spot.x, 0, st.spot.z);
+        body.group.rotation.y = st.spot.ry;
+        st.state = 'work';
+        st.timer = 5 + Math.random() * 11;
+        rest();
+      } else {
+        const step = Math.min(d, st.speed * dt);
+        body.group.position.x += (dx / d) * step;
+        body.group.position.z += (dz / d) * step;
+        body.group.rotation.y = Math.atan2(dx, dz);
+        const walk = Math.sin(now / 125 + st.phase) * 0.55;
+        body.legs[0].rotation.x = walk;
+        body.legs[1].rotation.x = -walk;
+        body.arms[0].rotation.x = -walk * 0.6;
+        body.arms[1].rotation.x = walk * 0.6;
+      }
+      return;
+    }
+
+    if (st.state === 'work') {
+      const mode = st.spot?.mode ?? 'idle';
+      if (mode === 'curl') {
+        const p = Math.sin(t * 2.3) * 0.5 + 0.5;
+        for (const a of body.arms) a.rotation.x = -p * 1.55;
+        body.group.position.y = p * 0.025;
+      } else if (mode === 'press') {
+        const p = Math.sin(t * 1.8) * 0.5 + 0.5;
+        for (const a of body.arms) a.rotation.x = -Math.PI + p * 0.7;
+        body.torso.rotation.x = p * 0.07;
+      } else if (mode === 'run') {
+        const r = Math.sin(t * 7.5) * 1.0;
+        body.legs[0].rotation.x = r;
+        body.legs[1].rotation.x = -r;
+        for (const a of body.arms) a.rotation.x = -0.5 - r * 0.35;
+      } else if (mode === 'drink') {
+        // Standing at the cooler with a drink, which is most of what people
+        // actually do in a gym.
+        const p = Math.max(0, Math.sin(t * 0.7));
+        body.arms[1].rotation.x = -p * 2.2;
+        body.head.rotation.x = -p * 0.35;
+      } else if (mode === 'stretch') {
+        const p = Math.sin(t * 0.9);
+        body.arms[0].rotation.x = -1.4 - p * 0.5;
+        body.arms[1].rotation.x = -1.4 + p * 0.5;
+        body.torso.rotation.y = p * 0.28;
+      } else {
+        const b = Math.sin(t * 1.15);
+        body.group.position.y = Math.abs(b) * 0.018;
+        for (const a of body.arms) a.rotation.x = b * 0.12;
+        body.head.rotation.y = Math.sin(t * 0.42) * 0.42;
+      }
+
+      if (st.timer <= 0) {
+        body.torso.rotation.set(0, 0, 0);
+        body.head.rotation.set(0, 0, 0);
+        rest();
+        const next = pickSpot();
+        if (next) { claim(next); st.state = 'walk'; }
+        else st.timer = 3 + Math.random() * 4;
+      }
+      return;
+    }
+
+    // idle, between things
+    const b = Math.sin(t * 1.1);
+    body.group.position.y = Math.abs(b) * 0.016;
+    if (st.timer <= 0) {
+      const next = pickSpot();
+      if (next) { claim(next); st.state = 'walk'; }
+      else st.timer = 2 + Math.random() * 3;
     }
   };
+
   return body;
 }
 
@@ -478,17 +590,19 @@ async function init() {
     bells.push(d);
   }
 
-  // Everyone shares one material, so the whole crew costs one shader.
+  // Everyone shares one material, so the whole crew costs one shader. They do
+  // NOT get collision: they move, so a static solid would leave an invisible
+  // wall wherever one happened to start, and being nudged past somebody is
+  // better than being stopped by where they used to be.
   if (CREW?.crew?.length > 1) {
     const crewMat = toon('#FFFFFF', { vertexColors: true });
     crewMat.userData.outlineParameters = { thickness: 0.010, color: [0, 0, 0], alpha: 1 };
-    NPC_SPOTS.forEach((spot, i) => {
-      const grid = CREW.crew[(i + 1) % CREW.crew.length];
-      const npc = makeNpc(grid, spot, crewMat);
+    const many = Math.min(6, CREW.crew.length - 1);
+    for (let i = 0; i < many; i++) {
+      const npc = makeNpc(CREW.crew[(i + 1) % CREW.crew.length], crewMat, SPOTS[i]);
       scene.add(npc.group);
       npcs.push(npc);
-      solids.push({ x: spot.x, z: spot.z, r: 0.42 });
-    });
+    }
   }
 
   const loader = new GLTFLoader();

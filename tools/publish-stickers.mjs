@@ -42,11 +42,11 @@ const EMOJI = {
 // halfway through uploading a batch.
 const MAX_BYTES = 256 * 1024;
 
-const api = async (method, form) => {
+const api = async (method, form, query = '') => {
   // A POST with an empty body comes back empty through the proxy, so calls
   // without parameters go as GET.
   const opts = form ? { method: 'POST', body: form } : { method: 'GET' };
-  const r = await fetch(`https://api.telegram.org/bot${TOKEN}/${method}`, opts);
+  const r = await fetch(`https://api.telegram.org/bot${TOKEN}/${method}${query ? `?${query}` : ''}`, opts);
   const text = await r.text();
   if (!text) throw new Error(`${method}: empty response (HTTP ${r.status})`);
   const j = JSON.parse(text);
@@ -80,6 +80,7 @@ async function main() {
   if (!files.length) throw new Error(`no .webm in ${DIR}`);
 
   const add = process.argv.includes('--add');
+  const replace = process.argv.includes('--replace');
   console.log(`bot @${me.username} · pack ${shortName} · ${files.length} stickers\n`);
 
   // uploadStickerFile first, so each sticker is referenced by file_id
@@ -108,7 +109,25 @@ async function main() {
     emoji_list: [EMOJI[u.slug] || '🔴'],
   }));
 
-  if (!add) {
+  if (replace) {
+    // Swap a sticker's file in place. delete+add would work too and would
+    // reshuffle the pack; anyone who has it installed sees the order change.
+    const set = await api('getStickerSet', null, `name=${shortName}`);
+    const byEmoji = new Map();
+    for (const st of set.stickers) byEmoji.set(st.emoji, st.file_id);
+    for (const u of uploaded) {
+      const old = byEmoji.get(EMOJI[u.slug]);
+      if (!old) { console.log(`  ${u.slug.padEnd(16)} not in the pack, skipped`); continue; }
+      const form = new FormData();
+      form.append('user_id', USER_ID);
+      form.append('name', shortName);
+      form.append('old_sticker', old);
+      form.append('sticker', JSON.stringify({ sticker: u.file_id, format: 'video', emoji_list: [EMOJI[u.slug]] }));
+      await api('replaceStickerInSet', form);
+      console.log(`  ${u.slug.padEnd(16)} replaced`);
+    }
+    console.log(`\nupdated: https://t.me/addstickers/${shortName}`);
+  } else if (!add) {
     const form = new FormData();
     form.append('user_id', USER_ID);
     form.append('name', shortName);
