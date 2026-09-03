@@ -140,26 +140,6 @@ const only = args.filter((a) => !a.startsWith('--'));
  * is a flat-backed cartoon, so the corner is the background colour by
  * definition, which beats hardcoding a hex that changes per image.
  */
-/** Render a word as a transparent overlay strip, once, in the brand face. */
-async function wordPlate(word, out) {
-  await withBrowser(async (browser) => {
-    const page = await browser.newPage({ viewport: { width: 512, height: 512 } });
-    const font = (await rf(join(ROOT, 'assets/fonts/luckiest-guy-400.woff2'))).toString('base64');
-    await page.setContent(`<style>
-      @font-face{font-family:'LG';src:url(data:font/woff2;base64,${font}) format('woff2')}
-      *{margin:0;padding:0}
-      html,body{width:512px;height:512px;background:transparent;overflow:hidden}
-      b{position:absolute;left:0;right:0;bottom:14px;text-align:center;
-        font-family:'LG',sans-serif;font-weight:400;line-height:1;
-        color:#fff;-webkit-text-stroke:16px #0B0B0B;paint-order:stroke fill;
-        font-size:${word.length > 8 ? 62 : word.length > 5 ? 84 : 104}px;letter-spacing:1px}
-    </style><b>${word}</b>`, { waitUntil: 'load' });
-    await page.evaluate(() => document.fonts.ready);
-    await wf(out, await page.screenshot({ omitBackground: true }));
-    await page.close();
-  });
-}
-
 /**
  * Cut a raw clip down to a Telegram video sticker.
  *
@@ -173,12 +153,100 @@ async function wordPlate(word, out) {
  * source is a flat-backed cartoon, so the corner is the background by
  * definition, and that stays true as sources change.
  */
-async function toSticker(src, out, { word = null, start = 1.4 } = {}) {
+/**
+ * Find the character's bounding box across the clip.
+ *
+ * A centre crop is wrong: the generator does not centre him, so a fixed centre
+ * square slices his head off and leaves a laser looking like a smear from
+ * nowhere. Keying the flat backdrop to alpha and running cropdetect over the
+ * whole clip gives the box he actually occupies.
+ */
+/**
+ * Some clips come back with a black letterbox bar baked into the frame. It is
+ * not the keyed backdrop colour, so the keyer leaves it and the content
+ * detector counts it as part of the character — which drags the crop down and
+ * smears black across the bottom of the sticker. Trim it off first.
+ */
+async function blackBars(src, start, dur) {
+  const { stderr } = await run(FFMPEG, ['-v', 'info', '-ss', String(start), '-t', String(dur), '-i', src,
+    '-vf', 'cropdetect=limit=24:round=2:reset=0', '-f', 'null', '-'],
+    { encoding: 'utf8', maxBuffer: 1 << 24 }).catch((e) => ({ stderr: e.stderr || '' }));
+  const hits = [...stderr.matchAll(/crop=(\d+):(\d+):(\d+):(\d+)/g)];
+  if (!hits.length) return null;
+  const [w, h, x, y] = hits[hits.length - 1].slice(1).map(Number);
+  return { w, h, x, y };
+}
+
+async function contentBox(src, hex, start, dur, bars) {
+  const pre = bars ? `crop=${bars.w}:${bars.h}:${bars.x}:${bars.y},` : '';
+  const { stderr } = await run(FFMPEG, ['-v', 'info', '-ss', String(start), '-t', String(dur), '-i', src,
+    '-vf', `${pre}colorkey=${hex}:0.18:0.05,alphaextract,cropdetect=limit=0.06:round=2:reset=0`,
+    '-f', 'null', '-'], { encoding: 'utf8', maxBuffer: 1 << 24 }).catch((e) => ({ stderr: e.stderr || '' }));
+  const hits = [...stderr.matchAll(/crop=(\d+):(\d+):(\d+):(\d+)/g)];
+  if (!hits.length) return null;
+  const last = hits[hits.length - 1].slice(1).map(Number);
+  return { w: last[0], h: last[1], x: last[2], y: last[3] };
+}
+
+/** Render a word as a transparent overlay strip, once, in the brand face. */
+async function wordPlate(word, out) {
+  await withBrowser(async (browser) => {
+    const page = await browser.newPage({ viewport: { width: 512, height: 512 } });
+    const font = (await rf(join(ROOT, 'assets/fonts/luckiest-guy-400.woff2'))).toString('base64');
+    await page.setContent(`<style>
+      @font-face{font-family:'LG';src:url(data:font/woff2;base64,${font}) format('woff2')}
+      *{margin:0;padding:0}
+      html,body{width:512px;height:512px;background:transparent;overflow:hidden}
+      b{position:absolute;left:0;right:0;bottom:12px;text-align:center;
+        font-family:'LG',sans-serif;font-weight:400;line-height:1;
+        color:#fff;-webkit-text-stroke:15px #0B0B0B;paint-order:stroke fill;
+        font-size:${word.length > 8 ? 58 : word.length > 5 ? 78 : 96}px;letter-spacing:1px}
+    </style><b>${word}</b>`, { waitUntil: 'load' });
+    await page.evaluate(() => document.fonts.ready);
+    await wf(out, await page.screenshot({ omitBackground: true }));
+    await page.close();
+  });
+}
+
+/**
+ * Cut a raw clip down to a Telegram video sticker.
+ *
+ * Uses the START of the clip, where the character is closest to the source
+ * still, and crops to where he actually is rather than to the middle of the
+ * frame. The word is typeset on afterwards, so the lettering is identical
+ * across the pack and cannot be lost when the generator reframes.
+ */
+async function toSticker(src, out, { word = null, start = 0.3, dur = 3 } = {}) {
   const probe = await run(FFMPEG, ['-v', 'error', '-ss', String(start), '-i', src,
     '-vf', 'crop=8:8:0:0,scale=1:1', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'],
     { encoding: 'buffer', maxBuffer: 1 << 20 });
   const [r, g, b] = probe.stdout;
   const hex = `0x${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+
+  // square crop around the character, with margin, clamped to the frame
+  const meta = await run(FFMPEG, ['-v', 'error', '-i', src, '-f', 'null', '-'], { encoding: 'utf8' })
+    .catch((e) => ({ stderr: e.stderr || '' }));
+  const dim = /, (\d{3,4})x(\d{3,4})/.exec(meta.stderr || '') || [null, '1280', '720'];
+  const FW = Number(dim[1]);
+  const FH = Number(dim[2]);
+
+  const bars = await blackBars(src, start, dur);
+  const bw = bars ? bars.w : FW;
+  const bh = bars ? bars.h : FH;
+  const bx = bars ? bars.x : 0;
+  const by = bars ? bars.y : 0;
+  const trim = bars ? `crop=${bw}:${bh}:${bx}:${by},` : '';
+
+  const box = await contentBox(src, hex, start, dur, bars);
+  let crop = `${trim}crop=${bh}:${bh}:${Math.round((bw - bh) / 2)}:0`;
+  if (box && box.w > 60 && box.h > 60) {
+    const cx = box.x + box.w / 2;
+    const cy = box.y + box.h / 2;
+    const side = Math.min(bh, Math.max(box.w, box.h) * 1.22);
+    const x = Math.max(0, Math.min(bw - side, cx - side / 2));
+    const y = Math.max(0, Math.min(bh - side, cy - side / 2));
+    crop = `${trim}crop=${Math.round(side)}:${Math.round(side)}:${Math.round(x)}:${Math.round(y)}`;
+  }
 
   let plate = null;
   if (word) {
@@ -186,11 +254,11 @@ async function toSticker(src, out, { word = null, start = 1.4 } = {}) {
     await wordPlate(word, plate);
   }
 
-  const base = `crop=ih:ih:(iw-ih)/2:0,scale=512:512:flags=lanczos,colorkey=${hex}:0.18:0.05`;
+  const base = `${crop},scale=512:512:flags=lanczos,colorkey=${hex}:0.18:0.05`;
 
   for (const fps of [30, 24, 20, 16]) {
     for (const crf of [34, 40, 46, 52]) {
-      const args = ['-y', '-v', 'error', '-ss', String(start), '-t', '3', '-i', src];
+      const args = ['-y', '-v', 'error', '-ss', String(start), '-t', String(dur), '-i', src];
       if (plate) args.push('-i', plate);
       const chain = fps === 30 ? base : `fps=${fps},${base}`;
       args.push('-filter_complex',
@@ -200,10 +268,10 @@ async function toSticker(src, out, { word = null, start = 1.4 } = {}) {
         '-crf', String(crf), '-b:v', '0', '-an', out);
       await run(FFMPEG, args);
       const { size } = await stat(out);
-      if (size <= 240 * 1024) return { size, crf, fps, hex };
+      if (size <= 240 * 1024) return { size, crf, fps, crop };
     }
   }
-  return { size: (await stat(out)).size, crf: 52, fps: 16, hex };
+  return { size: (await stat(out)).size, crf: 52, fps: 16, crop };
 }
 
 async function main() {
@@ -264,10 +332,19 @@ async function main() {
     return;
   }
 
+  // The video stage fetches the still over a public URL. A branch URL is
+  // mutable and CDN-cached, so a freshly regenerated still can be served stale
+  // — which silently animates the PREVIOUS version of the image. Committing and
+  // then addressing the still by commit SHA makes the URL immutable, so what
+  // gets animated is always what was just generated.
   await run('git', ['add', 'assets/stickers/stills'], { cwd: ROOT }).catch(() => {});
   await run('git', ['-c', 'user.email=bahmed3170@gmail.com', '-c', 'user.name=PettyMiggzy',
     'commit', '-q', '-m', 'Add sticker stills'], { cwd: ROOT }).catch(() => {});
-  await run('git', ['push', '-q', 'origin', BRANCH], { cwd: ROOT }).catch(() => {});
+  const push = await run('git', ['push', '-q', 'origin', BRANCH], { cwd: ROOT })
+    .then(() => true).catch((e) => { console.log(`  ! push failed: ${String(e.message).slice(0, 80)}`); return false; });
+  if (!push) { console.log('  ! stills are not reachable by the video stage — aborting'); return; }
+  const sha = (await run('git', ['rev-parse', 'HEAD'], { cwd: ROOT })).stdout.trim();
+  const STILL_BASE = `https://raw.githubusercontent.com/PettyMiggzy/kevin/${sha}/assets/stickers/stills`;
 
   // Stage 2: animate each still.
   for (const s of pending) {
@@ -275,7 +352,7 @@ async function main() {
     try {
       const id = await queue(key, {
         model: MODEL,
-        image_url: `https://raw.githubusercontent.com/PettyMiggzy/kevin/${BRANCH}/assets/stickers/stills/${s.slug}.png`,
+        image_url: `${STILL_BASE}/${s.slug}.png`,
         prompt: `${s.action}. ${HOLD}`,
         duration: '5s',
         resolution: '720p',
