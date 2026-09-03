@@ -6,7 +6,7 @@
 //   node tools/gen-props.mjs                # generate everything not cached
 //   node tools/gen-props.mjs bench treadmill
 //
-// Cached in game/assets/props/state.json by prompt, and that file is COMMITTED.
+// Cached in gym/assets/props/state.json by prompt, and that file is COMMITTED.
 // A cached task id is the difference between re-downloading a model and paying
 // for it a second time — so never gitignore it, and never edit a prompt unless
 // you mean to buy a new model.
@@ -16,7 +16,7 @@ import { existsSync } from 'node:fs';
 import { loadKey, balance, textToModel, wait, download, loadState, saveState } from './lib/tripo.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = join(ROOT, 'game/assets/props');
+const OUT = join(ROOT, 'gym/assets/props');
 const STATE = join(OUT, 'state.json');
 
 // One art direction, stated once and appended to every prompt. Mixed-source

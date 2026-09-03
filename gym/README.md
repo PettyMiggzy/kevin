@@ -2,11 +2,11 @@
 
 *No pain, only Kevin.*
 
-A playable prototype. Open `game/index.html` over http (not `file://` — it uses
+A playable prototype. Open `gym/index.html` over http (not `file://` — it uses
 ES modules) and press **Open the doors**.
 
 ```
-python3 -m http.server 8899   # then http://127.0.0.1:8899/game/
+python3 -m http.server 8899   # then http://127.0.0.1:8899/gym/
 ```
 
 WASD or the on-screen stick to move, **E** or the button to work a station.
@@ -105,7 +105,7 @@ node tools/gen-props.mjs            # generate anything not cached
 node tools/optimize-props.mjs       # 154MB -> 772KB
 ```
 
-`game/assets/props/state.json` is the paid-work cache and is **committed on
+`gym/assets/props/state.json` is the paid-work cache and is **committed on
 purpose** — a cached task id is the difference between re-downloading a model
 and buying it a second time. `raw/` holds the unoptimised originals and is
 gitignored; never delete it without checking `state.json` first.

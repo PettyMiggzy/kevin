@@ -19,17 +19,17 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'dist');
 
 const MODULES = {
-  three: 'game/vendor/three.module.js',
-  'three/addons/utils/BufferGeometryUtils.js': 'game/vendor/addons/utils/BufferGeometryUtils.js',
-  'three/addons/loaders/GLTFLoader.js': 'game/vendor/addons/loaders/GLTFLoader.js',
-  'three/addons/libs/meshopt_decoder.module.js': 'game/vendor/addons/libs/meshopt_decoder.module.js',
-  'three/addons/effects/OutlineEffect.js': 'game/vendor/addons/effects/OutlineEffect.js',
-  'kevin/save.js': 'game/js/save.js',
-  'kevin/voxel.js': 'game/js/voxel.js',
-  'kevin/gear.js': 'game/js/gear.js',
-  'kevin/reps.js': 'game/js/reps.js',
-  'kevin/audio.js': 'game/js/audio.js',
-  'kevin/main.js': 'game/js/main.js',
+  three: 'gym/vendor/three.module.js',
+  'three/addons/utils/BufferGeometryUtils.js': 'gym/vendor/addons/utils/BufferGeometryUtils.js',
+  'three/addons/loaders/GLTFLoader.js': 'gym/vendor/addons/loaders/GLTFLoader.js',
+  'three/addons/libs/meshopt_decoder.module.js': 'gym/vendor/addons/libs/meshopt_decoder.module.js',
+  'three/addons/effects/OutlineEffect.js': 'gym/vendor/addons/effects/OutlineEffect.js',
+  'kevin/save.js': 'gym/js/save.js',
+  'kevin/voxel.js': 'gym/js/voxel.js',
+  'kevin/gear.js': 'gym/js/gear.js',
+  'kevin/reps.js': 'gym/js/reps.js',
+  'kevin/audio.js': 'gym/js/audio.js',
+  'kevin/main.js': 'gym/js/main.js',
 };
 
 /**
@@ -134,14 +134,14 @@ async function main() {
   const props = {};
   let propBytes = 0;
   for (const name of PROPS) {
-    const buf = await readFile(join(ROOT, `game/assets/props/${name}.glb`));
+    const buf = await readFile(join(ROOT, `gym/assets/props/${name}.glb`));
     props[name] = buf.toString('base64');
     propBytes += buf.length;
   }
 
   // The shell's markup and styles, lifted straight out of the served page so
   // the two cannot drift.
-  const page = await readFile(join(ROOT, 'game/index.html'), 'utf8');
+  const page = await readFile(join(ROOT, 'gym/index.html'), 'utf8');
   const style = page.match(/<style>([\s\S]*?)<\/style>/)[1];
   const body = page.match(/<body>([\s\S]*?)<script type="importmap">/)[1];
 

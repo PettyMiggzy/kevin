@@ -20,7 +20,7 @@ import { promisify } from 'node:util';
 
 const run = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const DIR = join(ROOT, 'game/assets/props');
+const DIR = join(ROOT, 'gym/assets/props');
 const RAW = join(DIR, 'raw');
 const CLI = join(ROOT, 'node_modules/.bin/gltf-transform');
 
