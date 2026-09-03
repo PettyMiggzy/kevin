@@ -284,6 +284,7 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
     error ReservedTier();
     error LengthMismatch();
     error AmountExceedsRecoverable(uint256 requested, uint256 available);
+    error NotRescuable();
 
     // -------------------------------------------------------------------
     // Construction
@@ -446,6 +447,11 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
         effectiveBalanceOf[msg.sender] = 0;
         totalEffectiveSupply -= eff;
 
+        // Zeroed rather than left stale: with no stake there is no boost to
+        // report, and any later action re-derives it from the NFTs, which are
+        // deliberately untouched here.
+        appliedBoostBps[msg.sender] = 0;
+
         emit EmergencyWithdrawn(msg.sender, amount, forfeited);
         stakingToken.safeTransfer(msg.sender, amount);
     }
@@ -588,8 +594,15 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
         if (reward > available) revert RewardNotFunded(reward, available);
 
         uint256 remaining = periodFinish - block.timestamp;
-        uint256 rate = rewardRate + reward / remaining;
-        if (rate == 0) revert RewardTooSmall();
+
+        // The bump must be checked, not the total. `rewardRate` is already
+        // non-zero here, so testing the sum is dead code: a top-up smaller
+        // than the number of seconds left divides to zero, leaves the rate
+        // exactly where it was, and yet still commits the tokens — which
+        // strands them here forever, emitted to nobody and no longer free.
+        uint256 bump = reward / remaining;
+        if (bump == 0) revert RewardTooSmall();
+        uint256 rate = rewardRate + bump;
 
         rewardsCommitted += reward;
         rewardRate = rate;
@@ -686,6 +699,20 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
      */
     function rescueERC721(IERC721 token, uint256 tokenId, address to) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
+
+        // `transferFrom(address,address,uint256)` is the SAME 4-byte selector
+        // on ERC-721 and ERC-20. Without this guard the owner can point this
+        // function at the staking token, pass an AMOUNT where a tokenId is
+        // expected, and call
+        // `stakingToken.transferFrom(address(this), to, amount)` — which
+        // succeeds on every ERC-20 that skips the allowance check when
+        // `from == msg.sender` (DSToken/DAI-shaped tokens and many others),
+        // draining 100% of staked principal straight past the reserve
+        // arithmetic in `recoverERC20`. ERC-20s leave through `recoverERC20`
+        // or they do not leave.
+        if (address(token) == address(stakingToken) || address(token) == address(rewardToken)) {
+            revert NotRescuable();
+        }
         if (address(token) == address(crew) && nftDepositor[tokenId] != address(0)) {
             revert NotDepositor(tokenId);
         }

@@ -45,7 +45,7 @@ contract Configure is Script {
     /// @dev Split out from `run` so a test can parse a real fixture and a test
     ///      can apply it to a real pool, rather than the deploy path being the
     ///      one piece of this repo nobody ever executes.
-    function readPlan(string memory json) public view returns (Plan memory plan) {
+    function readPlan(string memory json) public pure returns (Plan memory plan) {
         plan.tierIds = vm.parseJsonUintArray(json, ".tierIds");
         plan.tierBps = vm.parseJsonUintArray(json, ".tierBps");
         plan.tierLabels = vm.parseJsonStringArray(json, ".tierLabels");

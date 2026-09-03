@@ -786,6 +786,27 @@ contract KevinStakingTest is Test {
         assertEq(staking.earned(alice), 0, "rewards gone");
     }
 
+    /// @dev A bailed-out position must not keep reporting a boost it no longer
+    ///      has any stake to apply, and must re-derive it if the holder returns.
+    function test_EmergencyWithdrawClearsTheReportedBoostAndItComesBack() public {
+        _mintCrew(alice, 1);
+        _setTierBoost(1, 5_000);
+        _setTier(1, 1);
+        _stake(alice, STAKE);
+        vm.prank(alice);
+        staking.stakeNfts(_ids(1));
+        assertEq(staking.appliedBoostBps(alice), 5_000);
+
+        vm.prank(alice);
+        staking.emergencyWithdraw();
+        assertEq(staking.appliedBoostBps(alice), 0, "stale boost left on an empty position");
+
+        // The NFT never moved, so staking again picks the boost straight back up.
+        _stake(alice, STAKE);
+        assertEq(staking.appliedBoostBps(alice), 5_000, "boost did not come back");
+        assertEq(staking.effectiveBalanceOf(alice), (STAKE * 15_000) / 10_000);
+    }
+
     function test_EmergencyWithdrawWorksWhileDepositsArePaused() public {
         _stake(alice, STAKE);
         _fund(REWARD);

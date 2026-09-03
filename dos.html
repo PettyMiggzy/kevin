@@ -340,7 +340,7 @@ var COLS = 80, ROWS = 25;
 function layout(){
   narrow = window.innerWidth < 660;
   COLS = narrow ? 40 : 80;
-  ROWS = narrow ? 26 : 25;
+  ROWS = 25;
 
   var padx = narrow ? 0.75 : 1.8;
   var pady = narrow ? 2.4  : 3.1;
@@ -437,7 +437,7 @@ var TICKERS = [
   { s:'SPTL',  avg:'0.04120000', last:'0.00097400', pc:'-97.6%',  val:'$  11.83' },
   { s:'WAGE',  avg:'1.88000000', last:'0.21400000', pc:'-88.6%',  val:'$  27.41' },
   { s:'MOPX',  avg:'0.00311000', last:'0.00004120', pc:'-98.7%',  val:'$   3.06' },
-  { s:'LAMBO', avg:'12.4000000', last:'0.83000000', pc:'-93.3%',  val:'$  19.92' },
+  { s:'LAMBO', avg:'12.40000000',last:'0.83000000', pc:'-93.3%',  val:'$  19.92' },
   { s:'SLEEP', avg:'0.75000000', last:'0.00000000', pc:'-100.0%', val:'$   0.00' },
   { s:'CRNCH', avg:'0.09800000', last:'0.01130000', pc:'-88.5%',  val:'$   8.60' }
 ];
@@ -452,16 +452,17 @@ var SHIFTS = [
   { d:'SUN', t:'10:00 - 18:00', n:'DEEP CLEAN. OIL CHANGE.' }
 ];
 
-var PLAN = [
-  ' ROBIN PLAN:',
-  '',
-  '   {g|[X]} LAUNCH',
-  '   {g|[X]} MOON',
-  '   {g|[X]} LAMBO',
-  '   [ ] SLEEP',
-  '',
-  ' {dim|three of four. sleep is later.}'
-];
+function planLines(){
+  return [
+    ' ROBIN PLAN:',
+    '',
+    '   {g|[X]} LAUNCH',
+    '   {g|[X]} MOON',
+    '   {g|[X]} LAMBO',
+    '   [ ] SLEEP' + (narrow ? '      ' : '            ') + '{dim|<- later}',
+    ''
+  ];
+}
 
 /* ------------------------------------------------------------- op script */
 function CLS(){ return ['cls']; }
@@ -529,8 +530,7 @@ function sceneRota(){
   var ops = [CLS(), W(380), CMD('ROTA.EXE'), P('', 90)];
   if(narrow){
     var ws = [5, 13, 9];
-    ops.push(P('{hi|ROTA v2.1  WEEK 37  EMP #0047}', 260));
-    ops.push(P('', 90));
+    ops.push(P('{hi|ROTA v2.1  WEEK 37  EMP #0047}', 300));
     ops.push(P(TOP(ws), TBL));
     ops.push(P(row(ws, [{t:'DAY',c:'hi'},{t:'SHIFT',c:'hi'},{t:'STATION',c:'hi'}]), TBL));
     ops.push(P(MID(ws), TBL));
@@ -572,7 +572,7 @@ function sceneRota(){
     ops.push(P('  DAYS OFF        : {hi|0}', 460));
     ops.push(P('  CLASH RESOLVED  : {hi|LAUNCH MOVED TO 00:05. FRYER UNAFFECTED.}', 3200));
   }
-  ops.push(P('', 60));
+  if(!narrow) ops.push(P('', 60));
   ops.push(P('C:\\>', 900));
   return flat(ops);
 }
@@ -581,9 +581,8 @@ function sceneBags(){
   var ops = [CMD('CLS'), CLS(), W(320), CMD('BAGS.EXE'), P('', 90)];
   var i;
   if(narrow){
-    var ws = [8, 10, 8];
+    var ws = [8, 10, 9];
     ops.push(P('{hi|PORTFOLIO 1.03    WIFI: OK}', 260));
-    ops.push(P('', 90));
     ops.push(P(TOP(ws), TBL));
     ops.push(P(row(ws, [{t:'TICKER',c:'hi'},{t:'LAST',c:'hi'},{t:'CHANGE',c:'hi'}]), TBL));
     ops.push(P(MID(ws), TBL));
@@ -646,14 +645,14 @@ function sceneBags(){
     ops.push(T('  Down 94.8 percent. My shift starts at four.', 44));
   }
   ops.push(W(3000));
-  ops.push(P('', 60));
+  if(!narrow) ops.push(P('', 60));
   ops.push(P('C:\\>', 800));
   return flat(ops);
 }
 
 function sceneClose(){
   var ops = [CMD('CLS'), CLS(), W(320), CMD('TYPE PLAN.TXT'), P('', 120)];
-  var board = boxed(narrow ? 32 : 38, PLAN, narrow ? 1 : 2);
+  var board = boxed(narrow ? 32 : 38, planLines(), narrow ? 1 : 2);
   board.forEach(function(l){ ops.push(P(l, 130)); });
   ops.push(P('', 1700));
   ops.push(CMD('KEVIN.EXE'));
