@@ -70,63 +70,63 @@ export const STICKERS = [
   {
     slug: 'wagmi', src: '01-hero-portrait.jpg', word: 'WAGMI',
     edit: 'Dress him in a red and yellow fast-food crew uniform with a matching visor cap, giving a big thumbs up with one hand. Add the word "WAGMI" in huge bold black cartoon letters across the bottom of the image',
-    action: 'He pumps his thumbs-up hand up and down and bounces on his feet, grinning wider',
+    action: 'His WHOLE BODY bounces up and down on his feet with the beat, head bobbing, torso twisting side to side, hood and dreadlocks swinging with the motion, thumb pumping. Everything moves together — head, body, arms, legs',
   },
   {
     slug: 'gm', src: '01-hero-portrait.jpg', word: 'GM',
     edit: 'Give him a big steaming white coffee mug held in both hands, eyes half closed and sleepy, hair messy. Add the word "GM" in huge bold black cartoon letters across the bottom',
-    action: 'He slowly lifts the mug, takes a sip, and his eyes blink open wider, steam curling upward',
+    action: 'His WHOLE BODY sags and sways sleepily, head lolling forward then jerking back up, shoulders rising and falling with a huge yawn, torso rocking, dreadlocks swinging heavily. Then he lifts the mug with both arms and his whole body leans into the sip',
   },
   {
     slug: 'lfg', src: '01-hero-portrait.jpg', word: 'LFG',
     edit: 'Both fists thrown up in the air, mouth wide open mid-shout, eyes blazing with excitement. Add the word "LFG" in huge bold black cartoon letters across the bottom',
-    action: 'He punches both fists up and down repeatedly, jumping, shouting',
+    action: 'He JUMPS — whole body leaving the ground, legs kicking, torso twisting, head thrown back, hood and dreadlocks flying up, both fists punching the air, then lands in a squash and springs again. Full body jump, not just arms',
   },
   {
     slug: 'buy', src: '01-hero-portrait.jpg', word: 'BUY',
     edit: 'He is slamming his hand down on an enormous glossy green arcade BUY button on a stand in front of him. Add the word "BUY" in huge bold black cartoon letters across the bottom',
-    action: 'He slams his hand onto the green button over and over, the button squashing under each hit',
+    action: 'His WHOLE BODY rears back then slams forward onto the button, torso folding, legs bracing, head snapping down with the hit, dreadlocks whipping forward, whole frame recoiling on impact, then rearing back to do it again',
   },
   {
     slug: 'send-it', src: '01-hero-portrait.jpg', word: 'SEND IT',
     edit: 'Glowing bright red laser beams shooting from both of his eyes, leaning forward aggressively, mouth open in a yell. Add the words "SEND IT" in huge bold black cartoon letters across the bottom',
-    action: 'The laser beams flare brighter and sweep sideways as he leans further into the camera',
+    action: 'His WHOLE BODY leans hard into the camera, torso pushing forward, legs planting and sliding, head lowering, dreadlocks streaming backward from the force, whole frame shaking with the beams firing',
   },
   {
     slug: 'hodl', src: '09-eating-candle.jpg', word: 'HODL',
     edit: 'He is hugging the giant green candlestick bar tightly with both arms wrapped around it, eyes clenched shut, refusing to let go. Add the word "HODL" in huge bold black cartoon letters across the bottom',
-    action: 'He squeezes the candle tighter and shakes his head, clinging harder',
+    action: 'His WHOLE BODY clenches around the candle, torso squeezing tighter, legs gripping, head shaking violently side to side in refusal, dreadlocks whipping, whole frame trembling with the effort',
   },
   {
     slug: 'ngmi', src: '01-hero-portrait.jpg', word: 'NGMI',
     edit: 'He is pointing straight at the viewer with one hand and laughing hard, head tipped back, other hand on his belly. Add the word "NGMI" in huge bold black cartoon letters across the bottom',
-    action: 'He points repeatedly at the camera while laughing, shoulders bouncing',
+    action: 'His WHOLE BODY rocks backward laughing, torso folding and unfolding, head tipping back then snapping forward to point again, shoulders heaving, legs unsteady, dreadlocks swinging with every laugh',
   },
   {
     slug: 'rekt', src: '01-hero-portrait.jpg', word: 'REKT',
     overlay: true,
     edit: 'He is flat on his back on the ground, limbs sprawled out, both eyes replaced with simple black X shapes, tongue lolling out. Do not add any text or lettering anywhere in the image',
-    action: 'He twitches once, a leg flops, then he goes still',
+    action: 'His WHOLE BODY twitches and spasms once on the ground, a leg kicking up and flopping down, torso jerking, head rolling to the side, tongue flopping, then everything goes limp and still',
   },
   {
     slug: 'wen', src: '01-hero-portrait.jpg', word: 'WEN',
     edit: 'He is tapping an oversized wristwatch on his wrist impatiently, one eyebrow raised, mouth a flat line. Add the word "WEN" in huge bold black cartoon letters across the bottom',
-    action: 'He taps the watch face repeatedly and looks up at the camera, tapping his foot',
+    action: 'His WHOLE BODY leans in impatiently then rocks back, hip cocking, foot tapping fast enough to shake his whole frame, head tilting and snapping to the camera, shoulders shrugging, dreadlocks bouncing',
   },
   {
     slug: 'pump-it', src: '10-candle-summit.jpg', word: 'PUMP IT',
     edit: 'He is riding the giant green candlestick like a rocket, arms raised in triumph, cape of red hair streaming behind him. Add the words "PUMP IT" in huge bold black cartoon letters across the bottom',
-    action: 'The candle surges upward beneath him, wind streaking past, his arms punching the air',
+    action: 'His WHOLE BODY rides upward with the candle, legs bending and straightening to absorb the surge, torso arching back, head thrown up, arms punching the sky, hood and dreadlocks streaming down behind him in the wind',
   },
   {
     slug: 'printer-go-brrr', src: '08-money-printer.jpg', word: 'BRRRR',
     edit: 'Cash exploding out of the money machine in a huge spray, him leaning back with both arms behind his head, feet up, laughing. Add the word "BRRRR" in huge bold black cartoon letters across the bottom',
-    action: 'Cash sprays faster and faster out of the machine, notes fluttering everywhere, him rocking back laughing',
+    action: 'His WHOLE BODY rocks back in the chair laughing, torso heaving, legs kicking up and down, head tipping back, dreadlocks swinging, the chair rocking under him as cash sprays everywhere',
   },
   {
     slug: 'ceo-of-chaos', src: '08-money-printer.jpg', word: 'CEO OF CHAOS',
     edit: 'Put a golden crown on his head and a royal fur-trimmed cape on his shoulders, sitting back like a king on the office chair, fingers steepled. Add the words "CEO OF CHAOS" in bold black cartoon letters across the bottom',
-    action: 'He leans slowly back in the chair, steepling his fingers, crown glinting, giving a slow satisfied nod',
+    action: 'His WHOLE BODY settles back into the throne with authority, torso reclining, shoulders rolling, head tilting up and giving a slow deliberate nod, cape and dreadlocks shifting with the movement, fingers steepling',
   },
 ];
 
