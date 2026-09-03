@@ -1,0 +1,73 @@
+<!doctype html><meta charset="utf-8">
+<title>Kevin's Gym — render style test</title>
+<!--
+  Proof that the 2D cartoon look survives in real-time 3D on a phone.
+
+  Two techniques do the work:
+    1. MeshToonMaterial with a 3-step gradient map, sampled NEAREST. Smooth
+       falloff is what makes 3D read as 3D; hard steps are what make it read as
+       a drawing.
+    2. Inverted-hull outlines — each mesh is drawn twice, the second copy with
+       its verts pushed along their normals and only backfaces rendered, in
+       near-black. That is what produces the thick black line the art has.
+
+  Known limit: the hull trick leaves gaps at hard corners on boxes, because
+  adjacent faces have divergent normals so the shell splits. Rounded geometry
+  is clean. Fix is either bevelled geometry or a post-process edge pass.
+-->
+<style>html,body{margin:0;background:#FFE500;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js"}}</script>
+<script type="module">
+import * as T from 'three';
+const W=900,H=600;
+const renderer = new T.WebGLRenderer({antialias:true});
+renderer.setSize(W,H); renderer.setPixelRatio(1);
+document.body.appendChild(renderer.domElement);
+
+const scene = new T.Scene(); scene.background = new T.Color('#FFE500');
+const cam = new T.PerspectiveCamera(45, W/H, 0.1, 100);
+cam.position.set(0, 1.9, 6.4);
+
+// flat cel ramp — hard steps, no smooth falloff. this is what reads as cartoon.
+const ramp = new T.DataTexture(new Uint8Array([88,88,88,255, 200,200,200,255, 255,255,255,255]), 3, 1, T.RGBAFormat);
+ramp.needsUpdate = true; ramp.minFilter = T.NearestFilter; ramp.magFilter = T.NearestFilter;
+
+scene.add(new T.AmbientLight(0xffffff, 0.6));
+const key = new T.DirectionalLight(0xffffff, 1.05); key.position.set(3,5,4); scene.add(key);
+
+// INVERTED HULL outline: clone the mesh, push verts along normals, draw backfaces black.
+function outlined(geo, color, thickness){
+  const g = new T.Group();
+  g.add(new T.Mesh(geo, new T.MeshToonMaterial({color, gradientMap: ramp})));
+  g.add(new T.Mesh(geo, new T.ShaderMaterial({
+    uniforms:{ t:{value:thickness} },
+    vertexShader:`uniform float t; void main(){
+      vec3 p = position + normalize(normal) * t;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(p,1.0); }`,
+    fragmentShader:'void main(){ gl_FragColor = vec4(0.043,0.043,0.043,1.0); }',
+    side: T.BackSide,
+  })));
+  return g;
+}
+
+const head = outlined(new T.SphereGeometry(1.05, 32, 24), '#E8232B', 0.06);
+head.position.set(-1.7, 2.1, 0); scene.add(head);
+const body = outlined(new T.CapsuleGeometry(0.62, 0.9, 8, 20), '#E8232B', 0.055);
+body.position.set(-1.7, 0.55, 0); scene.add(body);
+
+const bar = outlined(new T.CylinderGeometry(0.09,0.09,2.3,16), '#D5DAE2', 0.045);
+bar.rotation.z = Math.PI/2; bar.position.set(2.0, 1.3, 0); scene.add(bar);
+for (const dx of [-0.9, 0.9]) {
+  const w = outlined(new T.CylinderGeometry(0.55,0.55,0.36,22), '#2B2F38', 0.05);
+  w.rotation.z = Math.PI/2; w.position.set(2.0+dx, 1.3, 0); scene.add(w);
+}
+const bench = outlined(new T.BoxGeometry(2.4,0.28,0.9), '#E8232B', 0.05);
+bench.position.set(0.2, -0.1, 1.6); scene.add(bench);
+
+const floor = new T.Mesh(new T.PlaneGeometry(60,60), new T.MeshToonMaterial({color:'#C9BFAE', gradientMap:ramp}));
+floor.rotation.x = -Math.PI/2; floor.position.y = -0.62; scene.add(floor);
+
+cam.lookAt(0,1.2,0);
+renderer.render(scene, cam);
+window.__done = true;
+</script>
