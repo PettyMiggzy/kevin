@@ -44,7 +44,7 @@ window.KEVIN = {
   contract: null,                    // paste the CA here; copy button enables itself
   auction: { startsAt: null, ... },  // ISO-8601 with a timezone; drives the countdown
   burn: { wallet: null, receipts: [] },
-  pools: [ { key: 'weth', weight: 46 }, ... ],
+  pools: [ { key: 'weth', weight: 45 }, ... ],
 };
 ```
 

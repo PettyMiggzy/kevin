@@ -123,9 +123,9 @@ He launches on kekfun, on Robinhood Chain, against three pairs:
 
 | | | |
 |---|---|---|
-| **WETH** 46% | the plumbing | biggest slice, because the boring thing has to work |
-| **KEK** 36% | the laugh | locked by the pad at a 10% floor |
-| **GME** 18% | the point | smallest slice, loudest joke |
+| **WETH** 45% | the plumbing | biggest slice, because the boring thing has to work |
+| **KEK** 40% | the laugh | locked by the pad at a 10% floor |
+| **GME** 15% | the point | smallest slice, loudest joke |
 
 A GME pool on Robinhood's own chain. He walks into their headquarters with a
 briefcase that has his name on it and he does not explain why.

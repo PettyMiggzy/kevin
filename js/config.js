@@ -71,7 +71,7 @@ window.KEVIN = {
       key: 'weth',
       ticker: 'WETH',
       nickname: 'The Plumbing',
-      weight: 46,
+      weight: 45,
       blurb:
         "The honest one. It doesn't believe in anything — it's the pipe, the fee, the wrapped-up unit of actually getting somewhere. Belief without settlement is a screenshot.",
       note: 'The biggest slice, because the boring thing has to work first.',
@@ -80,7 +80,7 @@ window.KEVIN = {
       key: 'kek',
       ticker: 'KEK',
       nickname: 'The Laugh',
-      weight: 36,
+      weight: 40,
       blurb:
         'The oldest exit. Kek is the sound the storeroom makes when it agrees with you — the laugh in the walk-in freezer, at 2am, when the chart does the thing.',
       note: 'Locked by the pad at a 10% minimum. This one is not going anywhere.',
@@ -89,7 +89,7 @@ window.KEVIN = {
       key: 'gme',
       ticker: 'GME',
       nickname: 'The Point',
-      weight: 18,
+      weight: 15,
       blurb:
         'Not a joke. Flatter than that. A GME pool on Robinhood Chain, opened by a fry cook who walked in with a briefcase that had his name on it and did not explain why.',
       note: 'The smallest slice. The loudest joke. He is not discussing it.',

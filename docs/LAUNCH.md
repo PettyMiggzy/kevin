@@ -47,7 +47,7 @@ keep it that way until each value is real.
 - [ ] `burn.wallet` — **publish this before the auction opens**, not after
 - [ ] `contract` — the moment the token address exists
 - [ ] `links.chart` — once it's graduated and trading
-- [ ] `pools[].weight` — only if the composition changes from 46 / 36 / 18
+- [ ] `pools[].weight` — only if the composition changes from 45 / 40 / 15
 
 ## 4. Brand accounts
 
