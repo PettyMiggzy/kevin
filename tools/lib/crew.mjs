@@ -473,3 +473,23 @@ export function crewGrid(t) {
   }
   return { id: t.id, w: c.w, h: c.h, palette, cells, traits: t };
 }
+
+/**
+ * Kevin himself. Not a roll — he is the player, so his traits are fixed and he
+ * is never minted into the collection. Gym vest on purpose: the whole product
+ * is watching a body change, and a crew shirt hides the body.
+ */
+export const KEVIN = {
+  id: 0,
+  crew: 'Kevin Red',
+  hood: '#E8232B',
+  shirt: 'Gym Vest',
+  shirtColor: '#F2F2F2',
+  cap: 'Visor',
+  eyes: 'Normal',
+  mouth: 'Grin',
+  face: 'None',
+  extra: 'None',
+  background: 'Brand Yellow',
+  backgroundColor: '#FFE500',
+};

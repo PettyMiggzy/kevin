@@ -40,6 +40,17 @@ export const PROPS = [
   ['bucket', 'an upturned plastic mop bucket'],
   ['speaker', 'a chunky square gym wall speaker'],
   ['gym-mirror', 'a large rectangular wall mirror with a simple frame'],
+  // Second pass: enough machines to fill zones rather than dot a floor.
+  ['lat-pulldown', 'a lat pulldown machine with a seat, a high pulley and a long straight bar'],
+  ['leg-press', 'an angled leg press machine with a padded seat and a weight sled'],
+  ['cable-machine', 'a dual cable crossover machine, two tall towers with pulleys and handles'],
+  ['rowing-machine', 'a rowing machine with a sliding seat, a rail and a handle'],
+  ['pullup-rig', 'a black steel pull-up rig frame with a straight overhead bar'],
+  ['kettlebell', 'a single cast iron kettlebell with a thick handle'],
+  ['medicine-ball', 'a heavy textured medicine ball'],
+  ['punching-bag', 'a heavy punching bag hanging from a black steel stand'],
+  ['gym-clock', 'a large round wall clock with a plain white face and black hands'],
+  ['towel-bin', 'an open topped laundry bin with rolled white towels in it'],
 ];
 
 const args = process.argv.slice(2);

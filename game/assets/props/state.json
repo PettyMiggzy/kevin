@@ -58,5 +58,55 @@
     "prompt": "a large rectangular wall mirror with a simple frame",
     "id": "77c44f88-5a62-4be9-8b10-d75753d41843",
     "at": "2026-09-03T07:16:44.384Z"
+  },
+  "lat-pulldown": {
+    "prompt": "a lat pulldown machine with a seat, a high pulley and a long straight bar",
+    "id": "4707e371-2716-4d4d-b909-50bf96910658",
+    "at": "2026-09-03T09:06:00.094Z"
+  },
+  "leg-press": {
+    "prompt": "an angled leg press machine with a padded seat and a weight sled",
+    "id": "3ab95bd2-bb33-4471-b352-5d407f19e66e",
+    "at": "2026-09-03T09:06:26.556Z"
+  },
+  "cable-machine": {
+    "prompt": "a dual cable crossover machine, two tall towers with pulleys and handles",
+    "id": "b6ebc7ce-414f-406f-a74f-ef01ba573fac",
+    "at": "2026-09-03T09:06:53.281Z"
+  },
+  "rowing-machine": {
+    "prompt": "a rowing machine with a sliding seat, a rail and a handle",
+    "id": "bd3d019b-c95b-446c-8333-a8e23913b01c",
+    "at": "2026-09-03T09:07:09.182Z"
+  },
+  "pullup-rig": {
+    "prompt": "a black steel pull-up rig frame with a straight overhead bar",
+    "id": "f7da74bf-2443-4e54-ab02-8f8f173a5ce0",
+    "at": "2026-09-03T09:07:19.903Z"
+  },
+  "kettlebell": {
+    "prompt": "a single cast iron kettlebell with a thick handle",
+    "id": "b50cba7d-bf50-45b8-bd1b-158b7821e92e",
+    "at": "2026-09-03T09:07:40.936Z"
+  },
+  "medicine-ball": {
+    "prompt": "a heavy textured medicine ball",
+    "id": "371cae75-06f7-435b-bc14-7cf7d26a70e0",
+    "at": "2026-09-03T09:08:02.244Z"
+  },
+  "punching-bag": {
+    "prompt": "a heavy punching bag hanging from a black steel stand",
+    "id": "ae32f665-2efe-482a-89bd-21b8b8129110",
+    "at": "2026-09-03T09:08:02.744Z"
+  },
+  "gym-clock": {
+    "prompt": "a large round wall clock with a plain white face and black hands",
+    "id": "0463ae04-035e-4033-8f36-0c27be92143b",
+    "at": "2026-09-03T09:08:03.305Z"
+  },
+  "towel-bin": {
+    "prompt": "an open topped laundry bin with rolled white towels in it",
+    "id": "4bcfce5d-cd02-462b-8c35-cda7e25973d7",
+    "at": "2026-09-03T09:08:03.918Z"
   }
 }

@@ -225,22 +225,41 @@ const STATIONS = [
   },
 ];
 
-// Scenery. No interaction, entirely there so the room is not three objects
-// floating in a beige void.
+// The room, laid out in zones the way a real gym is: free weights on the mat,
+// machines along the back wall, cardio to one side, everything else against the
+// walls. Scattering equipment evenly across a floor is what made it read as a
+// showroom rather than somewhere people train.
 const SCENERY = [
-  ['squat-rack', { x: -1.0, z: -5.6, width: 2.4, rotY: 0 }],
-  ['plate-tree', { x: 1.6, z: -5.4, width: 1.1, rotY: 0 }],
-  ['locker', { x: -8.2, z: 3.6, width: 1.0, rotY: Math.PI / 2 }],
-  ['locker', { x: -8.2, z: 4.9, width: 1.0, rotY: Math.PI / 2 }],
-  ['water-cooler', { x: 7.6, z: 3.4, width: 0.8, rotY: -Math.PI / 2 }],
-  ['protein-tub', { x: 7.4, z: 1.6, width: 0.6, rotY: 0.4 }],
-  ['bucket', { x: 6.4, z: 4.6, width: 0.7, rotY: -0.3 }],
-  // Loose on the floor: you step over these, so they get no collision. Left
-  // solid they quietly wall off the route to the bench.
-  ['dumbbell', { x: -2.6, z: 2.9, width: 0.6, rotY: 0.8, solid: false }],
-  ['dumbbell', { x: -2.0, z: 3.4, width: 0.6, rotY: -0.5, solid: false }],
+  // --- free weights, on the platform ---------------------------------------
+  ['squat-rack', { x: -1.2, z: -5.4, width: 2.6, rotY: 0 }],
+  ['plate-tree', { x: 1.4, z: -5.4, width: 1.1, rotY: 0 }],
+  ['plate-tree', { x: -3.4, z: -5.4, width: 1.1, rotY: 0 }],
+  ['pullup-rig', { x: -6.6, z: 0.4, width: 2.6, rotY: Math.PI / 2 }],
+  ['kettlebell', { x: -2.6, z: 2.9, width: 0.45, rotY: 0.8, solid: false }],
+  ['kettlebell', { x: -2.1, z: 3.4, width: 0.4, rotY: -0.5, solid: false }],
+  ['dumbbell', { x: -3.2, z: 3.2, width: 0.55, rotY: 0.3, solid: false }],
+  ['medicine-ball', { x: -6.0, z: 4.4, width: 0.5, rotY: 0, solid: false }],
+  ['medicine-ball', { x: -5.5, z: 4.7, width: 0.42, rotY: 1.1, solid: false }],
+
+  // --- machines, along the back wall ---------------------------------------
+  ['lat-pulldown', { x: 2.2, z: -5.2, width: 2.0, rotY: 0 }],
+  ['cable-machine', { x: 4.8, z: -5.3, width: 2.6, rotY: 0 }],
+  ['leg-press', { x: 7.4, z: -4.6, width: 2.8, rotY: -0.5 }],
+
+  // --- cardio, right side --------------------------------------------------
+  ['rowing-machine', { x: 7.2, z: -1.4, width: 2.4, rotY: -Math.PI / 2 }],
+  ['punching-bag', { x: 6.8, z: 0.9, width: 1.2, rotY: 0 }],
+
+  // --- everything else, against the walls ----------------------------------
+  ['locker', { x: -8.2, z: 3.4, width: 1.0, rotY: Math.PI / 2 }],
+  ['locker', { x: -8.2, z: 4.5, width: 1.0, rotY: Math.PI / 2 }],
+  ['locker', { x: -8.2, z: 5.6, width: 1.0, rotY: Math.PI / 2 }],
+  ['water-cooler', { x: 7.6, z: 3.6, width: 0.8, rotY: -Math.PI / 2 }],
+  ['towel-bin', { x: 6.4, z: 4.8, width: 0.9, rotY: -0.3 }],
+  ['protein-tub', { x: 7.5, z: 2.4, width: 0.5, rotY: 0.4, solid: false }],
+  ['bucket', { x: -7.6, z: -6.0, width: 0.6, rotY: -0.3, solid: false }],
   ['speaker', { x: -8.6, z: -6.2, width: 0.7, rotY: 0.7 }],
-  ['gym-mirror', { x: 8.7, z: -1.0, width: 3.2, rotY: -Math.PI / 2 }],
+  ['gym-clock', { x: -8.85, z: -4.0, width: 1.0, rotY: Math.PI / 2, y: 3.0, solid: false }],
 ];
 
 // --- Kevin ------------------------------------------------------------------
@@ -628,6 +647,7 @@ async function init() {
     if (!src) return null;
     const obj = normalise(src.clone(true));
     place(obj, opts);
+    if (opts.y) obj.position.y += opts.y;
     scene.add(obj);
     if (opts.solid !== false) solids.push({ x: opts.x, z: opts.z, r: opts.width * 0.42 });
     if (tag) obj.userData.station = tag;

@@ -14,7 +14,7 @@ import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
-import { roll, crewSVG, crewGrid, TABLES, SPACE } from './lib/crew.mjs';
+import { roll, crewSVG, crewGrid, KEVIN, TABLES, SPACE } from './lib/crew.mjs';
 import { withBrowser, svgToPng, contactSheet } from './lib/render.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -62,7 +62,9 @@ async function main() {
   // index per cell — so the whole collection ships as a single file.
   await writeFile(
     join(OUT, 'grids.json'),
-    JSON.stringify({ size: crew.length, crew: crew.map(crewGrid) }) + '\n'
+    // Kevin goes in at index 0 and is not part of the collection — he is the
+    // player, not a token. The minted crew follow him.
+    JSON.stringify({ size: crew.length, crew: [crewGrid(KEVIN), ...crew.map(crewGrid)] }) + '\n'
   );
 
   const svgs = crew.map((t) => crewSVG(t));

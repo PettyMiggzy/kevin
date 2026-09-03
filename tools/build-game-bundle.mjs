@@ -98,6 +98,8 @@ function wrap(src, spec) {
 const PROPS = [
   'bench', 'bucket', 'dumbbell-rack', 'dumbbell', 'gym-mirror', 'locker',
   'plate-tree', 'protein-tub', 'speaker', 'squat-rack', 'treadmill', 'water-cooler',
+  'lat-pulldown', 'leg-press', 'cable-machine', 'rowing-machine', 'pullup-rig',
+  'kettlebell', 'medicine-ball', 'punching-bag', 'gym-clock', 'towel-bin',
 ];
 
 /**
