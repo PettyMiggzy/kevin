@@ -121,7 +121,7 @@ export const STICKERS = [
     action: 'His WHOLE BODY rides upward with the candle, legs bending and straightening to absorb the surge, torso arching back, head thrown up, arms punching the sky, hood and dreadlocks streaming down behind him in the wind',
   },
   {
-    slug: 'printer-go-brrr', src: '08-money-printer.jpg', word: 'BRRRR', nudgeY: 0.20,
+    slug: 'printer-go-brrr', src: '08-money-printer.jpg', word: 'BRRRR',
     edit: 'Cash exploding out of the money machine in a huge spray, him leaning back with both arms behind his head, feet up, laughing. Add the word "BRRRR" in huge bold black cartoon letters across the bottom',
     action: 'His WHOLE BODY rocks back in the chair laughing, torso heaving, legs kicking up and down, head tipping back, dreadlocks swinging, the chair rocking under him as cash sprays everywhere',
   },
@@ -167,6 +167,13 @@ export const STICKERS = [
 const args = process.argv.slice(2);
 const has = (f) => args.includes(`--${f}`);
 const only = args.filter((a) => !a.startsWith('--'));
+
+// The pack is the animated character on transparent, nothing else. The word
+// plate stays in the code because it is useful for one-off promo art, but it is
+// off unless asked for — and note that with it off the crop has to lift, or the
+// generator's own baked-in lettering is left showing at the bottom of frame.
+const WORDS = has('text');
+const NO_TEXT_LIFT = 0.16;
 
 /**
  * Cut a raw 16:9 clip down to a Telegram video sticker.
@@ -401,7 +408,12 @@ async function main() {
       const raw = join(RAW, `${s.slug}.mp4`);
       if (!existsSync(raw)) { console.log(`  ${s.slug.padEnd(16)} no raw, skipped`); continue; }
       const webm = join(OUT, `${s.slug}.webm`);
-      const { size, crf, fps } = await toSticker(raw, webm, { word: s.word, wide: s.wide, start: s.start, nudgeY: s.nudgeY });
+      const { size, crf, fps } = await toSticker(raw, webm, {
+        word: WORDS ? s.word : null,
+        wide: s.wide,
+        start: s.start,
+        nudgeY: s.nudgeY ?? (WORDS ? 0 : NO_TEXT_LIFT),
+      });
       await derive(webm, s.slug);
       console.log(`  ${s.slug.padEnd(16)} ${(size / 1024).toFixed(0).padStart(4)}KB (crf ${crf}${fps < 30 ? `, ${fps}fps` : ''})`);
     }
@@ -475,7 +487,12 @@ async function main() {
       const mp4 = await retrieve(key, { model: MODEL, queue_id: id });
       const rawPath = await save(mp4, RAW, `${s.slug}.mp4`);
       const webm = join(OUT, `${s.slug}.webm`);
-      const { size, crf, fps } = await toSticker(rawPath, webm, { word: s.word, wide: s.wide, start: s.start, nudgeY: s.nudgeY });
+      const { size, crf, fps } = await toSticker(rawPath, webm, {
+        word: WORDS ? s.word : null,
+        wide: s.wide,
+        start: s.start,
+        nudgeY: s.nudgeY ?? (WORDS ? 0 : NO_TEXT_LIFT),
+      });
       await derive(webm, s.slug);
       console.log(`\r  ${s.slug.padEnd(16)} ${(size / 1024).toFixed(0).padStart(4)}KB (crf ${crf}${fps < 30 ? `, ${fps}fps` : ''})       `);
     } catch (e) {

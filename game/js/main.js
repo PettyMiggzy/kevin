@@ -794,8 +794,8 @@ function startWorkout(st) {
   $('#setStation').textContent = st.label;
   $('#setPips').innerHTML = Array.from({ length: REPS_PER_SET }, () => '<i></i>').join('');
   $('#setHint').innerHTML = matchMedia('(pointer:coarse)').matches
-    ? 'Tap the button in the band'
-    : 'Press <b>E</b> in the band';
+    ? 'Tap the button in the band · move to quit'
+    : 'Press <b>E</b> in the band · <b>Esc</b> to quit';
   refreshSetUI();
   $('#set').classList.add('on');
   $('#act').textContent = 'Rep';
@@ -852,6 +852,30 @@ function unmount() {
   kevin.group.position.y = 0;
   bar.visible = false;
   bells.forEach((b) => { b.visible = false; });
+}
+
+/**
+ * Bail out of a set. There was no way out at all: once mounted, movement is
+ * ignored and the only exit was five graded reps, so a mistaken press locked
+ * you to a machine for fifteen seconds. Nothing is banked — quitting a set
+ * should cost you the set, not pay for it.
+ */
+function abortSet() {
+  if (!set) return;
+  const st = set.station;
+  set = null;
+  for (const a of kevin.arms) a.rotation.x = 0;
+  for (const l of kevin.legs) l.rotation.x = 0;
+  kevin.torso.rotation.set(0, 0, 0);
+  unmount();
+  $('#set').classList.remove('on');
+  $('#result').classList.remove('on');
+  $('#act').textContent = st.stat === 'stamina' ? 'Run' : 'Lift';
+  // Step off the machine, or you are instantly back in range and the prompt
+  // reads as though nothing happened.
+  kevin.group.position.z += 1.5;
+  nearest = null;
+  play('ui');
 }
 
 function finishSet() {
@@ -1063,7 +1087,12 @@ $('#muteBtn').onclick = () => {
 };
 try { if (localStorage.getItem('kevin.gym.muted') === '1') { setMuted(true); $('#muteBtn').textContent = 'SOUND OFF'; } } catch { /* private mode */ }
 
-$('#shopBtn').onclick = () => { play('ui'); renderShop(); $('#shop').classList.add('on'); };
+$('#shopBtn').onclick = () => {
+  if (set) abortSet();          // it opened straight over the rep track otherwise
+  play('ui');
+  renderShop();
+  $('#shop').classList.add('on');
+};
 $('#closeShop').onclick = () => { play('ui'); $('#shop').classList.remove('on'); };
 $('#shopItems').onclick = (e) => {
   const id = e.target.closest('.buy')?.dataset.id;
@@ -1086,7 +1115,12 @@ addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   keys.add(k);
   if (k === 'e' || k === ' ') { input.act = true; e.preventDefault(); }
-  if (k === 'escape') $('#shop').classList.remove('on');
+  if (k === 'escape') {
+    if (set) abortSet();
+    else $('#shop').classList.remove('on');
+  }
+  // Trying to walk out of a set means you want out of the set.
+  if (set && ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) abortSet();
   readKeys();
 });
 addEventListener('keyup', (e) => { keys.delete(e.key.toLowerCase()); readKeys(); });
@@ -1117,6 +1151,7 @@ for (const ev of ['pointerup', 'pointercancel']) {
   });
 }
 function dragStick(e) {
+  if (set) abortSet();
   const r = stick.getBoundingClientRect();
   let dx = e.clientX - (r.left + r.width / 2);
   let dy = e.clientY - (r.top + r.height / 2);
