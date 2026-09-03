@@ -17,8 +17,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
-import { load, save, settle, workout, projectedLoss, DECAY_PER_DAY } from './save.js';
+import { load, save, settle, workout, projectedLoss, DECAY_PER_DAY, DAILY_GOAL } from './save.js';
 import { buildCrewBody, applyCrewMuscle } from './voxel.js';
+import { Set as RepSet, REPS_PER_SET, rankOf } from './reps.js';
+import { play, setMuted, isMuted } from './audio.js';
 
 const $ = (s) => document.querySelector(s);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -142,19 +144,22 @@ const STATIONS = [
   {
     id: 'bench', prop: 'bench', label: 'Bench press',
     x: -4.4, z: 1.4, width: 2.2, rotY: Math.PI / 2,
-    stat: 'muscle', gain: 4.2, coin: 12, seconds: 3.4,
+    stat: 'muscle', gain: 3.0, coin: 10,
+    sweep: 0.80, window: 0.115,          // slow sweep, tight band — heavy and precise
     lines: ['That is a set.', 'Chest day. Every day is chest day.', 'Two more than last time.'],
   },
   {
     id: 'rack', prop: 'dumbbell-rack', label: 'Dumbbells',
     x: -7.2, z: -4.4, width: 3.0, rotY: 0,
-    stat: 'muscle', gain: 2.6, coin: 8, seconds: 2.6,
+    stat: 'muscle', gain: 2.0, coin: 7,
+    sweep: 1.35, window: 0.175,          // quick and forgiving — the warm-up
     lines: ['Curls. For the girls. And for me.', 'Light weight.', 'I do this on my break as well.'],
   },
   {
     id: 'treadmill', prop: 'treadmill', label: 'Treadmill',
     x: 5.4, z: -3.6, width: 2.6, rotY: -Math.PI / 2,
-    stat: 'stamina', gain: 5.0, coin: 10, seconds: 4.0,
+    stat: 'stamina', gain: 3.6, coin: 9,
+    sweep: 1.75, window: 0.155,          // fastest sweep in the room
     lines: ['Cardio. Reluctantly.', 'I walk to work anyway.', 'This is my third shift today.'],
   },
 ];
@@ -169,8 +174,10 @@ const SCENERY = [
   ['water-cooler', { x: 7.6, z: 3.4, width: 0.8, rotY: -Math.PI / 2 }],
   ['protein-tub', { x: 7.4, z: 1.6, width: 0.6, rotY: 0.4 }],
   ['bucket', { x: 6.4, z: 4.6, width: 0.7, rotY: -0.3 }],
-  ['dumbbell', { x: -2.6, z: 2.9, width: 0.6, rotY: 0.8 }],
-  ['dumbbell', { x: -2.0, z: 3.4, width: 0.6, rotY: -0.5 }],
+  // Loose on the floor: you step over these, so they get no collision. Left
+  // solid they quietly wall off the route to the bench.
+  ['dumbbell', { x: -2.6, z: 2.9, width: 0.6, rotY: 0.8, solid: false }],
+  ['dumbbell', { x: -2.0, z: 3.4, width: 0.6, rotY: -0.5, solid: false }],
   ['speaker', { x: -8.6, z: -6.2, width: 0.7, rotY: 0.7 }],
   ['gym-mirror', { x: 8.7, z: -1.0, width: 3.2, rotY: -Math.PI / 2 }],
 ];
@@ -297,6 +304,49 @@ function makePlayer(gridIndex = 0) {
   return buildCrewBody(CREW.crew[gridIndex % CREW.crew.length], { material: mat });
 }
 
+// --- the rest of the crew ---------------------------------------------------
+// An empty gym reads as a tech demo. These are other minted crew members, each
+// on a loop, and they cost almost nothing: the same voxel builder, the same
+// shared material, no AI beyond a timer and a waypoint.
+
+const NPC_SPOTS = [
+  { x: -7.4, z: -3.2, ry: 0.9, mode: 'curl' },
+  { x: 3.2, z: -4.8, ry: -0.4, mode: 'press' },
+  { x: 7.0, z: 0.2, ry: -1.5, mode: 'idle' },
+  { x: -2.2, z: -3.4, ry: 2.6, mode: 'curl' },
+  { x: 6.2, z: 5.2, ry: 2.4, mode: 'idle' },
+  { x: -7.8, z: -1.6, ry: 1.6, mode: 'press' },
+];
+
+function makeNpc(grid, spot, mat) {
+  const body = buildCrewBody(grid, { material: mat });
+  body.group.position.set(spot.x, 0, spot.z);
+  body.group.rotation.y = spot.ry;
+  applyCrewMuscle(body, 0.15 + Math.random() * 0.6);
+  const phase = Math.random() * 10;
+  const rate = 0.6 + Math.random() * 0.5;
+
+  body.tick = (dt, now) => {
+    const t = now / 1000 * rate + phase;
+    if (spot.mode === 'curl') {
+      const p = Math.sin(t * 2.2) * 0.5 + 0.5;
+      for (const a of body.arms) a.rotation.x = -p * 1.5;
+      body.group.position.y = p * 0.03;
+    } else if (spot.mode === 'press') {
+      const p = Math.sin(t * 1.7) * 0.5 + 0.5;
+      for (const a of body.arms) a.rotation.x = -0.3 - p * 1.4;
+      body.torso.rotation.x = p * 0.1;
+    } else {
+      // Idling still moves. A motionless figure reads as a prop, not a person.
+      const b = Math.sin(t * 1.1);
+      body.group.position.y = Math.abs(b) * 0.02;
+      for (const a of body.arms) a.rotation.x = b * 0.12;
+      body.head.rotation.y = Math.sin(t * 0.4) * 0.4;
+    }
+  };
+  return body;
+}
+
 // --- boot -------------------------------------------------------------------
 
 const canvas = $('#c');
@@ -306,8 +356,11 @@ const props = new Map();
 const solids = [];                    // {x,z,r} circles the player cannot walk into
 
 const input = { f: 0, s: 0, act: false };
-let busy = null;                      // {station, until, then}
+let set = null;                       // the RepSet in progress, or null
 let nearest = null;
+let lastStep = 0;
+let resultTimer = null;
+const npcs = [];
 
 function fail(msg) {
   $('#err').textContent = msg;
@@ -346,6 +399,19 @@ async function init() {
   kevin.group.position.set(0, 0, 3.6);
   scene.add(kevin.group);
 
+  // Everyone shares one material, so the whole crew costs one shader.
+  if (CREW?.crew?.length > 1) {
+    const crewMat = toon('#FFFFFF', { vertexColors: true });
+    crewMat.userData.outlineParameters = { thickness: 0.010, color: [0, 0, 0], alpha: 1 };
+    NPC_SPOTS.forEach((spot, i) => {
+      const grid = CREW.crew[(i + 1) % CREW.crew.length];
+      const npc = makeNpc(grid, spot, crewMat);
+      scene.add(npc.group);
+      npcs.push(npc);
+      solids.push({ x: spot.x, z: spot.z, r: 0.42 });
+    });
+  }
+
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
 
@@ -370,7 +436,7 @@ async function init() {
     const obj = normalise(src.clone(true));
     place(obj, opts);
     scene.add(obj);
-    solids.push({ x: opts.x, z: opts.z, r: opts.width * 0.42 });
+    if (opts.solid !== false) solids.push({ x: opts.x, z: opts.z, r: opts.width * 0.42 });
     if (tag) obj.userData.station = tag;
     return obj;
   };
@@ -414,37 +480,162 @@ function onResize() {
 const SPEED = 4.2;
 const tmp = new THREE.Vector3();
 
+let shake = 0;
+
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const now = performance.now();
 
-  if (busy) {
-    // Working a station: hold position, animate the effort.
-    const t = (now - busy.start) / (busy.station.seconds * 1000);
-    const pump = Math.sin(t * Math.PI * 6) * 0.5 + 0.5;
-    if (busy.station.stat === 'muscle') {
-      for (const a of kevin.arms) a.rotation.x = -pump * 1.5;
-      kevin.group.position.y = pump * 0.06;
-    } else {
-      for (const a of kevin.arms) a.rotation.x = Math.sin(t * Math.PI * 14) * 0.9;
-      for (const l of kevin.legs) l.rotation.x = Math.sin(t * Math.PI * 14 + Math.PI) * 0.9;
-    }
-    if (t >= 1) finishWorkout();
-  } else {
-    move(dt, now);
-  }
+  if (set) tickSet(dt, now);
+  else move(dt, now);
 
-  // Chase camera, behind and above, easing in so it never snaps.
+  for (const n of npcs) n.tick(dt, now);
+
+  // Chase camera, behind and above, easing in so it never snaps. Pulls in a
+  // little during a set so the reps read bigger.
+  const close = set ? 0.72 : 1;
   const want = tmp.set(
     kevin.group.position.x,
-    kevin.group.position.y + 3.4,
-    kevin.group.position.z + 5.6
+    kevin.group.position.y + 3.4 * close,
+    kevin.group.position.z + 5.6 * close
   );
-  camera.position.lerp(want, 1 - Math.pow(0.0015, dt));
-  camera.lookAt(kevin.group.position.x, kevin.group.position.y + 1.25, kevin.group.position.z);
+  camera.position.lerp(want, 1 - Math.pow(set ? 0.004 : 0.0015, dt));
 
+  // Shake is a decaying impulse rather than a duration, so a perfect rep on top
+  // of a perfect rep stacks instead of restarting.
+  if (shake > 0.001) {
+    shake *= Math.pow(0.0009, dt);
+    camera.position.x += (Math.random() - 0.5) * shake;
+    camera.position.y += (Math.random() - 0.5) * shake;
+  } else shake = 0;
+
+  camera.lookAt(kevin.group.position.x, kevin.group.position.y + 1.25, kevin.group.position.z);
   effect.render(scene, camera);
 }
+
+// --- the set ----------------------------------------------------------------
+
+function tickSet(dt, now) {
+  const st = set.station;
+
+  if (set.armed) {
+    set.tick(dt);
+    $('#marker').style.left = `${set.pos * 100}%`;
+    if (set.expired) gradeRep(set.timeout());
+  }
+
+  // Kevin follows the marker: he lowers on the way out and drives on the way
+  // back, so the press lands at the bottom of a real movement rather than
+  // somewhere in a loop that ignores you.
+  const p = set.armed ? set.pos : 1;
+  if (st.stat === 'muscle') {
+    for (const a of kevin.arms) a.rotation.x = -0.4 - p * 1.25;
+    kevin.torso.rotation.x = p * 0.12;
+    kevin.group.position.y = -p * 0.06;
+  } else {
+    const run = Math.sin(now / 70) * 1.05;
+    kevin.legs[0].rotation.x = run;
+    kevin.legs[1].rotation.x = -run;
+    for (const a of kevin.arms) a.rotation.x = -run * 0.6;
+  }
+
+  if (input.act) { input.act = false; if (set.armed) gradeRep(set.hit()); }
+}
+
+function gradeRep(r) {
+  if (!r) return;
+  play(r.sound);
+  shake = r.shake;
+  floatText(r.combo >= 3 && r.grade !== 'miss' ? `${r.label} x${r.combo}` : r.label, r.grade);
+
+  const pips = $('#setPips').children;
+  if (pips[r.rep - 1]) pips[r.rep - 1].className = r.grade;
+  $('#track').animate(
+    [{ transform: 'translateX(0)' }, { transform: `translateX(${r.grade === 'miss' ? 6 : -3}px)` }, { transform: 'translateX(0)' }],
+    { duration: 130 }
+  );
+
+  setTimeout(() => {
+    if (!set) return;
+    set.nextRep();
+    if (set.done) finishSet();
+    else refreshSetUI();
+  }, 260);
+}
+
+function refreshSetUI() {
+  if (!set) return;
+  $('#setReps').textContent = `REP ${set.rep} / ${REPS_PER_SET}`;
+  const half = set.half * 100;
+  const c = set.target * 100;
+  $('#zone').style.left = `${c - half}%`;
+  $('#zone').style.width = `${half * 2}%`;
+  $('#zoneHot').style.left = `${c - half * 0.34}%`;
+  $('#zoneHot').style.width = `${half * 0.68}%`;
+}
+
+function startWorkout(st) {
+  set = new RepSet(st, state.stamina);
+  $('#prompt').classList.remove('on');
+  $('#setStation').textContent = st.label;
+  $('#setPips').innerHTML = Array.from({ length: REPS_PER_SET }, () => '<i></i>').join('');
+  $('#setHint').innerHTML = matchMedia('(pointer:coarse)').matches
+    ? 'Tap the button in the band'
+    : 'Press <b>E</b> in the band';
+  refreshSetUI();
+  $('#set').classList.add('on');
+  $('#act').textContent = 'Rep';
+  kevin.group.lookAt(st.x, kevin.group.position.y, st.z);
+  play('rack');
+}
+
+function finishSet() {
+  const st = set.station;
+  const sc = set.score();
+  set = null;
+
+  for (const a of kevin.arms) a.rotation.x = 0;
+  for (const l of kevin.legs) l.rotation.x = 0;
+  kevin.torso.rotation.x = 0;
+  kevin.group.position.y = 0;
+  $('#set').classList.remove('on');
+  $('#act').textContent = st.stat === 'stamina' ? 'Run' : 'Lift';
+
+  const before = rankOf(state.muscle).index;
+  const r = workout(state, st, Date.now(), sc.mult);
+  state.sessions = (state.sessions || 0) + 1;
+  state.bestCombo = Math.max(state.bestCombo || 0, sc.bestCombo);
+  save(state);
+  applyMuscle(kevin, state.muscle / 100);
+  refreshHud();
+
+  play(sc.flawless ? 'rank' : 'set');
+  shake = sc.flawless ? 0.55 : 0.2;
+
+  const title = sc.flawless ? 'FLAWLESS SET' : sc.clean ? 'CLEAN SET' : sc.misses >= 3 ? 'ROUGH SET' : 'SET DONE';
+  const gained = st.stat === 'muscle' ? r.gain : r.stam;
+  $('#resultTitle').textContent = title;
+  $('#resultBody').innerHTML =
+    `<span>+${gained.toFixed(1)}</span> ${st.stat} &nbsp;·&nbsp; <span>+${r.coin}</span> $KEVIN<br>` +
+    `${sc.perfects}/${REPS_PER_SET} perfect${sc.bestCombo > 1 ? ` · best chain ${sc.bestCombo}` : ''}<br>` +
+    `<small style="opacity:.7">${st.lines[Math.floor(Math.random() * st.lines.length)]}</small>`;
+  $('#result').classList.add('on');
+  clearTimeout(resultTimer);
+  resultTimer = setTimeout(() => $('#result').classList.remove('on'), 2600);
+
+  // A rank is the one thing worth interrupting for.
+  const after = rankOf(state.muscle).index;
+  if (after > before) {
+    setTimeout(() => {
+      play('rank');
+      toast(`${rankOf(state.muscle).name.toUpperCase()}<br><small>Rank up. Noted.</small>`, 3000);
+    }, 900);
+  }
+
+  nearest = null;
+}
+
+// --- movement ---------------------------------------------------------------
 
 function move(dt, now) {
   const len = Math.hypot(input.f, input.s);
@@ -459,7 +650,7 @@ function move(dt, now) {
     for (const [axis, d, limit] of [['x', nx, half.x], ['z', nz, half.z]]) {
       const was = p[axis];
       p[axis] = clamp(p[axis] + d, -limit, limit);
-      if (solids.some((s) => Math.hypot(p.x - s.x, p.z - s.z) < s.r + 0.45)) p[axis] = was;
+      if (solids.some((s) => Math.hypot(p.x - s.x, p.z - s.z) < s.r + 0.34)) p[axis] = was;
     }
 
     kevin.group.rotation.y = Math.atan2(nx, nz);
@@ -468,6 +659,7 @@ function move(dt, now) {
     kevin.legs[1].rotation.x = -walk;
     kevin.arms[0].rotation.x = -walk * 0.7;
     kevin.arms[1].rotation.x = walk * 0.7;
+    if (Math.sin(now / 110) > 0.97 && now - lastStep > 220) { play('step'); lastStep = now; }
   } else {
     const idle = Math.sin(now / 620) * 0.04;
     kevin.group.position.y = idle * 0.5;
@@ -487,7 +679,7 @@ function move(dt, now) {
     nearest = best;
     const p = $('#prompt');
     if (best) {
-      p.innerHTML = `${best.label} — <b>${matchMedia('(pointer:coarse)').matches ? 'tap LIFT' : 'press E'}</b>`;
+      p.innerHTML = `${best.label} — <b>${matchMedia('(pointer:coarse)').matches ? 'tap' : 'E'}</b> · ${REPS_PER_SET} reps`;
       p.classList.add('on');
       $('#act').textContent = best.stat === 'stamina' ? 'Run' : 'Lift';
     } else {
@@ -499,31 +691,20 @@ function move(dt, now) {
   input.act = false;
 }
 
-function startWorkout(st) {
-  busy = { station: st, start: performance.now() };
-  $('#prompt').classList.remove('on');
-  kevin.group.lookAt(st.x, kevin.group.position.y, st.z);
-}
+// --- floating numbers -------------------------------------------------------
+// Screen-space, over the character's head. In-scene text would cost a draw call
+// and alias; an absolutely-positioned div costs nothing and stays crisp.
 
-function finishWorkout() {
-  const st = busy.station;
-  busy = null;
-  for (const a of kevin.arms) a.rotation.x = 0;
-  for (const l of kevin.legs) l.rotation.x = 0;
-  kevin.group.position.y = 0;
-
-  const r = workout(state, st);
-  save(state);
-  applyMuscle(kevin, state.muscle / 100);
-  refreshHud();
-
-  const line = st.lines[Math.floor(Math.random() * st.lines.length)];
-  toast(
-    `${line}<br><small>+${(r.gain || r.stam).toFixed(1)} ${st.stat} · +${r.coin} $KEVIN` +
-    `${r.boosted ? ' · booster active' : ''}</small>`,
-    1900
-  );
-  nearest = null;
+const proj = new THREE.Vector3();
+function floatText(text, cls) {
+  proj.set(kevin.group.position.x, kevin.group.position.y + 2.2, kevin.group.position.z).project(camera);
+  const el = document.createElement('div');
+  el.className = `float ${cls}`;
+  el.textContent = text;
+  el.style.left = `${(proj.x * 0.5 + 0.5) * 100}%`;
+  el.style.top = `${(-proj.y * 0.5 + 0.5) * 100}%`;
+  $('#floaters').appendChild(el);
+  setTimeout(() => el.remove(), 1000);
 }
 
 // --- hud --------------------------------------------------------------------
@@ -546,6 +727,19 @@ function refreshHud() {
   set('#barStam', '#numStam', state.stamina);
   set('#barStreak', '#numStreak', state.streak, 14);
   $('#numCoin').textContent = Math.round(state.coin);
+
+  const rk = rankOf(state.muscle);
+  $('#rankName').textContent = rk.name;
+  $('#barRank').style.width = `${rk.progress * 100}%`;
+  $('#rankNext').textContent = rk.next
+    ? `${rk.toNext.toFixed(1)} to ${rk.next}`
+    : 'Top rank. There is nothing above this.';
+
+  const sets = state.goalDay === Math.floor(Date.now() / 86400000) ? (state.goalSets || 0) : 0;
+  const hit = sets >= DAILY_GOAL;
+  $('#goal').classList.toggle('done', hit);
+  $('#goalText').textContent = hit ? `Today done · ${sets} sets` : `Today · ${sets} of ${DAILY_GOAL} sets`;
+  $('#goalBar').style.width = `${Math.min(100, (sets / DAILY_GOAL) * 100)}%`;
 
   // The most important line on the screen. Everything else is decoration.
   const loss = projectedLoss(state);
@@ -591,18 +785,27 @@ function renderShop() {
   }).join('');
 }
 
-$('#shopBtn').onclick = () => { renderShop(); $('#shop').classList.add('on'); };
-$('#closeShop').onclick = () => $('#shop').classList.remove('on');
+$('#muteBtn').onclick = () => {
+  setMuted(!isMuted());
+  $('#muteBtn').textContent = isMuted() ? 'SOUND OFF' : 'SOUND ON';
+  try { localStorage.setItem('kevin.gym.muted', isMuted() ? '1' : '0'); } catch { /* private mode */ }
+  if (!isMuted()) play('ui');
+};
+try { if (localStorage.getItem('kevin.gym.muted') === '1') { setMuted(true); $('#muteBtn').textContent = 'SOUND OFF'; } } catch { /* private mode */ }
+
+$('#shopBtn').onclick = () => { play('ui'); renderShop(); $('#shop').classList.add('on'); };
+$('#closeShop').onclick = () => { play('ui'); $('#shop').classList.remove('on'); };
 $('#shopItems').onclick = (e) => {
   const id = e.target.closest('.buy')?.dataset.id;
   if (!id) return;
   const it = SHOP.find((s) => s.id === id);
-  if (!it || state.coin < it.cost || (it.can && !it.can(state))) return;
+  if (!it || state.coin < it.cost || (it.can && !it.can(state))) { play('deny'); return; }
   state.coin -= it.cost;
   it.apply(state);
   save(state);
   refreshHud();
   renderShop();
+  play('buy');
   toast(`${it.name}.<br><small>Bought. Noted.</small>`, 1800);
 };
 

@@ -43,7 +43,14 @@ const FRESH = {
   boosterUntil: 0,
   decaySlowUntil: 0,
   totalReps: 0,
+  goalDay: 0,
+  goalSets: 0,
+  bestCombo: 0,
+  sessions: 0,
 };
+
+/** Three sets a day. Low on purpose — the streak has to be easy to keep. */
+export const DAILY_GOAL = 3;
 
 const dayOf = (t) => Math.floor(t / DAY);
 
@@ -118,10 +125,17 @@ export function projectedLoss(s, now = Date.now()) {
   return s.muscle * (1 - Math.exp(-DECAY_PER_DAY * slowed));
 }
 
-/** Credit a set. Returns what changed, for the toast. */
-export function workout(s, station, now = Date.now()) {
+/**
+ * Credit a completed set.
+ *
+ * `quality` is how well the set was actually played — 0.25 for five misses,
+ * about 1.0 for a scrappy clean set, up to ~2.5 for five perfects. It is the
+ * whole reason the reps exist: without it every set pays the same and pressing
+ * the button well is decoration.
+ */
+export function workout(s, station, now = Date.now(), quality = 1) {
   const boosted = now < s.boosterUntil;
-  const mult = boosted ? 2 : 1;
+  const mult = (boosted ? 2 : 1) * quality;
   const gain = station.stat === 'muscle' ? station.gain * mult : 0;
   const stam = station.stat === 'stamina' ? station.gain * mult : 0;
   const coin = Math.round(station.coin * mult);
@@ -134,6 +148,10 @@ export function workout(s, station, now = Date.now()) {
   // The streak ticks once per calendar day, on any station. Keeping it must be
   // easy; the ambitious workout is a separate reward on top.
   const today = dayOf(now);
+  // Sets done today, for the daily goal. Reset when the day rolls over.
+  if (s.goalDay !== today) { s.goalDay = today; s.goalSets = 0; }
+  s.goalSets = (s.goalSets || 0) + 1;
+
   if (s.lastWorkoutDay !== today) {
     s.streak = s.lastWorkoutDay === today - 1 || s.lastWorkoutDay === 0 ? s.streak + 1 : 1;
     s.lastWorkoutDay = today;

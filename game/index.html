@@ -36,13 +36,14 @@
   .stat + .stat { margin-top: 6px; }
   .bar { height: 12px; border: 3px solid var(--ink); border-radius: 99px; background: #0002; overflow: hidden; }
   .bar > i { display: block; height: 100%; width: 0%; background: var(--red); transition: width .35s ease; }
+  .bar > i:not([style*="width"]), .bar > i[style*="width: 0%"] { background: transparent; }
   .stat b { font-size: 13px; min-width: 34px; text-align: right; }
   #wallet { padding: 10px 12px; text-align: right; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
   #wallet b { display: block; font-size: 19px; letter-spacing: 0; }
 
   /* --- the decay warning: the whole product lives here --------------------- */
   #warn {
-    position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 96px); left: 12px;
+    position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 168px); left: 12px;
     max-width: 300px; padding: 9px 12px; font-size: 12px; line-height: 1.45;
     background: var(--ink); color: var(--void); border-color: var(--void); box-shadow: 5px 5px 0 var(--red);
   }
@@ -102,9 +103,83 @@
   #boot.gone { display: none; }
   #err { font-size: 12px; color: var(--red); margin-top: 14px; max-width: 40ch; }
 
+  /* --- rank ---------------------------------------------------------------- */
+  #rank { margin-top: 9px; padding-top: 9px; border-top: 3px solid var(--ink); display: grid;
+    grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; }
+  #rank b { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  #rank .bar { grid-column: 1 / -1; height: 8px; }
+  #rank .bar > i { background: var(--ink); }
+  #rank small { grid-column: 1 / -1; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+
+  /* --- daily goal ---------------------------------------------------------- */
+  #goal { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+    padding: 8px 14px; min-width: 200px; text-align: center; }
+  #goal b { display: block; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 5px; }
+  #goal .bar { height: 9px; }
+  #goal.done { background: var(--ink); color: var(--void); border-color: var(--void); }
+  #goal.done .bar > i { background: var(--void); }
+
+  /* --- the set ------------------------------------------------------------- */
+  /* The track is the game. It sits low and centred, big enough to read with a
+     thumb over it, and nothing else is allowed to share that space. */
+  #set { position: absolute; left: 50%; bottom: 16%; transform: translateX(-50%) translateY(14px);
+    width: min(460px, 88vw); padding: 14px 16px 12px; opacity: 0; pointer-events: none;
+    background: var(--void); border: var(--edge) solid var(--ink); border-radius: 14px;
+    box-shadow: 6px 6px 0 var(--ink); transition: opacity .16s, transform .16s; }
+  #set.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #setHead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 9px;
+    font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+  #setHead b { font-size: 14px; }
+  #track { position: relative; height: 40px; margin: 0 7px; border: var(--edge) solid var(--ink); border-radius: 8px;
+    background: repeating-linear-gradient(90deg, #0000 0 9px, #0b0b0b12 9px 10px); }
+  #zone { position: absolute; top: 0; bottom: 0; background: var(--green); border-left: 3px solid var(--ink);
+    border-right: 3px solid var(--ink); box-sizing: border-box; }
+  #zoneHot { position: absolute; top: 0; bottom: 0; background: #A8F0B4; }
+  #marker { position: absolute; top: -9px; bottom: -9px; width: 14px; margin-left: -7px; background: var(--red);
+    border: 3px solid var(--ink); border-radius: 4px; box-shadow: 0 0 0 2px var(--void); }
+  #setHint { margin-top: 8px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; opacity: .75; text-align: center; }
+  #setPips { display: flex; gap: 6px; justify-content: center; margin-top: 8px; }
+  #setPips i { width: 26px; height: 8px; border: 3px solid var(--ink); border-radius: 99px; background: #0000; }
+  #setPips i.perfect { background: var(--green); }
+  #setPips i.good { background: var(--void); box-shadow: inset 0 0 0 2px var(--ink); }
+  #setPips i.miss { background: var(--red); }
+  body.touch #set { bottom: 25%; }
+
+  /* --- floating numbers ---------------------------------------------------- */
+  #floaters { position: absolute; inset: 0; overflow: hidden; }
+  .float { position: absolute; font: 700 22px/1 var(--mono); text-transform: uppercase; letter-spacing: .02em;
+    color: var(--void); -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill;
+    transform: translate(-50%, -50%); animation: rise 1s ease-out forwards; white-space: nowrap; }
+  .float.perfect { color: #A8F0B4; font-size: 28px; }
+  .float.miss { color: var(--red); }
+  @keyframes rise { to { transform: translate(-50%, -160%) scale(1.14); opacity: 0; } }
+
+  /* --- set result ---------------------------------------------------------- */
+  #result { position: absolute; left: 50%; top: 30%; transform: translate(-50%, -6px) ; padding: 16px 22px;
+    text-align: center; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
+    background: var(--ink); color: var(--void); border-color: var(--void); box-shadow: 6px 6px 0 var(--red); }
+  #result.on { opacity: 1; transform: translate(-50%, 0); }
+  #result b { display: block; font-size: 22px; text-transform: uppercase; letter-spacing: .03em; }
+  #resultBody { margin-top: 6px; font-size: 12px; line-height: 1.6; }
+  #resultBody span { color: #A8F0B4; }
+
+  #muteBtn { position: absolute; right: 12px; bottom: 62px; padding: 8px 12px; font: 700 11px/1 var(--mono);
+    letter-spacing: .06em; cursor: pointer; background: var(--void); }
+  body.touch #muteBtn { bottom: 200px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .float { animation-duration: .01s; }
+    #set, #result { transition: none; }
+  }
+
   @media (max-width: 560px) {
     #stats { max-width: none; }
-    #warn { right: 12px; max-width: none; }
+    #warn { right: 12px; max-width: none; top: calc(max(12px, env(safe-area-inset-top)) + 210px); }
+    /* On a phone the goal sat on top of the stat numbers. Put it under them. */
+    #goal { top: calc(max(12px, env(safe-area-inset-top)) + 156px); left: 12px; right: 12px;
+      transform: none; min-width: 0; }
+    #hud { flex-wrap: wrap; }
+    #wallet { text-align: left; }
   }
   @media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
 </style>
@@ -119,16 +194,32 @@
       <div class="stat"><span>Muscle</span><span class="bar"><i id="barMuscle"></i></span><b id="numMuscle">0</b></div>
       <div class="stat"><span>Stamina</span><span class="bar"><i id="barStam"></i></span><b id="numStam">0</b></div>
       <div class="stat"><span>Streak</span><span class="bar"><i id="barStreak"></i></span><b id="numStreak">0</b></div>
+      <div id="rank"><b id="rankName">New Starter</b><span class="bar"><i id="barRank"></i></span><small id="rankNext"></small></div>
     </div>
     <div id="wallet" class="panel">$KEVIN<b id="numCoin">0</b></div>
   </div>
 
+  <div id="goal" class="panel"><b id="goalText"></b><span class="bar"><i id="goalBar"></i></span></div>
   <div id="warn" class="panel"></div>
+  <div id="floaters"></div>
+
+  <div id="set">
+    <div id="setHead"><b id="setStation"></b><span id="setReps"></span></div>
+    <div id="track"><i id="zone"></i><s id="zoneHot"></s><u id="marker"></u></div>
+    <div id="setHint">Press <b>E</b> in the band</div>
+    <div id="setPips"></div>
+  </div>
+
+  <div id="result" class="panel">
+    <b id="resultTitle"></b>
+    <div id="resultBody"></div>
+  </div>
   <div id="prompt" class="panel"></div>
   <div id="toast" class="panel"></div>
 
   <div id="stick"><i></i></div>
   <button id="act" class="panel">Lift</button>
+  <button id="muteBtn" class="panel" aria-label="Sound">SOUND ON</button>
   <button id="shopBtn" class="panel">Supplements</button>
 
   <div id="shop" class="panel">
@@ -142,9 +233,9 @@
 <div id="boot">
   <div>
     <h1>Kevin's Gym</h1>
-    <p><b>No pain, only Kevin.</b> Work the stations, spend what you earn on supplements, and come back tomorrow — miss a day and it comes off.</p>
+    <p><b>No pain, only Kevin.</b> Five reps to a set, and every rep is a timing hit — land the red marker in the green band. Spend what you earn on supplements, and come back tomorrow, because miss a day and it comes off.</p>
     <button id="start">Open the doors</button>
-    <small>WASD or the stick to move · E or the button to work a station<br>Prototype. Progress is saved in this browser only.</small>
+    <small>WASD or the stick to move · E or the button to lift<br>Progress is saved in this browser only.</small>
     <div id="err"></div>
   </div>
 </div>

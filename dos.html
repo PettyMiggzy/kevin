@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KEVIN — the storeroom terminal</title>
-<meta name="description" content="On my break I check two things. The rota and the bags. One of them is going well.">
+<meta name="description" content="I check the rota. I check the bags. Both are on schedule.">
 <link rel="icon" href="assets/png/favicon-32.png" type="image/png">
 <meta property="og:type" content="website">
 <meta property="og:title" content="KEVIN — the storeroom terminal">
-<meta property="og:description" content="On my break I check two things. The rota and the bags. One of them is going well.">
+<meta property="og:description" content="I check the rota. I check the bags. Both are on schedule.">
 <meta property="og:image" content="assets/png/og-1200x630.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="assets/png/og-1200x630.png">
@@ -27,18 +27,17 @@
   --red:#e8232b;
   --cream:#fff6c8;
 
-  /* phosphor: amber. committed. */
+  /* phosphor: amber, and only amber. a monochrome tube cannot show red or
+     green, so emphasis is intensity and inverse video, the way DOS did it. */
   --amber:#ffbe38;
   --amber-hi:#fff0b8;
-  --amber-dim:#b87a12;
-  --p-red:#ff5348;
-  --p-green:#5ceb8c;
+  --amber-dim:#a86f0f;
   --tube-bg:#100a03;
 
   --cols:80;
   --rows:25;
   --fs:18px;
-  --lh:1.24;
+  --lh:1.19;   /* replaced at runtime with the box-glyph cell height */
   --padx:1.8;
   --pady:3.1;
   --bezel:60px;
@@ -131,13 +130,16 @@ pre{
   pointer-events:none;
 }
 
-/* phosphor colours (VGA-ish, but the tube is amber and it shows) */
+/* three beam intensities and inverse video. that is the whole palette. */
 .hi{color:var(--amber-hi);text-shadow:0 0 1px currentColor,0 0 .5em rgba(255,210,120,.6);}
-.w{color:#ffeccb;text-shadow:0 0 1px currentColor,0 0 .5em rgba(255,220,160,.5);}
+.w{color:#ffe3a8;text-shadow:0 0 1px currentColor,0 0 .5em rgba(255,220,160,.5);}
 .dim{color:var(--amber-dim);text-shadow:0 0 1px currentColor,0 0 .35em rgba(180,110,0,.4);}
-.r{color:var(--p-red);text-shadow:0 0 1px currentColor,0 0 .5em rgba(255,50,40,.55);}
-.g{color:var(--p-green);text-shadow:0 0 1px currentColor,0 0 .55em rgba(60,220,120,.6);}
-.tri{display:inline-block;width:1ch;text-align:center;font-style:normal;}
+.inv{
+  background:var(--amber);
+  color:#150c02;
+  text-shadow:none;
+  box-shadow:0 0 .5em rgba(255,180,50,.7);
+}
 
 .cur{
   display:inline-block;
@@ -262,6 +264,7 @@ pre{
 .sig a:hover{color:var(--red);border-color:var(--red);}
 
 .probe{position:absolute;visibility:hidden;white-space:pre;font-size:100px;left:-9999px;top:0;}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0;}
 
 @media (max-width:659px){
   body{padding:10px 6px 12px;}
@@ -288,7 +291,7 @@ pre{
   <div class="crt">
     <div class="tube" id="tube">
       <div class="glass">
-        <pre id="screen" aria-live="polite" aria-label="Kevin's terminal"></pre>
+        <pre id="screen" aria-hidden="true"></pre>
         <pre class="bloom" id="bloom" aria-hidden="true"></pre>
       </div>
       <div class="fx fx-scan"></div>
@@ -312,6 +315,16 @@ pre{
   <p class="sig"><a href="index.html">iamkevin.lol</a></p>
 </div>
 
+<div class="sr">
+  <p>Kevin's terminal. Week 37. Seven shifts on the fryer, fifty-six hours, no
+  days off. Friday's shift runs 16:00 to 00:00 and clashes with the token
+  launch at 18:00; the launch has been moved to 00:05 and the fryer is
+  unaffected. The portfolio is down 94.8 percent. KEVIN itself is not listed
+  and has no feed.</p>
+  <p>I am Kevin. I work the fryer. I have WiFi. I have checked the rota and I
+  have checked the bags. Both are on schedule.</p>
+</div>
+
 <span class="probe" id="probe">00000000000000000000</span>
 
 <script>
@@ -329,9 +342,23 @@ var RM = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 /* ---------------------------------------------------------------- layout */
 var chRatio = 0.6;
+var LH = 1.19;
 function measure(){
   var w = probeEl.getBoundingClientRect().width;
   if(w > 0) chRatio = (w / 20) / 100;
+
+  /* A text mode cell is exactly as tall as a box-drawing glyph. If the line
+     box is any taller, every vertical rule comes out dashed and no corner
+     joins, which is the single biggest tell that this is a web page. Measure
+     the ink height of the double vertical in whatever mono font we actually
+     got, and use that as the line height. */
+  try{
+    var cx = document.createElement('canvas').getContext('2d');
+    cx.font = '200px ' + getComputedStyle(screenEl).fontFamily;
+    var m = cx.measureText('\u2551');
+    var h = (m.actualBoundingBoxAscent + m.actualBoundingBoxDescent) / 200;
+    if(h > 0.9 && h < 1.7) LH = Math.round(h * 1000) / 1000;
+  }catch(e){ /* no canvas, keep the default */ }
 }
 
 var narrow = window.innerWidth < 660;
@@ -345,7 +372,7 @@ function layout(){
   var padx = narrow ? 0.75 : 1.8;
   var pady = narrow ? 2.4  : 3.1;
   var bezel = narrow ? 50 : 60;
-  var lh = 1.24;
+  var lh = LH;
   var borderPx = narrow ? 8 + 10 : 10 + 10;      /* tube border + crt border */
   var casing  = narrow ? 14 : 28;                /* crt padding l+r */
   var chromeV = narrow ? 22 + 40 + 18 : 44 + 46 + 28; /* body pad + sig + crt pad */
@@ -363,6 +390,7 @@ function layout(){
   root.setProperty('--cols', COLS);
   root.setProperty('--rows', ROWS);
   root.setProperty('--fs', fs + 'px');
+  root.setProperty('--lh', lh);
   root.setProperty('--padx', padx);
   root.setProperty('--pady', pady);
   root.setProperty('--bezel', bezel + 'px');
@@ -381,7 +409,7 @@ function fmt(line){
     i = m.index + m[0].length;
   }
   out += esc(line.slice(i));
-  return out.replace(/\u25b2/g, '<i class="tri">\u25b2</i>');
+  return out;
 }
 
 var buf = [];
@@ -413,10 +441,17 @@ function bar(ws, l, m, r){
 var TOP = function(ws){ return bar(ws,'\u2554','\u2566','\u2557'); };
 var MID = function(ws){ return bar(ws,'\u2560','\u256c','\u2563'); };
 var BOT = function(ws){ return bar(ws,'\u255a','\u2569','\u255d'); };
+function tint(txt, cls){
+  if(!cls) return txt;
+  var a = 0, b = txt.length;
+  while(a < b && txt.charAt(a) === ' ') a++;
+  while(b > a && txt.charAt(b - 1) === ' ') b--;
+  if(a >= b) return txt;
+  return txt.slice(0, a) + '{' + cls + '|' + txt.slice(a, b) + '}' + txt.slice(b);
+}
 function row(ws, cells){
   return '\u2551' + cells.map(function(c, i){
-    var txt = cell(c.t, ws[i], c.a);
-    return c.c ? '{' + c.c + '|' + txt + '}' : txt;
+    return tint(cell(c.t, ws[i], c.a), c.c);
   }).join('\u2551') + '\u2551';
 }
 function boxed(inner, lines, indent){
@@ -456,9 +491,9 @@ function planLines(){
   return [
     ' ROBIN PLAN:',
     '',
-    '   {g|[X]} LAUNCH',
-    '   {g|[X]} MOON',
-    '   {g|[X]} LAMBO',
+    '   {hi|[X]} LAUNCH',
+    '   {hi|[X]} MOON',
+    '   {hi|[X]} LAMBO',
     '   [ ] SLEEP' + (narrow ? '      ' : '            ') + '{dim|<- later}',
     ''
   ];
@@ -544,7 +579,7 @@ function sceneRota(){
     ops.push(P(BOT(ws), TBL));
     ops.push(P('', 200));
     ops.push(P(' {dim|WED:} COVERING FOR DAVE', 220));
-    ops.push(P(' {dim|FRI:} {r|CLASH - TOKEN LAUNCH 18:00}', 520));
+    ops.push(P(' {dim|FRI:} {inv|CLASH - TOKEN LAUNCH 18:00}', 520));
     ops.push(P(' {dim|SUN:} DEEP CLEAN. OIL CHANGE.', 260));
     ops.push(P('', 260));
     ops.push(P(' HOURS THIS WEEK : {hi|56}', 240));
@@ -563,7 +598,7 @@ function sceneRota(){
         {t:s.d, c:'w'},
         {t:s.t},
         {t:'FRYER'},
-        {t:s.n, c:s.hot ? 'r' : (s.n === '-' ? 'dim' : null)}
+        {t:s.n, c:s.hot ? 'inv' : (s.n === '-' ? 'dim' : null)}
       ]), s.hot ? 520 : TBL));
     });
     ops.push(P(BOT(w2), TBL));
@@ -582,7 +617,7 @@ function sceneBags(){
   var i;
   if(narrow){
     var ws = [8, 10, 9];
-    ops.push(P('{hi|PORTFOLIO 1.03    WIFI: OK}', 260));
+    ops.push(P('{hi|PORTFOLIO 1.03   15:42   WIFI: OK}', 260));
     ops.push(P(TOP(ws), TBL));
     ops.push(P(row(ws, [{t:'TICKER',c:'hi'},{t:'LAST',c:'hi'},{t:'CHANGE',c:'hi'}]), TBL));
     ops.push(P(MID(ws), TBL));
@@ -591,27 +626,25 @@ function sceneBags(){
       ops.push(P(row(ws, [
         {t:t.s, c:'w'},
         {t:t.last.slice(0,8), a:'r'},
-        {t:t.pc, c:'r', a:'r'}
+        {t:t.pc, a:'r'}
       ]), 250));
     }
     ops.push(P(MID(ws), 700));
     ops.push(P(row(ws, [
-      {t:'KEVIN', c:'g'},
-      {t:'---', c:'dim', a:'c'},
-      {t:'\u25b2', c:'g', a:'c'}
+      {t:'KEVIN', c:'w'},
+      {t:'NO FEED', c:'dim', a:'c'},
+      {t:'---', c:'dim', a:'c'}
     ]), 260));
     ops.push(P(BOT(ws), 700));
     ops.push(P('', 120));
-    ops.push(P(' TOTAL   : {r|$70.82   -94.8%}', 400));
-    ops.push(P(' KEVIN   : {dim|NO PRICE FEED.}', 240));
-    ops.push(P('           {dim|RENDERED GREEN}', 240));
-    ops.push(P('           {dim|BY DEFAULT.}', 1500));
+    ops.push(P(' TOTAL   : $70.82   -94.8%', 400));
+    ops.push(P(' KEVIN   : {dim|NOT LISTED}', 1500));
     ops.push(P('', 120));
     ops.push(T(' Down 94.8 percent.', 44));
     ops.push(T(' My shift starts at four.', 44));
   } else {
     var w2 = [10, 13, 13, 10, 13];
-    ops.push(P('{hi|PORTFOLIO 1.03      HOLDER: KEVIN      WIFI: CONNECTED      17:42}', 260));
+    ops.push(P('{hi|PORTFOLIO 1.03      HOLDER: KEVIN      WIFI: CONNECTED      15:42}', 260));
     ops.push(P('', 90));
     ops.push(P(TOP(w2), TBL));
     ops.push(P(row(w2, [
@@ -624,23 +657,23 @@ function sceneBags(){
         {t:k.s, c:'w'},
         {t:k.avg, a:'r'},
         {t:k.last, a:'r'},
-        {t:k.pc, c:'r', a:'r'},
-        {t:k.val, c:'r', a:'r'}
+        {t:k.pc, a:'r'},
+        {t:k.val, a:'r'}
       ]), 250));
     }
     ops.push(P(MID(w2), 780));
     ops.push(P(row(w2, [
-      {t:'KEVIN', c:'g'},
+      {t:'KEVIN', c:'w'},
       {t:'---', c:'dim', a:'c'},
-      {t:'NOT LIVE', c:'dim', a:'c'},
-      {t:'\u25b2', c:'g', a:'c'},
-      {t:'PRE-LAUNCH', c:'g', a:'c'}
+      {t:'NOT LISTED', c:'dim', a:'c'},
+      {t:'---', c:'dim', a:'c'},
+      {t:'---', c:'dim', a:'c'}
     ]), 300));
     ops.push(P(BOT(w2), 760));
     ops.push(P('', 140));
     ops.push(P('  TOTAL COST    : {dim|$1,364.00}', 260));
-    ops.push(P('  TOTAL VALUE   : {r|$    70.82}        CHANGE: {r|-94.8%}', 460));
-    ops.push(P('  KEVIN         : {dim|NO PRICE FEED. RENDERED GREEN BY DEFAULT.}', 1600));
+    ops.push(P('  TOTAL VALUE   : $    70.82        CHANGE: -94.8%', 460));
+    ops.push(P('  KEVIN         : {dim|NO FEED}', 1600));
     ops.push(P('', 140));
     ops.push(T('  Down 94.8 percent. My shift starts at four.', 44));
   }
@@ -807,8 +840,13 @@ replayBtn.addEventListener('click', function(){
 });
 
 document.addEventListener('keydown', function(e){
-  if(e.target && e.target.tagName === 'BUTTON') return;
-  if(e.key === ' ' || e.key === 'Enter' || e.key === 'Escape'){
+  var onBtn = e.target && e.target.tagName === 'BUTTON';
+  if(e.key === ' ' || e.key === 'Enter'){
+    if(onBtn) return;            /* let the bezel button take its own click */
+    e.preventDefault();
+    loopOn = false;
+    showFinal();
+  } else if(e.key === 'Escape'){
     e.preventDefault();
     loopOn = false;
     showFinal();
@@ -841,7 +879,7 @@ window.addEventListener('resize', function(){
     measure();
     layout();
     if(narrow !== before){
-      if(RM.matches || !running) showFinal();
+      if(RM.matches || !loopOn) showFinal();
       else run(false);
     } else {
       paint();
