@@ -1,0 +1,135 @@
+// What Kevin knows, assembled from the repo at startup.
+//
+// Read from the real files rather than retyped here on purpose. The pool
+// weights have already changed once in this project's life, and a bot
+// confidently quoting last week's numbers in the official group is worse than
+// a bot that says nothing. js/config.js is the single source the site renders
+// from; this reads the same file, so the two cannot disagree.
+import { readFile } from 'node:fs/promises';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createContext, runInNewContext } from 'node:vm';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * js/config.js is a browser file — it assigns to `window`, it does not export.
+ * Rather than keep a second copy in sync, run it against a fake window and take
+ * the object back out.
+ */
+export async function loadConfig() {
+  const src = await readFile(join(ROOT, 'js/config.js'), 'utf8');
+  const sandbox = { window: {} };
+  createContext(sandbox);
+  runInNewContext(src, sandbox);
+  return sandbox.window.KEVIN;
+}
+
+const fmt = (v, fallback = 'not published yet') =>
+  v === null || v === undefined || v === '' ? fallback : String(v);
+
+/** The hard facts, stated plainly. The persona layer makes them sound like him. */
+function factSheet(c) {
+  const pools = c.pools.map((p) => `${p.ticker} ${p.weight}%`).join(' / ');
+  const total = c.pools.reduce((n, p) => n + p.weight, 0);
+  const m = c.mechanics;
+
+  return `THE TOKEN
+- Name: KEVIN. Chain: ${c.chain} (chain id ${m.chainId}).
+- Launchpad: kekfun (${c.links.launchpad}). Auction type: ${m.auctionType}.
+- Supply ${m.supply}. ${m.sold}% sold through the auction, ${m.lockedLp}% into
+  locked LP, ${m.creator}% to the creator — zero, enforced by the token factory,
+  not a promise anyone is making.
+- Sale runs ${m.saleDays} days, ${m.perDay}% of supply released per day.
+  Buyers vest linearly over ${m.vestDays} days from settle.
+- Explorer: ${m.explorer}
+- CONTRACT ADDRESS: ${fmt(c.contract)}
+- Auction opens: ${fmt(c.auction.startsAt, 'already open — it is live now')}
+- Auction closes: ${fmt(c.auction.endsAt, 'not announced')}
+
+THE POOLS (open when the auction settles)
+- ${pools}  (adds up to ${total}%)
+${c.pools.map((p) => `- ${p.ticker}, "${p.nickname}": ${p.note}`).join('\n')}
+
+THE BURN
+- The creator's own auction allocation gets bought and then destroyed.
+- Bidding wallet: ${fmt(c.burn.wallet)}
+- Burn address: ${c.burn.burnAddr}
+- Burned so far: ${fmt(c.burn.burned, 'nothing published yet')}
+
+WHERE TO GO
+- Site: https://iamkevin.lol
+- Game: https://iamkevin.lol/gym  (also /game and /play)
+- Telegram: ${c.links.telegram}
+- X: ${c.links.x}
+- Chart: ${fmt(c.links.chart, 'no chart yet — nothing is trading')}
+
+THE GYM (a free browser game, built by the team)
+- Walk into Kevin's Gym at https://iamkevin.lol/gym. Works on a phone. Free.
+- Bench, dumbbells and treadmill. Five reps to a set; each rep is a timing hit —
+  land the marker in the green band.
+- Miss a day and muscle comes off. That is the whole point of it.
+- Out the front: a market with a supplement stall and a crew stall, and
+  Kevin's Fry House, where you clock in and serve six customers a shift.
+- The $KEVIN you earn in the game is a SCORE. It is not the token, it is not
+  supply, nothing in the game mints or moves anything on a chain.
+- Progress saves in your own browser only. There is no account and no server.
+- You play as Kevin. If you want, you can switch to any of the crew faces at
+  the crew stall.
+
+KEVIN'S CREW (the NFT collection)
+- 32x32 pixel characters, the people Kevin works with.
+- NOT MINTED. There is no contract, no sale and no mint date. Anyone saying
+  otherwise is lying.`;
+}
+
+/** The things Kevin must admit he does not know, listed so he cannot invent them. */
+function unknowns(c) {
+  const gaps = [];
+  if (!c.contract) gaps.push('the contract address');
+  if (!c.auction.endsAt) gaps.push('when exactly the auction closes');
+  if (!c.burn.wallet) gaps.push('the burn wallet address');
+  if (!c.links.chart) gaps.push('a chart link');
+  gaps.push('the price, now or ever');
+  gaps.push('when the NFTs mint');
+  return gaps;
+}
+
+/**
+ * Trim a markdown doc down to something worth spending context on. Keeps the
+ * prose, drops the tables of file paths and the asset inventories — Kevin does
+ * not need to know where the favicon lives to answer a question in a group.
+ */
+function trimDoc(md, maxChars) {
+  const out = md
+    .split('\n')
+    .filter((l) => !/^\|/.test(l))            // markdown tables
+    .filter((l) => !/^\s*```/.test(l) === false || true)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return out.length > maxChars ? out.slice(0, maxChars) + '\n[...]' : out;
+}
+
+/** Everything Kevin knows, as one block of text for the system prompt. */
+export async function buildBrief() {
+  const config = await loadConfig();
+  const [lore, launch] = await Promise.all([
+    readFile(join(ROOT, 'docs/LORE.md'), 'utf8').catch(() => ''),
+    readFile(join(ROOT, 'docs/LAUNCH.md'), 'utf8').catch(() => ''),
+  ]);
+
+  const gaps = unknowns(config);
+  const brief = `${factSheet(config)}
+
+THINGS KEVIN DOES NOT KNOW — say so plainly, never guess:
+${gaps.map((g) => `- ${g}`).join('\n')}
+
+--- BACKGROUND: THE BOOK OF KEVIN ---
+${trimDoc(lore, 5200)}
+
+--- BACKGROUND: HOW THE LAUNCH WORKS ---
+${trimDoc(launch, 3600)}`;
+
+  return { config, brief, gaps };
+}

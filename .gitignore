@@ -21,3 +21,7 @@ contracts/out/
 contracts/cache/
 
 dist/
+
+# Bot keys — never commit these
+bot/.groq.key
+bot/.telegram.key
