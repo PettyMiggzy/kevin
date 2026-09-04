@@ -30,6 +30,8 @@ const MODULES = {
   'kevin/gear.js': 'gym/js/gear.js',
   'kevin/reps.js': 'gym/js/reps.js',
   'kevin/audio.js': 'gym/js/audio.js',
+  'kevin/job.js': 'gym/js/job.js',
+  'kevin/city.js': 'gym/js/city.js',
   'kevin/main.js': 'gym/js/main.js',
 };
 

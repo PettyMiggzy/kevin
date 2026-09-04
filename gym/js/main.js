@@ -17,12 +17,15 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
-import { load, save, settle, workout, projectedLoss, DECAY_PER_DAY, DAILY_GOAL } from './save.js';
+import { load, save, settle, workout, projectedLoss, payShift, leaderboard,
+  DECAY_PER_DAY, DAILY_GOAL } from './save.js';
 import { buildCrewBody, applyCrewMuscle } from './voxel.js';
 import { Set as RepSet, REPS_PER_SET, rankOf } from './reps.js';
 import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, mirrorPanel, stripLight,
   skyTexture, concreteTexture, facadeTexture, bannerTexture, billboardTexture, boardTexture } from './gear.js';
 import { play, setMuted, isMuted } from './audio.js';
+import { buildCity, buildLeaderboard, paintLeaderboard, MARKET, FRY, QUEUE } from './city.js';
+import { Shift, ITEMS, SHIFT_LENGTH } from './job.js';
 
 const $ = (s) => document.querySelector(s);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -53,6 +56,20 @@ const PALETTE = {
 
 const toon = (color, opts = {}) =>
   new THREE.MeshToonMaterial({ color, gradientMap: RAMP, ...opts });
+
+/**
+ * Scenery material: toon-shaded but with no outline.
+ *
+ * Buildings and backdrop get no black line — an inverted hull on a forty-metre
+ * box draws a stripe you can see from across the yard. buildRoom and
+ * buildExterior each kept a private copy of this; city.js needs the same one,
+ * so there is one.
+ */
+const flatMat = (color, map = null) => {
+  const m = toon(color, map ? { map } : {});
+  m.userData.outlineParameters = { visible: false };
+  return m;
+};
 
 /**
  * Tripo hands back photoreal PBR. Left alone, twelve models from twelve prompts
@@ -246,10 +263,12 @@ function buildExterior(scene) {
   // Banner strung under it.
   solid(ROOM.w - 2.4, 1.0, 0.1, '#FFFFFF', 0, EAVES - 0.05, FZ + 0.34, bannerTexture());
 
-  // Billboard on a post, off to the right where the yard is empty.
-  solid(0.34, 5.4, 0.34, '#5A5A62', 7.2, 2.7, 15.6);
-  solid(0.34, 5.4, 0.34, '#5A5A62', 10.4, 2.7, 15.6);
-  solid(4.6, 3.1, 0.24, '#FFFFFF', 8.8, 5.6, 15.6, billboardTexture());
+  // Billboard, out on the grass past the kerb. It used to stand at x 7-10,
+  // which is where the fry house now is; out here it is scenery you read
+  // across the yard rather than something you walk into.
+  solid(0.34, 6.4, 0.34, '#5A5A62', -9.6, 3.2, 27.0);
+  solid(0.34, 6.4, 0.34, '#5A5A62', -6.0, 3.2, 27.0);
+  solid(5.2, 3.5, 0.24, '#FFFFFF', -7.8, 6.6, 27.0, billboardTexture());
 
   // Hand-painted board by the door.
   solid(0.22, 2.4, 0.22, '#6B5B41', -6.2, 1.2, 10.2);
@@ -719,6 +738,18 @@ const input = { f: 0, s: 0, act: false };
 let set = null;                       // the RepSet in progress, or null
 let nearest = null;
 let lastStep = 0;
+/** Everything you can walk up to and press E at. Filled during init. */
+const places = [];
+let shift = null;                     // the shift in progress, or null
+let board = null;                     // the leaderboard mesh on the back wall
+const customers = [];                 // bodies in the queue at the window
+let shiftCam = null;                  // where the camera sits while working
+/**
+ * Dev only, and only when asked for: ?peek lets a screenshot harness park the
+ * camera anywhere so scene composition can be checked without walking there.
+ * Camera position and aim, nothing else — it cannot touch state or progress.
+ */
+let peek = null;
 let bar = null;                       // the barbell, parented to the body
 const bells = [];                     // one dumbbell per hand
 let resultTimer = null;
@@ -815,12 +846,16 @@ async function init() {
 
   buildRoom(scene);
   buildExterior(scene);
+  buildCity(scene, { flat: flatMat, solids, blockers });
+  board = buildLeaderboard(scene, { flat: flatMat });
 
   await loadCrew();
   kevin = makePlayer(state.crewId ?? 0);
   // Facing (Y) has to compose with lying back (X), not fight it.
   kevin.group.rotation.order = 'YXZ';
-  kevin.group.position.set(0, 0, 15.5);   // on the forecourt, facing the door
+  // On the forecourt facing the door, and clear of the market — 15.5 put the
+  // player standing in the middle of the stalls, which now live at z 15.4.
+  kevin.group.position.set(0, 0, 11.5);
   scene.add(kevin.group);
 
   // Gear rides on the body so it never drifts out of his hands.
@@ -899,12 +934,33 @@ async function init() {
   for (const [name, opts] of SCENERY) spawn(name, opts);
   clearSpots();
 
+  // Everything walk-up-able, in the order you meet it coming out of the door.
+  places.length = 0;
+  for (const st of STATIONS) {
+    places.push({ kind: 'station', station: st, label: st.label, x: st.x, z: st.z,
+      note: `${REPS_PER_SET} reps`, act: st.stat === 'stamina' ? 'Run' : 'Lift' });
+  }
+  const stallLabel = {
+    supplements: ['Supplement stall', 'spend $KEVIN', 'Shop'],
+    crew: ["Kevin's Crew", 'have a look', 'Look'],
+    produce: ['Fresh produce', 'closed, obviously', ''],
+  };
+  for (const st of MARKET) {
+    const [label, note, act] = stallLabel[st.id];
+    if (!act) continue;                       // the produce stall is set dressing
+    places.push({ kind: st.id === 'crew' ? 'nft' : 'shop', label, note, act,
+      x: st.x, z: st.z - 1.2 });
+  }
+  places.push({ kind: 'work', label: "Kevin's Fry House", note: 'clock in',
+    act: 'Work', x: FRY.x, z: FRY.counterZ - 1.4 });
+
   // Settle the absence before the first frame, so the number in the toast is
   // the number on the bars.
   const gone = settle(state, Date.now());
   save(state);
   applyMuscle(kevin, state.muscle / 100);
   refreshHud();
+  refreshBoard();
   if (gone.days >= 1) {
     if (gone.frozen) {
       toast('Protein shake used.<br><small>One missed day covered. That was the last spare.</small>', 4200);
@@ -915,6 +971,20 @@ async function init() {
         5200
       );
     }
+  }
+
+  if (location.search.includes('peek')) {
+    window.__peek = (pos, at) => {
+      peek = pos ? { pos: new THREE.Vector3(...pos), at: new THREE.Vector3(...at) } : null;
+    };
+    // Where the player is, and putting them somewhere. Enough to drive the real
+    // walk-up-and-press-E path from a test without waiting out a software
+    // renderer's frame rate. It moves a position; it cannot touch muscle,
+    // coins, streaks or anything that is saved.
+    window.__where = () => ({ x: kevin.group.position.x, z: kevin.group.position.z, near: nearest?.kind ?? null });
+    window.__warp = (x, z) => kevin.group.position.set(x, 0, z);
+    window.__scene = scene;
+    window.__customers = customers;
   }
 
   addEventListener('resize', onResize);
@@ -942,7 +1012,8 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const now = performance.now();
 
-  if (set) tickSet(dt, now);
+  if (shift) tickShift(now);
+  else if (set) tickSet(dt, now);
   else move(dt, now);
 
   for (const n of npcs) n.tick(dt, now);
@@ -951,7 +1022,15 @@ function frame() {
   // you film a bench press from the side and a chase camera shows the soles of
   // his shoes.
   let lookY = 1.25;
-  if (set?.station.cam) {
+  if (peek) {
+    camera.position.copy(peek.pos);
+    aim.copy(peek.at);
+  } else if (shift && shiftCam) {
+    // Locked off at the window. A chase camera here would follow a player who
+    // is standing still and frame the inside of a wall.
+    camera.position.lerp(shiftCam.pos, 1 - Math.pow(0.004, dt));
+    aim.copy(shiftCam.at);
+  } else if (set?.station.cam) {
     const c = set.station.cam;
     tmp.set(set.station.x + c.x, c.y, set.station.z + c.z);
     lookY = c.at;
@@ -1161,6 +1240,7 @@ function finishSet() {
   applyMuscle(kevin, state.muscle / 100);
   refreshHud();
 
+  refreshBoard();
   play(sc.flawless ? 'rank' : 'set');
   shake = sc.flawless ? 0.55 : 0.2;
 
@@ -1226,27 +1306,39 @@ function move(dt, now) {
   }
 
   // Proximity, not raycasting — you walk up to a machine, you do not aim at it.
+  // Everything walk-up-able is in one list now: the three stations, the three
+  // market stalls, and the window at the fry house. Scanning two lists is how
+  // you end up with a stall that shows a prompt and a station that does not.
   let best = null;
-  let bestD = 2.4;
-  for (const st of STATIONS) {
-    if (!st.object) continue;
-    const d = Math.hypot(kevin.group.position.x - st.x, kevin.group.position.z - st.z);
-    if (d < bestD) { bestD = d; best = st; }
+  let bestD = 2.6;
+  for (const pl of places) {
+    if (pl.kind === 'station' && !pl.station.object) continue;
+    const d = Math.hypot(kevin.group.position.x - pl.x, kevin.group.position.z - pl.z);
+    if (d < bestD) { bestD = d; best = pl; }
   }
   if (best !== nearest) {
     nearest = best;
     const p = $('#prompt');
     if (best) {
-      p.innerHTML = `${best.label} — <b>${matchMedia('(pointer:coarse)').matches ? 'tap' : 'E'}</b> · ${REPS_PER_SET} reps`;
+      const tap = matchMedia('(pointer:coarse)').matches ? 'tap' : 'E';
+      p.innerHTML = `${best.label} — <b>${tap}</b>${best.note ? ` · ${best.note}` : ''}`;
       p.classList.add('on');
-      $('#act').textContent = best.stat === 'stamina' ? 'Run' : 'Lift';
+      $('#act').textContent = best.act;
     } else {
       p.classList.remove('on');
     }
   }
 
-  if (input.act && nearest) startWorkout(nearest);
+  if (input.act && nearest) enter(nearest);
   input.act = false;
+}
+
+/** What pressing E at a place does. One switch, so adding a place is one line. */
+function enter(pl) {
+  if (pl.kind === 'station') return startWorkout(pl.station);
+  if (pl.kind === 'shop') return openShop();
+  if (pl.kind === 'nft') return openCrew();
+  if (pl.kind === 'work') return clockIn();
 }
 
 // --- floating numbers -------------------------------------------------------
@@ -1315,6 +1407,274 @@ function refreshHud() {
       `one set keeps the streak.</small>`;
 }
 
+// --- the market -------------------------------------------------------------
+
+function openShop() {
+  if (set) abortSet();
+  play('ui');
+  renderShop();
+  $('#shop').classList.add('on');
+}
+
+function openCrew() {
+  if (set) abortSet();
+  play('ui');
+  renderCrew();
+  $('#nft').classList.add('on');
+}
+
+/**
+ * The crew stall.
+ *
+ * Draws the same 32x32 grids the game extrudes into heads, so what is on the
+ * stall is exactly what walks around the room — no separate art to fall out of
+ * step with the game.
+ *
+ * It sells nothing, and that is deliberate. There is no contract and no mint,
+ * and a stall that took money for a token which does not exist is the one
+ * thing in this build that could actually cost somebody something. So it shows
+ * the art and says plainly where it has got to.
+ */
+function renderCrew() {
+  const grid = $('#nftGrid');
+  const crew = CREW?.crew ?? [];
+  $('#nftNote').textContent = crew.length
+    ? 'Not minted. No contract, no sale, no mint — these are the faces already walking around the gym. When there is something real to say, it gets said in the group first.'
+    : 'The crew could not be loaded. Reload and they should turn up.';
+
+  if (grid.childElementCount) return;         // draw once; they never change
+  const frag = document.createDocumentFragment();
+  // Kevin is index 0 and is not part of the collection — he is the player.
+  for (let i = 1; i < crew.length; i++) {
+    const fig = document.createElement('figure');
+    fig.append(gridCanvas(crew[i]));
+    const cap = document.createElement('figcaption');
+    cap.textContent = '#' + String(i).padStart(3, '0');
+    fig.append(cap);
+    frag.append(fig);
+  }
+  grid.append(frag);
+}
+
+/** One 32x32 grid, painted at native size and scaled up by CSS. */
+function gridCanvas(g) {
+  const c = document.createElement('canvas');
+  c.width = g.w;
+  c.height = g.h;
+  const x = c.getContext('2d');
+  for (let i = 0; i < g.cells.length; i++) {
+    const colour = g.palette[g.cells[i]];
+    if (!colour || colour === 'none') continue;
+    x.fillStyle = colour;
+    x.fillRect(i % g.w, Math.floor(i / g.w), 1, 1);
+  }
+  return c;
+}
+
+// --- the shift --------------------------------------------------------------
+// Clock in at the window, fill orders, get paid. The queue behind the panel is
+// real geometry rather than a picture: the customers are crew bodies standing
+// on the marks in QUEUE, and they leave when they are served or when they have
+// waited long enough to give up.
+
+let parked = null;                     // where the player stood before clocking in
+
+function clockIn() {
+  if (shift) return;
+  if (set) abortSet();
+  play('ui');
+
+  parked = kevin.group.position.clone();
+  // Behind the counter, facing the queue.
+  kevin.group.position.set(FRY.x, 0, FRY.counterZ + 1.0);
+  kevin.group.rotation.y = Math.PI;
+
+  // Three-quarters from the front left: the queue leads away to the window, so
+  // you can see who is next as well as who you are serving. Straight over the
+  // shoulder shows four backs, and side-on from far enough to fit them all in
+  // frames most of the forecourt instead.
+  // Aimed low on purpose. The order panel owns the bottom third of the screen,
+  // and anything at eye level ends up behind it — aiming at the queue's feet
+  // lifts their heads into the clear half.
+  shiftCam = {
+    pos: new THREE.Vector3(FRY.x - 4.6, 3.5, FRY.counterZ - 7.4),
+    at: new THREE.Vector3(FRY.x - 0.3, 0.9, FRY.counterZ - 1.6),
+  };
+
+  shift = new Shift(performance.now());
+  spawnCustomers();
+  document.body.classList.add('working');
+  $('#prompt').classList.remove('on');
+  $('#shift').classList.add('on');
+  renderTray();
+  renderShift();
+}
+
+function clockOff({ paid = false } = {}) {
+  if (!shift) return;
+  const r = shift.result();
+  shift = null;
+  shiftCam = null;
+  clearCustomers();
+  document.body.classList.remove('working');
+  $('#shift').classList.remove('on');
+  if (parked) { kevin.group.position.copy(parked); parked = null; }
+  nearest = null;                       // so the prompt re-arms when you step away
+
+  if (!paid) return null;
+  payShift(state, r, Date.now());
+  save(state);
+  refreshHud();
+  refreshBoard();
+  return r;
+}
+
+function finishShift() {
+  const r = clockOff({ paid: true });
+  if (!r) return;
+  play(r.clean ? 'rank' : 'set');
+  shake = r.clean ? 0.5 : 0.2;
+  $('#resultTitle').textContent = r.title;
+  $('#resultBody').innerHTML =
+    `<span>+${r.coin}</span> $KEVIN<br>` +
+    `${r.served}/${SHIFT_LENGTH} served` +
+    `${r.walked ? ` · ${r.walked} walked out` : ''}` +
+    `${r.bonus ? `<br><small style="opacity:.7">+${r.bonus} bonus</small>` : ''}`;
+  $('#result').classList.add('on');
+  clearTimeout(resultTimer);
+  resultTimer = setTimeout(() => $('#result').classList.remove('on'), 3000);
+}
+
+/** Called every frame while a shift is up. */
+function tickShift(now) {
+  const ev = shift.tick(now);
+  if (ev?.walked) {
+    play('deny');
+    floatText('WALKED OUT', 'miss');
+    shuffleQueue();
+  }
+  if (shift.done) { finishShift(); return; }
+
+  const left = shift.patienceLeft(now);
+  const bar = $('#patience');
+  bar.style.width = (left * 100).toFixed(1) + '%';
+  bar.classList.toggle('low', left < 0.34);
+}
+
+function pressItem(id) {
+  if (!shift) return;
+  const before = shift.index;
+  const r = shift.press(id, performance.now());
+  const btn = $(`#tray button[data-id="${id}"]`);
+  if (btn) {
+    btn.classList.add(r.ok ? 'hit' : 'bad');
+    setTimeout(() => btn.classList.remove('hit', 'bad'), 160);
+  }
+  if (!r.ok) play('miss');
+  else if (r.served) play('buy');
+  else play('good');
+
+  if (r.served) {
+    floatText(`+${r.pay}`, r.fast ? 'perfect' : 'good');
+    shuffleQueue();
+  } else if (r.walked && shift.index !== before) {
+    shuffleQueue();
+  }
+  if (shift.done) { finishShift(); return; }
+  renderShift();
+}
+
+function renderShift() {
+  if (!shift) return;
+  const o = shift.order;
+  if (!o) return;
+  $('#shiftWho').textContent = o.name;
+  $('#shiftCount').textContent = `customer ${shift.index + 1} of ${SHIFT_LENGTH} · ${shift.coin} earned`;
+
+  // Wants, in the order they were asked for, ticked off as the bag fills. A
+  // count would be smaller; a row of what is left is what you can act on
+  // without reading.
+  const left = shift.remaining().slice();
+  $('#order').innerHTML = o.want.map((id) => {
+    const i = left.indexOf(id);
+    const outstanding = i !== -1;
+    if (outstanding) left.splice(i, 1);
+    const it = ITEMS.find((t) => t.id === id);
+    return `<span class="want${outstanding ? '' : ' done'}" title="${it.label}">${it.icon}</span>`;
+  }).join('');
+}
+
+function renderTray() {
+  $('#tray').innerHTML = ITEMS.map((it) =>
+    `<button data-id="${it.id}"><span>${it.icon}</span>${it.label}<small>${it.key}</small></button>`
+  ).join('');
+}
+
+// --- the queue --------------------------------------------------------------
+
+function spawnCustomers() {
+  clearCustomers();
+  const crew = CREW?.crew ?? [];
+  if (!crew.length) return;
+  for (let i = 0; i < QUEUE.length; i++) {
+    customers.push(makeCustomer(crew, i));
+  }
+}
+
+/**
+ * One person in the queue.
+ *
+ * Same body the crew inside use, with a build of its own — without
+ * applyCrewMuscle every customer is the same untouched beanpole, and four
+ * identical strangers read as a rendering bug rather than as a queue.
+ */
+function makeCustomer(crew, i) {
+  const mat = toon('#FFFFFF', { vertexColors: true });
+  mat.userData.outlineParameters = { thickness: 0.010, color: [0, 0, 0], alpha: 1 };
+  const body = buildCrewBody(crew[1 + Math.floor(Math.random() * (crew.length - 1))], { material: mat });
+  body.group.rotation.order = 'YXZ';
+  applyCrewMuscle(body, 0.1 + Math.random() * 0.75);
+  const spot = QUEUE[Math.min(i, QUEUE.length - 1)];
+  body.group.position.set(spot.x, 0, spot.z);
+  // Turned toward the counter, but angled off it so the camera gets a face
+  // rather than four backs. Squarely facing the window is more correct and
+  // makes the queue anonymous, which defeats the point of having people in it.
+  body.group.rotation.y = -0.8 + (Math.random() - 0.5) * 0.4;
+  scene.add(body.group);
+  return body;
+}
+
+/** Somebody left the front of the queue. Everyone steps up. */
+function shuffleQueue() {
+  const gone = customers.shift();
+  if (gone) scene.remove(gone.group);
+  customers.forEach((c, i) => {
+    if (QUEUE[i]) c.group.position.set(QUEUE[i].x, 0, QUEUE[i].z);
+  });
+  // Top the queue back up so the window never looks shut mid-shift.
+  const crew = CREW?.crew ?? [];
+  const ahead = shift ? SHIFT_LENGTH - shift.index : 0;
+  if (crew.length > 1 && customers.length < Math.min(QUEUE.length, ahead)) {
+    customers.push(makeCustomer(crew, customers.length));
+  }
+}
+
+function clearCustomers() {
+  for (const c of customers) scene.remove(c.group);
+  customers.length = 0;
+}
+
+// --- the board --------------------------------------------------------------
+
+/** Repaint the wall board. Cheap enough to call whenever a number moves. */
+function refreshBoard() {
+  if (!board) return;
+  paintLeaderboard(board, leaderboard(state), {
+    title: 'TOP OF THE GYM',
+    note: 'LOCAL — THIS BROWSER ONLY',
+  });
+}
+
 // --- shop -------------------------------------------------------------------
 // Three items, one of each kind the loop needs: more now, less lost later, and
 // one that is purely a flex. No wallet, no chain, no purchase — putting crypto
@@ -1363,6 +1723,15 @@ $('#shopBtn').onclick = () => {
   $('#shop').classList.add('on');
 };
 $('#closeShop').onclick = () => { play('ui'); $('#shop').classList.remove('on'); };
+$('#closeNft').onclick = () => { play('ui'); $('#nft').classList.remove('on'); };
+
+// The tray, and the number keys that shadow it. Delegated, because the buttons
+// are rebuilt whenever the item list changes.
+$('#tray').onclick = (e) => {
+  const id = e.target.closest('button')?.dataset.id;
+  if (id) pressItem(id);
+};
+$('#clockOff').onclick = () => { play('ui'); finishShift(); };
 $('#shopItems').onclick = (e) => {
   const id = e.target.closest('.buy')?.dataset.id;
   if (!id) return;
@@ -1384,9 +1753,15 @@ addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   keys.add(k);
   if (k === 'e' || k === ' ') { input.act = true; e.preventDefault(); }
+  // 1-4 fill the bag. Only while a shift is up, so they stay free elsewhere.
+  if (shift) {
+    const it = ITEMS.find((t) => t.key === k);
+    if (it) { pressItem(it.id); e.preventDefault(); }
+  }
   if (k === 'escape') {
-    if (set) abortSet();
-    else $('#shop').classList.remove('on');
+    if (shift) finishShift();
+    else if (set) abortSet();
+    else { $('#shop').classList.remove('on'); $('#nft').classList.remove('on'); }
   }
   // Trying to walk out of a set means you want out of the set.
   if (set && ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) abortSet();

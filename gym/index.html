@@ -90,6 +90,51 @@
   .buy[disabled] { background: #0002; color: #0008; cursor: not-allowed; }
   #closeShop { margin-top: 12px; width: 100%; padding: 9px; font: 700 12px/1 var(--mono); text-transform: uppercase;
     border: 3px solid var(--ink); border-radius: 8px; background: var(--void); cursor: pointer; }
+  #closeNft { margin-top: 12px; width: 100%; padding: 9px; font: 700 12px/1 var(--mono); text-transform: uppercase;
+    border: 3px solid var(--ink); border-radius: 8px; background: var(--void); cursor: pointer; }
+
+  /* --- the crew stall ------------------------------------------------------ */
+  #nft { position: absolute; inset: auto 12px 12px 12px; max-width: 460px; margin: 0 auto; padding: 16px; display: none; }
+  #nft.on { display: block; }
+  #nft h2 { font-size: 17px; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+  #nftGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; max-height: 210px; overflow-y: auto; }
+  #nftGrid canvas { width: 100%; height: auto; display: block; border: 3px solid var(--ink); border-radius: 8px;
+    image-rendering: pixelated; background: var(--ink); }
+  #nftGrid figure { margin: 0; }
+  #nftGrid figcaption { font-size: 9px; letter-spacing: .06em; text-align: center; margin-top: 3px; opacity: .7; }
+
+  /* --- the shift ----------------------------------------------------------- */
+  #shift { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(520px, calc(100% - 24px));
+    padding: 14px; display: none; background: var(--void); border: var(--edge) solid var(--ink);
+    border-radius: 12px; box-shadow: 6px 6px 0 var(--ink); pointer-events: auto; }
+  #shift.on { display: block; }
+  #shiftHead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+  #shiftHead b { font-size: 16px; text-transform: uppercase; letter-spacing: .03em; }
+  #shiftHead span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+  #patienceBar { height: 14px; }
+  /* Patience turns red on its own rather than needing a separate warning — the
+     bar is the only thing anyone is watching once an order is up. */
+  #patience { background: var(--green); transition: width .08s linear, background .2s; }
+  #patience.low { background: var(--red); }
+
+  #order { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; min-height: 46px; align-items: center; }
+  .want { display: grid; place-items: center; width: 44px; height: 44px; font-size: 22px; line-height: 1;
+    border: 3px solid var(--ink); border-radius: 10px; background: #0001; }
+  .want.done { background: var(--green); opacity: .55; }
+
+  #tray { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  #tray button { display: grid; place-items: center; gap: 2px; padding: 10px 4px 8px; cursor: pointer;
+    font: 700 9px/1.1 var(--mono); text-transform: uppercase; letter-spacing: .04em;
+    border: 3px solid var(--ink); border-radius: 10px; background: var(--cream); }
+  #tray button span { font-size: 24px; line-height: 1; }
+  #tray button small { opacity: .5; font-size: 8px; }
+  #tray button.hit { background: var(--green); }
+  #tray button.bad { background: var(--red); color: var(--void); }
+  #clockOff { margin-top: 10px; width: 100%; padding: 8px; font: 700 11px/1 var(--mono); text-transform: uppercase;
+    border: 3px solid var(--ink); border-radius: 8px; background: var(--ink); color: var(--void); cursor: pointer; }
+  /* On a phone the stick and the action button sit exactly where the tray goes,
+     and you are not walking while you are at the window anyway. */
+  body.working #stick, body.working #act, body.working #shopBtn { display: none; }
 
   /* --- boot ---------------------------------------------------------------- */
   /* The game gets shared on its own. Without this, someone who lands here has
@@ -233,6 +278,26 @@
     <p class="note">Bought with $KEVIN earned on the floor. Nothing here touches a real wallet — no contract, no chain, no purchase.</p>
     <div id="shopItems"></div>
     <button id="closeShop">Back to the floor</button>
+  </div>
+
+  <div id="nft" class="panel">
+    <h2>Kevin's Crew</h2>
+    <p class="note" id="nftNote"></p>
+    <div id="nftGrid"></div>
+    <button id="closeNft">Back to the floor</button>
+  </div>
+
+  <!-- The shift. Takes the middle of the screen because it is the whole game
+       while it is up, and the 3D queue behind it is the only thing worth
+       seeing past it. -->
+  <div id="shift">
+    <div id="shiftHead">
+      <b id="shiftWho"></b><span id="shiftCount"></span>
+    </div>
+    <div class="bar" id="patienceBar"><i id="patience"></i></div>
+    <div id="order"></div>
+    <div id="tray"></div>
+    <button id="clockOff">Clock off</button>
   </div>
 </div>
 

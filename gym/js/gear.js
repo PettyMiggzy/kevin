@@ -250,3 +250,147 @@ export const boardTexture = () =>
     x.fillStyle = '#0B0B0B';
     x.fillText("DOESN'T EITHER", w / 2, 268);
   });
+
+// --- the strip: market, restaurant, and something behind the fence ----------
+// Everything below fills what used to be flat blue sky and empty concrete. All
+// of it is canvas on a quad rather than geometry, for the same reason the gym
+// signage is: a painted sign costs one texture, a modelled one costs a model.
+
+/** Awning stripes. Two colours, because one is a tarpaulin and two is a market. */
+export const awningTexture = (a = '#E8232B', b = '#FFF6C8') =>
+  canvasTexture(128, 128, (x, w, h) => {
+    for (let i = 0; i < 8; i++) {
+      x.fillStyle = i % 2 ? a : b;
+      x.fillRect((i * w) / 8, 0, w / 8, h);
+    }
+  }, { repeat: [3, 1] });
+
+/** A stall's header board. Short words only — it is read at a glance, in 3D. */
+export const stallTexture = (title, sub, bg = '#0B0B0B', fg = '#FFE500') =>
+  canvasTexture(768, 224, (x, w, h) => {
+    x.fillStyle = bg;
+    x.fillRect(0, 0, w, h);
+    x.strokeStyle = fg;
+    x.lineWidth = 8;
+    x.strokeRect(10, 10, w - 20, h - 20);
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    x.fillStyle = fg;
+    x.font = '700 76px ui-monospace, Menlo, monospace';
+    x.fillText(title, w / 2, h * 0.40);
+    x.fillStyle = '#FFFFFF';
+    x.font = '700 34px ui-monospace, Menlo, monospace';
+    x.fillText(sub, w / 2, h * 0.74);
+  });
+
+/** The fry house fascia. Kevin's own colours — this is his second job, not a
+ *  franchise, and it should not look like anybody else's. */
+export const fryHouseTexture = () =>
+  canvasTexture(1024, 320, (x, w, h) => {
+    x.fillStyle = '#E8232B';
+    x.fillRect(0, 0, w, h);
+    x.fillStyle = '#FFE500';
+    x.fillRect(0, h - 34, w, 34);
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    x.fillStyle = '#FFE500';
+    x.font = '700 128px ui-monospace, Menlo, monospace';
+    x.fillText("KEVIN'S", w / 2, h * 0.40);
+    x.fillStyle = '#FFFFFF';
+    x.font = '700 44px ui-monospace, Menlo, monospace';
+    x.fillText('FRY HOUSE  ·  OVER 3 SERVED', w / 2, h * 0.74);
+  });
+
+/** The menu above the counter. Prices in $KEVIN, which is a score. */
+export const menuTexture = () =>
+  canvasTexture(640, 448, (x, w, h) => {
+    x.fillStyle = '#141418';
+    x.fillRect(0, 0, w, h);
+    x.strokeStyle = '#FFE500';
+    x.lineWidth = 8;
+    x.strokeRect(8, 8, w - 16, h - 16);
+    x.textAlign = 'left';
+    x.textBaseline = 'middle';
+    x.fillStyle = '#FFE500';
+    x.font = '700 40px ui-monospace, Menlo, monospace';
+    x.fillText('MENU', 40, 56);
+    const rows = [['BURGER', '1'], ['FRIES', '1'], ['SHAKE', '1'], ['NUGGETS', '1']];
+    x.font = '700 34px ui-monospace, Menlo, monospace';
+    rows.forEach(([name, price], i) => {
+      const y = 130 + i * 62;
+      x.fillStyle = '#FFFFFF';
+      x.fillText(name, 44, y);
+      x.fillStyle = '#E8232B';
+      x.textAlign = 'right';
+      x.fillText(price, w - 44, y);
+      x.textAlign = 'left';
+    });
+    x.fillStyle = '#8A8A8A';
+    x.font = '700 22px ui-monospace, Menlo, monospace';
+    x.fillText('ASK ABOUT THE FRYER', 44, h - 42);
+  });
+
+/**
+ * A block in the skyline. Windows are drawn, not modelled — at forty metres
+ * nobody can tell, and a lit grid on a box is what makes a box read as a
+ * building rather than a box.
+ */
+export const windowsTexture = (wall = '#6E6A78', lit = '#FFE9A8', seed = 1) =>
+  canvasTexture(128, 256, (x, w, h) => {
+    x.fillStyle = wall;
+    x.fillRect(0, 0, w, h);
+    let s = seed * 9301;
+    const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+    for (let row = 0; row < 12; row++) {
+      for (let col = 0; col < 5; col++) {
+        const r = rnd();
+        x.fillStyle = r > 0.62 ? lit : r > 0.3 ? '#3A3A46' : '#2A2A34';
+        x.fillRect(10 + col * 22, 12 + row * 20, 14, 12);
+      }
+    }
+    x.fillStyle = '#00000022';
+    x.fillRect(0, 0, w, 8);
+  });
+
+/**
+ * The leaderboard, redrawn whenever the numbers move.
+ *
+ * Takes rows rather than reading state, so the same board can show local bests
+ * today and server rankings later without touching the drawing.
+ */
+export const leaderTexture = (rows, { title = 'TOP OF THE GYM', note = '' } = {}) =>
+  canvasTexture(768, 512, (x, w, h) => {
+    x.fillStyle = '#0B0B0B';
+    x.fillRect(0, 0, w, h);
+    x.strokeStyle = '#FFE500';
+    x.lineWidth = 10;
+    x.strokeRect(12, 12, w - 24, h - 24);
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    x.fillStyle = '#FFE500';
+    x.font = '700 46px ui-monospace, Menlo, monospace';
+    x.fillText(title, w / 2, 62);
+
+    x.textAlign = 'left';
+    x.font = '700 30px ui-monospace, Menlo, monospace';
+    rows.slice(0, 8).forEach((r, i) => {
+      const y = 124 + i * 41;
+      const you = r.you;
+      x.fillStyle = you ? '#E8232B' : '#FFFFFF';
+      // The row's own rank, not its position in the list — the last row is the
+      // player, who may be ninth.
+      x.fillText(String(r.rank ?? i + 1).padStart(2, ' '), 44, y);
+      x.fillText(r.name.slice(0, 16).toUpperCase(), 100, y);
+      x.textAlign = 'right';
+      x.fillStyle = you ? '#E8232B' : '#FFE500';
+      x.fillText(r.score, w - 48, y);
+      x.textAlign = 'left';
+    });
+
+    if (note) {
+      x.textAlign = 'center';
+      x.fillStyle = '#7A7A7A';
+      x.font = '700 20px ui-monospace, Menlo, monospace';
+      x.fillText(note, w / 2, h - 40);
+    }
+  });

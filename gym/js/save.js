@@ -47,6 +47,11 @@ const FRESH = {
   goalSets: 0,
   bestCombo: 0,
   sessions: 0,
+  // --- the shift -----------------------------------------------------------
+  shifts: 0,
+  served: 0,
+  bestShift: 0,          // best single-shift pay
+  jobCoin: 0,            // lifetime earned at the window, for the board
 };
 
 /** Three sets a day. Low on purpose — the streak has to be easy to keep. */
@@ -161,4 +166,44 @@ export function workout(s, station, now = Date.now(), quality = 1) {
 
   s.lastSeen = now;
   return { gain, stam, coin, boosted };
+}
+
+
+/** Credit a finished shift at the fry house. */
+export function payShift(s, r, now = Date.now()) {
+  s.coin += r.coin;
+  s.jobCoin = (s.jobCoin || 0) + r.coin;
+  s.shifts = (s.shifts || 0) + 1;
+  s.served = (s.served || 0) + r.served;
+  s.bestShift = Math.max(s.bestShift || 0, r.coin);
+  s.lastSeen = now;
+  return r;
+}
+
+/**
+ * The board on the gym wall.
+ *
+ * LOCAL ONLY, and the board says so on its face. The crew below are fixed
+ * numbers, not other players — there is no server, so there is nobody else to
+ * rank against. Beating them is a milestone rather than a competition, and the
+ * shape of this function (rows in, rows out) is what a real ranking would slot
+ * into unchanged.
+ */
+const RIVALS = [
+  ['Big Mike', 96], ['Sandra', 81], ['Trav', 68], ['The Regular', 57],
+  ['Dave from work', 44], ['Kayla', 33], ['Nan', 24], ['The Night Guy', 15],
+];
+
+export function leaderboard(s) {
+  const you = { name: 'You', score: Math.round(s.muscle), you: true };
+  const all = [...RIVALS.map(([name, score]) => ({ name, score })), you]
+    .sort((a, b) => b.score - a.score)
+    .map((r, i) => ({ ...r, rank: i + 1 }));
+
+  // A board that leaves you off it is not a leaderboard, it is a poster. You
+  // start on 12 muscle, below every rival, so the naive top-8 showed a stranger
+  // eight times and never the player. Top seven, then you — at your real rank.
+  const top = all.slice(0, 7);
+  if (top.some((r) => r.you)) return all.slice(0, 8);
+  return [...top, all.find((r) => r.you)];
 }
