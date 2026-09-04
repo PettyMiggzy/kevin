@@ -136,11 +136,16 @@ function buildRoom(scene) {
     flat('#FFFFFF', floorTexture())
   );
   floor.rotation.x = -Math.PI / 2;
+  // Lifted off zero. The forecourt out front is a 60x60 plane centred at z=20,
+  // which reaches back to z=-10 and so passes underneath this entire room — two
+  // surfaces at exactly y=0 fight for the depth buffer and the floor shimmers
+  // and tears as the camera moves. A few millimetres is invisible and settles it.
+  floor.position.y = 0.008;
   scene.add(floor);
 
   const mat = new THREE.Mesh(new THREE.PlaneGeometry(7.4, 5.0), flat('#FFFFFF', platformTexture()));
   mat.rotation.x = -Math.PI / 2;
-  mat.position.set(-4.2, 0.012, 1.2);
+  mat.position.set(-4.2, 0.024, 1.2);      // and clear of the floor above it
   scene.add(mat);
 
   const wall = (w, h, x, y, z, ry) => {

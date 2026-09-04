@@ -33,8 +33,15 @@ const flag = (n, d) => {
 // A prop in a one-room gym gets a few thousand triangles. Anything that will
 // not simplify to this is not a prop, it is a problem — say so rather than
 // quietly shipping a 300k-triangle bench.
-const BUDGET = Number(flag('budget', 6000));
-const TEXTURE = Number(flag('texture', 512));
+// Raised after the first pass shipped a bench at 1,307 triangles from a 376,675
+// triangle source — a 288x cut, which is where "the equipment looks like shit"
+// came from. At --simplify-error 0.001 the same bench keeps 6,103 triangles for
+// 124KB instead of 48KB: about five times the geometry for two and a half times
+// the bytes, and 22 props still come in under 140k triangles, which no phone
+// made this decade will notice.
+const BUDGET = Number(flag('budget', 20000));
+const TEXTURE = Number(flag('texture', 1024));
+const ERROR = flag('error', '0.001');
 
 const mb = (n) => (n / 1048576).toFixed(2) + 'MB';
 const kb = (n) => (n / 1024).toFixed(0) + 'KB';
@@ -99,7 +106,7 @@ async function main() {
       '--compress', 'meshopt',
       '--texture-size', String(TEXTURE),
       '--texture-compress', 'webp',
-      '--simplify-error', '0.005',
+      '--simplify-error', ERROR,
     ], { maxBuffer: 1 << 26 });
 
     const outSize = (await stat(out)).size;
