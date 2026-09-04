@@ -33,6 +33,9 @@ Get the bot token from [@BotFather](https://t.me/BotFather) (`/newbot`). To use 
 group, add it and then either give it admin, or run `/setprivacy` → Disable in BotFather
 so it can see messages that mention it.
 
+Running it on a server, keeping it up with systemd, and the Telegram group
+settings it needs: **[DEPLOY.md](DEPLOY.md)**.
+
 ## Configuration
 
 | Variable | Default | What |

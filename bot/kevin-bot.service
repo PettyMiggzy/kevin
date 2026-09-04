@@ -1,0 +1,32 @@
+# Kevin, as a service.
+#   cp bot/kevin-bot.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now kevin-bot
+#
+# Keys are NOT in here. They live in /opt/kevin/bot/.groq.key and
+# .telegram.key, chmod 600, gitignored, and they stay on the box — this repo
+# is public.
+[Unit]
+Description=Kevin (Telegram bot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/kevin
+ExecStart=/usr/bin/env node bot/index.mjs
+# Long polling reconnects on its own, but a crash should not be the end of it.
+Restart=always
+RestartSec=5
+# Telegram rate-limits a bot that reconnects in a tight loop, so back off
+# rather than hammering it if something is persistently wrong.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kevin-bot
+
+# If the model id ever gets retired, set it here and restart.
+# Environment=GROQ_MODEL=llama-3.3-70b-versatile
+
+[Install]
+WantedBy=multi-user.target
