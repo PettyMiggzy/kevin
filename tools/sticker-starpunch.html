@@ -19,8 +19,10 @@ const SIZE = 512;
 const FRAMES = Number(new URL(location.href).searchParams.get('frames') || 48);
 const SRC = '../assets/stickers/stills/star-power.png';
 
-// Where the star sits in the 1024px source. The burst is drawn here.
-const STAR = { x: 692, y: 172 };
+// Where the star sits is MEASURED, not typed in. It moves every time the still
+// is regenerated, and a burst that fires next to the star instead of on it is
+// worse than no burst.
+const STAR_FALLBACK = { x: 692, y: 172 };
 
 const canvas = document.getElementById('c');
 canvas.width = canvas.height = SIZE;
@@ -32,13 +34,14 @@ await img.decode();
 
 // --- cut the backdrop out ----------------------------------------------------
 /**
- * Flood fill inward from the border rather than keying a colour.
+ * Lift the character and the star off the flat backdrop, and find the star.
  *
- * A colour key cannot do this job: the backdrop is rgb(248,215,0) and the
- * star's fill is rgb(250,229,0) — fourteen levels apart in one channel. Any key
- * loose enough to clear the backdrop takes the star with it. The star has a
- * heavy black outline all the way round, so a fill that starts at the frame
- * edge simply cannot get inside it.
+ * A plain colour key cannot do this. On the current still the backdrop is
+ * rgb(252,232,11) and parts of the star's fill are rgb(249,230,29) — three
+ * levels apart in red, two in green. Any key loose enough to clear the backdrop
+ * dissolves the star. What separates them is not colour, it is the star's heavy
+ * black outline, so the cut is a flood fill inward from the frame edge: it
+ * cannot get inside a closed shape.
  */
 function cutout() {
   const w = img.naturalWidth;
@@ -51,39 +54,61 @@ function cutout() {
   const d = sx.getImageData(0, 0, w, h);
   const p = d.data;
   const bg = [p[4 * (4 * w + 4)], p[4 * (4 * w + 4) + 1], p[4 * (4 * w + 4) + 2]];
+  const nearBg = (k, t) =>
+    Math.abs(p[k * 4] - bg[0]) <= t && Math.abs(p[k * 4 + 1] - bg[1]) <= t &&
+    Math.abs(p[k * 4 + 2] - bg[2]) <= t;
 
-  const near = (i, tr, tg, tb) =>
-    Math.abs(p[i] - bg[0]) <= tr && Math.abs(p[i + 1] - bg[1]) <= tg && Math.abs(p[i + 2] - bg[2]) <= tb;
+  /** Grow a region from seeds over any pixel `ok` accepts. Shared by both fills. */
+  const grow = (seeds, mark, ok) => {
+    const st = [...seeds];
+    for (const k of st) mark[k] = 1;
+    let n = 0;
+    const px = [];
+    while (st.length) {
+      const k = st.pop();
+      n++;
+      px.push(k);
+      const x = k % w;
+      const y = (k / w) | 0;
+      const go = (nk) => { if (!mark[nk] && ok(nk)) { mark[nk] = 1; st.push(nk); } };
+      if (x > 0) go(k - 1);
+      if (x < w - 1) go(k + 1);
+      if (y > 0) go(k - w);
+      if (y < h - 1) go(k + w);
+    }
+    return { n, px };
+  };
 
   const gone = new Uint8Array(w * h);
-  const stack = [];
-  const push = (x, y) => {
-    const k = y * w + x;
-    if (!gone[k] && near(k * 4, 26, 26, 26)) { gone[k] = 1; stack.push(k); }
-  };
-  for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }
-  for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
-  while (stack.length) {
-    const k = stack.pop();
-    const x = k % w;
-    const y = (k / w) | 0;
-    if (x > 0) push(x - 1, y);
-    if (x < w - 1) push(x + 1, y);
-    if (y > 0) push(x, y - 1);
-    if (y < h - 1) push(x, y + 1);
+  const border = [];
+  for (let x = 0; x < w; x++) { border.push(x, (h - 1) * w + x); }
+  for (let y = 0; y < h; y++) { border.push(y * w, y * w + w - 1); }
+  grow(border.filter((k) => nearBg(k, 26)), gone, (k) => nearBg(k, 26));
+
+  // Backdrop trapped between his arm and his body is walled off from the frame
+  // edge, so the fill above never reaches it. Those pockets are found as their
+  // own islands and dropped BY SIZE, not by colour: a colour test tight enough
+  // to spare the star does not exist here, and a previous version of this
+  // punched holes right through the star's fill. A pocket between two limbs is
+  // small; the star is a twentieth of the frame.
+  // A pocket is bounded at BOTH ends. The ceiling keeps the star, which is a
+  // twentieth of the frame. The floor matters just as much: parts of the star's
+  // own fill sit within a whisker of the backdrop, so scattered single pixels
+  // inside it pass the colour test, and each one is an island of one. Without a
+  // floor they were all deleted and the star came out riddled with holes.
+  const POCKET_MAX = w * h * 0.008;
+  const POCKET_MIN = 150;
+  const seenPocket = new Uint8Array(w * h);
+  for (let k = 0; k < w * h; k++) {
+    if (gone[k] || seenPocket[k] || !nearBg(k, 12)) continue;
+    const { n, px } = grow([k], seenPocket, (nk) => !gone[nk] && nearBg(nk, 12));
+    if (n >= POCKET_MIN && n <= POCKET_MAX) for (const j of px) gone[j] = 1;
   }
 
-  // Backdrop trapped inside the drawing — between his arm and his body — is
-  // walled off from the border, so the fill above never reaches it. It is
-  // exact backdrop colour though, and the star is not: a tight, deliberately
-  // LOPSIDED tolerance clears the pockets while leaving the star alone,
-  // because the whole of the star's difference lives in the green channel.
-  for (let k = 0; k < w * h; k++) if (!gone[k] && near(k * 4, 10, 6, 10)) gone[k] = 1;
-
-  // Two passes of erosion. Between the black line art and the backdrop is a
-  // ring of half-and-half pixels, too dark to read as backdrop and too yellow
-  // to read as ink; left in, they ring the whole character in yellow the moment
-  // it sits on anything but yellow — which is every chat it will ever be in.
+  // Two passes of erosion. Between the ink and the backdrop sits a ring of
+  // half-and-half pixels, too dark to read as backdrop and too yellow to read
+  // as ink; left in, they outline the whole character in yellow the moment it
+  // sits on anything but yellow — which is every chat it will ever be in.
   for (let pass = 0; pass < 2; pass++) {
     const edge = [];
     for (let k = 0; k < w * h; k++) {
@@ -95,37 +120,53 @@ function cutout() {
     }
     for (const k of edge) gone[k] = 1;
   }
-
   for (let k = 0; k < w * h; k++) if (gone[k]) p[k * 4 + 3] = 0;
   sx.putImageData(d, 0, 0);
 
-  // Measure what is actually left, so the framing follows the art instead of
-  // a number typed in by hand that goes stale the next time the still changes.
+  // With the backdrop gone the drawing falls into islands: the character is far
+  // and away the largest, the star is the next, and the rest are the little
+  // white impact ticks. Taking the runner-up finds the star wherever it has
+  // landed, which matters because it moves every time the still is regenerated
+  // and a burst that fires beside the star is worse than no burst.
+  const seen = new Uint8Array(w * h);
+  let first = null;
+  let second = null;
   let x0 = w, y0 = h, x1 = -1, y1 = -1;
   for (let k = 0; k < w * h; k++) {
-    if (p[k * 4 + 3] === 0) continue;
-    const x = k % w;
-    const y = (k / w) | 0;
-    if (x < x0) x0 = x;
-    if (x > x1) x1 = x;
-    if (y < y0) y0 = y;
-    if (y > y1) y1 = y;
+    if (seen[k] || gone[k]) continue;
+    const { n, px } = grow([k], seen, (nk) => !gone[nk]);
+    let sxSum = 0;
+    let sySum = 0;
+    for (const j of px) {
+      const x = j % w;
+      const y = (j / w) | 0;
+      sxSum += x; sySum += y;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+    const c = { n, x: sxSum / n, y: sySum / n };
+    if (!first || n > first.n) { second = first; first = c; }
+    else if (!second || n > second.n) { second = c; }
   }
-  return { canvas: s, box: { x0, y0, x1, y1 } };
+  const star = second && second.n > first.n * 0.02 ? { x: second.x, y: second.y } : STAR_FALLBACK;
+
+  return { canvas: s, box: { x0, y0, x1, y1 }, star };
 }
 
-const { canvas: art, box } = cutout();
+const { canvas: art, box, star: STAR } = cutout();
 
 // Fit the art into the square. Anchored low rather than centred: the drawing
 // runs off the bottom of its own frame, so there is no chin to leave room for,
 // and the space is worth more above his fist where the star travels.
 const bw = box.x1 - box.x0 + 1;
 const bh = box.y1 - box.y0 + 1;
-const scale = (SIZE * 0.88) / Math.max(bw, bh);
+const scale = (SIZE * 0.84) / Math.max(bw, bh);
 const drawW = art.width * scale;
 const drawH = art.height * scale;
 const originX = SIZE / 2 - (box.x0 + bw / 2) * scale;
-const originY = SIZE * 0.975 - (box.y1 + 1) * scale;
+const originY = SIZE * 0.985 - (box.y1 + 1) * scale;
 const starX = originX + STAR.x * scale;
 const starY = originY + STAR.y * scale;
 

@@ -39,18 +39,39 @@ const BASE = `https://raw.githubusercontent.com/PettyMiggzy/kevin/${BRANCH}/asse
 const MODEL = process.env.VIDEO_MODEL || 'wan-3-0-image-to-video';
 
 // Keep the framing and the backdrop nailed down; the model only animates.
-// Drift shows up first in the head: the hair goes spiky, the muzzle narrows,
-// the eyes shrink. Naming those parts specifically holds them far better than
-// a general "keep the character the same".
+//
+// The features named below are named because they are the ones that drift, and
+// they are described from assets/refs/00-kevin-pfp.png — the original hand-drawn
+// PFP, which is the character. Anything else in assets/refs is a rendering OF
+// him and can be wrong; 00 cannot.
+//
+// Three specific drifts, all of which have actually happened here: the mouth
+// opens into a big screaming cartoon mouth with lips and a tongue and takes a
+// muzzle with it, the hair breaks into an all-over spiky mane, and the eyes
+// shrink. Kevin's mouth is a SMALL SOLID BLACK TRIANGLE and he has no snout at
+// all. General instructions to "keep the character the same" do not hold any of
+// this; naming each part does.
 const EDIT_HOLD =
-  'CRITICAL — keep the character IDENTICAL to the source image: the same ' +
-  'smooth rounded red hood shape with the same thick blunt dreadlock spikes ' +
-  '(never spiky, never messy, never human hair), the same TWO ENORMOUS white ' +
-  'oval eyes at the same size cutting up into the hood, the same wide pale ' +
-  'cream muzzle at the same width, the same heavy black line art, the same ' +
-  'flat colours. Change only what is asked for. Keep the whole character in ' +
-  'frame, centred, with margin on all sides, on a flat solid single-colour ' +
-  'background with nothing else in it. Do not crop in on his face.';
+  'CRITICAL — keep the character IDENTICAL to the source. He is: a large pale ' +
+  'cream rounded face with NO muzzle, NO snout, NO jaw; TWO ENORMOUS white oval ' +
+  'eyes, one bigger than the other, set high and cutting into the hair, each ' +
+  'with one small black oval pupil; a tiny black wedge nose; and for a mouth ' +
+  'ONE SMALL SOLID BLACK TRIANGLE — never an open mouth, never lips, teeth, ' +
+  'tongue, grin or scream. His hair is a smooth solid mass of flat red swept ' +
+  'over the top and down ONE side, ending in a few ragged torn points — never ' +
+  'spiky all over, never a mane, never fur. Thick wobbly hand-drawn black ' +
+  'outlines, flat colours, no shading. Change only what is asked. Keep the ' +
+  'whole character in frame, centred, with margin all round, on a flat solid ' +
+  'single-colour background with nothing else in it. Do not crop in on his face.';
+
+/**
+ * Venice caps an edit prompt at 1500 characters and rejects the whole call over
+ * it. EDIT_HOLD is prepended to every one of these, so a few words added to the
+ * hold can push a sticker that has always worked over the line — and the only
+ * signal is a 400 halfway through a run. Checked here instead, before anything
+ * is billed.
+ */
+const PROMPT_LIMIT = 1500;
 
 const HOLD =
   'ABSOLUTELY DO NOT change the framing. The camera must not zoom, pan, dolly, ' +
@@ -140,8 +161,8 @@ export const STICKERS = [
     // nudgeY 0 because this still is asked for with no baked lettering; the
     // default lift exists to crop the generator's own words out of frame and
     // would otherwise slice his chin off for nothing.
-    slug: 'star-power', src: '01-hero-portrait.jpg', word: 'STAR POWER', nudgeY: 0,
-    edit: 'Keep his head exactly as it is — same size, same position, same enormous white oval eyes, same wide cream muzzle, same smooth rounded red hood with thick blunt dreadlock spikes. Leave clear empty space across the top of the frame. Change only his arms: one arm punched straight up into that empty space above his head with the hand in a tight closed fist, the other fist raised beside his shoulder. Resting right on top of the raised fist, put one big glossy yellow five-pointed cartoon power-up star with two simple black oval eyes and a thick black outline, knocked upward by the punch, with short white impact lines flicking off it. His mouth is wide open shouting and his eyes look up at the star. Add no text or lettering anywhere in the image',
+    slug: 'star-power', src: '00-kevin-pfp.png', word: 'STAR POWER', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE exactly as in the source — do NOT open it, no tongue, no teeth. The top of his hair stays smooth with no spikes or tufts. Leave empty space across the top of the frame. Change only his arms: one arm punched straight up into that space with a tight CLOSED fist, the other fist raised by his shoulder. Floating just above the raised knuckles — not touched, not held, not gripped — put one big glossy yellow five-pointed cartoon power-up star with two small black oval eyes and a thick black outline, knocked upward, with short white impact lines flicking off it. Add no text anywhere',
     action: 'His WHOLE BODY drives upward with the punch, torso stretching tall, shoulders lifting, head tipping back to shout up at it, hood and dreadlocks swinging with the motion, the raised fist punching up hard — the star spins, flashes and bounces higher on the hit — then he drops back into a squash and punches straight up into it again',
   },
   // --- the fryer set ------------------------------------------------------
@@ -431,6 +452,16 @@ async function main() {
       await derive(webm, s.slug);
       console.log(`  ${s.slug.padEnd(16)} ${(size / 1024).toFixed(0).padStart(4)}KB (crf ${crf}${fps < 30 ? `, ${fps}fps` : ''})`);
     }
+    return;
+  }
+
+  // Fail on an over-length prompt here rather than at the API, mid-run.
+  const over = list
+    .map((s) => ({ slug: s.slug, n: `${s.edit}. ${EDIT_HOLD}`.length }))
+    .filter((s) => s.n > PROMPT_LIMIT);
+  if (over.length) {
+    for (const o of over) console.log(`  ! ${o.slug}: edit prompt is ${o.n} chars, over the ${PROMPT_LIMIT} limit`);
+    console.log('  shorten the edit text or EDIT_HOLD — nothing was billed');
     return;
   }
 
