@@ -1,0 +1,256 @@
+{
+  "palette": {
+    "red": [
+      216,
+      28,
+      36
+    ],
+    "cream": [
+      250,
+      240,
+      205
+    ],
+    "white": [
+      250,
+      250,
+      250
+    ],
+    "ink": [
+      16,
+      12,
+      12
+    ]
+  },
+  "colourways": {
+    "Classic Red": [
+      216,
+      28,
+      36
+    ],
+    "Fryer Orange": [
+      232,
+      116,
+      24
+    ],
+    "Kek Green": [
+      40,
+      168,
+      84
+    ],
+    "Cold Blue": [
+      42,
+      108,
+      214
+    ],
+    "Grape": [
+      138,
+      62,
+      190
+    ],
+    "Bubblegum": [
+      236,
+      88,
+      160
+    ],
+    "Gold": [
+      226,
+      176,
+      34
+    ],
+    "Void": [
+      64,
+      64,
+      72
+    ]
+  },
+  "note": "head/<name>.png over body/<name>.png reassembles the original frame exactly; both are full-size so they composite at 0,0.",
+  "cuts": [
+    {
+      "name": "back-00",
+      "cut": 108
+    },
+    {
+      "name": "back-01",
+      "cut": 108
+    },
+    {
+      "name": "back-02",
+      "cut": 108
+    },
+    {
+      "name": "back-03",
+      "cut": 108
+    },
+    {
+      "name": "back-04",
+      "cut": 108
+    },
+    {
+      "name": "back-05",
+      "cut": 108
+    },
+    {
+      "name": "back-06",
+      "cut": 108
+    },
+    {
+      "name": "back-07",
+      "cut": 108
+    },
+    {
+      "name": "back-08",
+      "cut": 108
+    },
+    {
+      "name": "diagonal-00",
+      "cut": 101
+    },
+    {
+      "name": "diagonal-01",
+      "cut": 101
+    },
+    {
+      "name": "diagonal-02",
+      "cut": 101
+    },
+    {
+      "name": "diagonal-03",
+      "cut": 101
+    },
+    {
+      "name": "diagonal-04",
+      "cut": 101
+    },
+    {
+      "name": "diagonal-05",
+      "cut": 101
+    },
+    {
+      "name": "diagonal-06",
+      "cut": 101
+    },
+    {
+      "name": "diagonal-07",
+      "cut": 101
+    },
+    {
+      "name": "diagonal-08",
+      "cut": 101
+    },
+    {
+      "name": "front-00",
+      "cut": 95
+    },
+    {
+      "name": "front-01",
+      "cut": 95
+    },
+    {
+      "name": "front-02",
+      "cut": 95
+    },
+    {
+      "name": "front-03",
+      "cut": 95
+    },
+    {
+      "name": "front-04",
+      "cut": 95
+    },
+    {
+      "name": "front-05",
+      "cut": 95
+    },
+    {
+      "name": "front-06",
+      "cut": 95
+    },
+    {
+      "name": "front-07",
+      "cut": 95
+    },
+    {
+      "name": "front-08",
+      "cut": 95
+    },
+    {
+      "name": "left-00",
+      "cut": 109
+    },
+    {
+      "name": "left-01",
+      "cut": 109
+    },
+    {
+      "name": "left-02",
+      "cut": 109
+    },
+    {
+      "name": "left-03",
+      "cut": 109
+    },
+    {
+      "name": "left-04",
+      "cut": 109
+    },
+    {
+      "name": "left-05",
+      "cut": 109
+    },
+    {
+      "name": "left-06",
+      "cut": 109
+    },
+    {
+      "name": "left-07",
+      "cut": 109
+    },
+    {
+      "name": "left-08",
+      "cut": 109
+    },
+    {
+      "name": "right-00",
+      "cut": 109
+    },
+    {
+      "name": "right-01",
+      "cut": 109
+    },
+    {
+      "name": "right-02",
+      "cut": 109
+    },
+    {
+      "name": "right-03",
+      "cut": 109
+    },
+    {
+      "name": "right-04",
+      "cut": 109
+    },
+    {
+      "name": "right-05",
+      "cut": 109
+    },
+    {
+      "name": "right-06",
+      "cut": 109
+    },
+    {
+      "name": "right-07",
+      "cut": 109
+    },
+    {
+      "name": "right-08",
+      "cut": 109
+    }
+  ],
+  "cutByDirection": {
+    "back": 108,
+    "diagonal": 101,
+    "front": 95,
+    "left": 109,
+    "right": 109
+  }
+}

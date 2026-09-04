@@ -51,3 +51,45 @@ Cells are 158x176 because that is roughly what Todd's frames actually are. They
 are not upscaled. Blown up to 512 for a sticker they go soft, which is a real
 limit of the source and not something code fixes — for anything larger, ask
 Todd for the frames at full size.
+
+## Head / body split — the NFT seam
+
+`tools/sprite-parts.mjs` splits every frame into `parts/head/` and
+`parts/body/`. Both are full-size, so `head` drawn over `body` at 0,0
+reassembles the original frame — verified byte for byte, 0 pixels differing.
+
+This is what makes 1,000 playable NFTs affordable. If a token varies by head and
+colour, you do not need 1,000 sprite sets:
+
+```
+body(colourway) + head(variant) = that token, in every frame Todd has drawn
+```
+
+Every new animation costs **one body set** and inherits every head and every
+colour for free. Eight colourways are defined in `parts.json`; adding a ninth is
+a line.
+
+**The cut is one line per DIRECTION, not per frame.** Per-frame cutting looks
+tidier and is wrong: the head lands at a different height each frame and the
+composite shears at the neck. Two other things it took a wrong turn to learn —
+the lowest cream pixel is not the muzzle, because Kevin has a cream strip down
+his chest that dragged the cut 46px too low; and the back-facing frames have no
+muzzle at all, so they borrow the median of the directions that do.
+
+**Recolour by palette swap, never by hue rotation.** His red is a flat
+`rgb(216,28,36)`. Hue-rotating JPEG-sourced flat art turns it to mud, which is
+exactly why the first PFP colourways came out brown. Mapping the red family to a
+new colour while keeping each shade's own lightness keeps the darker outline
+reds darker and every edge crisp.
+
+## What would make this better, and only Todd can
+
+- **More walk frames.** Nine is a standard cycle and reads fine at 12fps.
+  Twelve or sixteen would be visibly smoother. In-betweening these in code
+  would morph the line art, so it is a drawing job.
+- **More body sets**: lifting, idle, fry-station, sit. Each one is a full
+  character set for free once split, because heads and colours come along.
+- **A head library**: the same head with shades, cap, crown, gold tooth. Drawn
+  once per direction, they drop into `parts/head/` and every body animation
+  gets them.
+- **The frames at full resolution** if these are ever wanted above ~158px.
