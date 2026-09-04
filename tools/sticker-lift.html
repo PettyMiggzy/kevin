@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kevin lifts — sticker frames</title>
+<style>html,body{margin:0;background:transparent}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="importmap">
+{ "imports": { "three": "../gym/vendor/three.module.js", "three/addons/": "../gym/vendor/addons/" } }
+</script>
+<script type="module">
+// Kevin curling a dumbbell, as frames for an animated Telegram sticker.
+//
+// Rendered from the SAME builder the game uses, so the sticker is the character
+// people meet in the gym rather than a lookalike. Transparent background,
+// 512x512, which is what Telegram wants for a video sticker.
+import * as THREE from 'three';
+import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
+import { buildKitKevin } from '../gym/js/kevin.js';
+import { makeDumbbell } from '../gym/js/gear.js';
+
+const SIZE = 512;
+const FRAMES = Number(new URL(location.href).searchParams.get('frames') || 48);
+
+const canvas = document.getElementById('c');
+canvas.width = canvas.height = SIZE;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(1);
+renderer.setSize(SIZE, SIZE, false);
+renderer.setClearAlpha(0);
+const effect = new OutlineEffect(renderer, { defaultThickness: 0.006, defaultColor: [0, 0, 0], defaultAlpha: 1 });
+
+const RAMP = (() => {
+  const t = new THREE.DataTexture(
+    new Uint8Array([120, 120, 120, 255, 215, 215, 215, 255, 255, 255, 255, 255]), 3, 1, THREE.RGBAFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
+})();
+const toon = (color) => new THREE.MeshToonMaterial({ color, gradientMap: RAMP });
+
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight('#FFFFFF', '#9A8F7A', 2.2));
+const key = new THREE.DirectionalLight('#FFFFFF', 1.4);
+key.position.set(4, 8, 7);
+scene.add(key);
+
+const kevin = buildKitKevin({ toon });
+kevin.group.rotation.order = 'YXZ';
+kevin.group.rotation.y = 0.42;
+scene.add(kevin.group);
+
+// A dumbbell in each hand, hung where the game hangs them.
+const gearMat = toon('#FFFFFF');
+gearMat.vertexColors = true;
+gearMat.userData.outlineParameters = { thickness: 0.009, color: [0, 0, 0], alpha: 1 };
+const bells = kevin.arms.map((arm) => {
+  const d = makeDumbbell(gearMat);
+  d.position.y = -kevin.torsoH * 0.95;
+  // The bar is modelled along z. A curl swings the arm in the yz plane, so left
+  // as-is the dumbbell tumbles end over end; turned a quarter, the bar lies
+  // across the fist and stays horizontal through the whole rep.
+  d.rotation.y = Math.PI / 2;
+  arm.add(d);
+  return d;
+});
+
+// Kevin stands about 1.83 tall (legs .635 + torso .52 + head). Framed to put the
+// whole of him in the square with a little air top and bottom — a sticker with
+// the feet sliced off by the frame edge looks like a mistake, not a crop.
+const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 40);
+camera.position.set(0.80, 1.20, 3.65);
+camera.lookAt(0, 0.91, 0);
+
+/**
+ * One curl per loop, with the arms slightly out of phase so it reads as a
+ * person rather than a machine. Everything is a function of t in [0,1) so the
+ * last frame hands back to the first with no seam — a sticker that jumps on
+ * loop is the one thing people notice immediately.
+ */
+function pose(t) {
+  const curl = (1 - Math.cos(t * Math.PI * 2)) / 2;        // 0 -> 1 -> 0, smooth
+  kevin.arms.forEach((arm, i) => {
+    const lag = i === 0 ? 0 : 0.10;
+    const c = (1 - Math.cos((t + lag) * Math.PI * 2)) / 2;
+    arm.rotation.x = -c * 2.35;                             // the curl itself
+    arm.rotation.z = (i === 0 ? -1 : 1) * (0.16 + c * 0.10);
+  });
+  // The whole body dips on the effort and the head follows a beat later.
+  kevin.rig.position.y = -0.035 * curl;
+  kevin.head.rotation.x = 0.10 * curl;
+  kevin.group.rotation.y = 0.42 + Math.sin(t * Math.PI * 2) * 0.05;
+  // Chest swells at the top of the rep. Small: a pump, not a balloon.
+  const s = 1 + curl * 0.06;
+  kevin.torso.scale.set(s, 1, s);
+}
+
+const frames = [];
+for (let i = 0; i < FRAMES; i++) {
+  pose(i / FRAMES);
+  effect.render(scene, camera);
+  frames.push(canvas.toDataURL('image/png'));
+}
+window.__frames = frames;
+window.__ready = true;
+</script>
+</body>
+</html>
