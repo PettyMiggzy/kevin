@@ -46,7 +46,15 @@ window.KEVIN = {
   // stays disabled until then. EIP-55 checksum verified before publishing —
   // a mixed-case address that fails its own checksum is a typo, and a typo
   // here is somebody's money.
-  contract: '0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A',
+  //
+  // PULLED. What was here — 0x63D7fa...9e284A — is the OLD BASE token, not the
+  // Robinhood Chain one launching on the 7th. It was on the live site and the
+  // bot was handing it out on /ca, under copy telling people to memorise it now
+  // so they would recognise the fakes later. Which means it was teaching the
+  // group the wrong address and vouching for it. Null until the real one is in
+  // hand: the site and the bot both say nobody has it yet, which is true and
+  // safe, where a confident wrong answer is neither.
+  contract: null,
 
   // When it actually starts trading. Publishing the address BEFORE this is
   // deliberate and protective: the group gets to memorise the real one while
