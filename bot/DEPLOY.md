@@ -178,15 +178,27 @@ core.telegram.org/api/bots/bot-to-bot**, not taken on trust — the old rule
 ("bots never see other bots") held for a decade and building on a wrong version
 of it would have cost a week.
 
-To read another bot's ordinary group posts, with no cooperation from that bot,
-**Kevin needs all three**:
+To read another bot's ordinary group posts, with no cooperation from that bot:
 
-1. @BotFather → Kevin → **Bot-to-Bot Communication Mode** → on
-2. @BotFather → Kevin → **Group Privacy** → off
-3. Kevin is **admin** in the group
+1. @BotFather → Kevin → **Bot-to-Bot Communication Mode** → on — **required**
+2. **and either** Group Privacy off **or** Kevin is admin in the group
 
-With fewer than all three you only get bot messages that `/command@Iamkevinzbot`
-or reply to Kevin directly.
+core.telegram.org/bots/features is explicit that the second pair is an **or**:
+"bots with Bot-to-Bot Communication Mode enabled will receive all messages from
+other bots in groups without explicit mentions or replies if they: Have admin
+rights in the group, **or** Have Group Privacy Mode disabled". The lower-level
+api/bots/bot-to-bot page lists the same two as bullets, which reads as an and —
+the features page is the clearer of the two. Doing both costs nothing.
+
+Without Bot-to-Bot Communication Mode you only get bot messages that
+`/command@Iamkevinzbot` or reply to Kevin directly, and only when at least one
+of the two bots has the mode on. It is not optional for passive reading.
+
+**If the toggle is not in your Bot Settings menu**, it has not appeared for that
+bot yet. Send `/help` to BotFather and look for a direct command; the menu and
+the command list do not always match, and new settings often land as a command
+first. Nothing else here depends on it — `--sniff` will simply log nothing until
+it is on.
 
 ### Capture the format before parsing it
 

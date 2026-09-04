@@ -6,11 +6,14 @@
 // would have wasted a week.
 //
 // To receive another bot's ordinary group posts — Radar's leaderboard, say —
-// with no cooperation from that bot, THIS bot needs all three:
-//   1. Bot-to-Bot Communication Mode on, in @BotFather
-//   2. Group Privacy Mode off, in @BotFather
-//   3. admin in the group
-// With fewer, it only sees bot messages that /command@ThisBot or reply to it.
+// with no cooperation from that bot, THIS bot needs Bot-to-Bot Communication
+// Mode on in @BotFather, AND EITHER Group Privacy off OR admin in the group.
+// core.telegram.org/bots/features words that second pair as an "or"; the
+// lower-level api/bots/bot-to-bot page lists them as bullets that read as an
+// "and". Doing both costs nothing and settles it.
+//
+// Without the mode itself, it only sees bot messages that /command@ThisBot or
+// reply to it directly. The mode is not optional for passive reading.
 //
 // Telegram's own docs ask for loop safeguards, and they are right to: two bots
 // that answer each other will do so forever at machine speed. Everything below
