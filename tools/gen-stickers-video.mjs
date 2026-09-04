@@ -40,29 +40,30 @@ const MODEL = process.env.VIDEO_MODEL || 'wan-3-0-image-to-video';
 
 // Keep the framing and the backdrop nailed down; the model only animates.
 //
-// THE REFERENCE THAT SETTLES THIS IS assets/refs/13-kevin-canon.jpg. Not the
-// hand-drawn PFP, which is a rough sketch of him, and not any of the generated
-// scenes, which are renderings OF him and drift.
+// THE CHARACTER IS TODD'S. 14-todd-walkcycles.jpg and 15-todd-poses.jpg are
+// drawn by the project's own artist and settle every question the earlier
+// references left open — full body, all four directions, fourteen poses.
+// 16-kevin-idle.png is one pose cut out of the sheet as a clean edit source.
 //
-// I have now got this wrong in both directions and each mistake cost a pack.
-// First I read the sketch literally: called his head "hair", forbade spikes,
-// and deleted the muzzle — which stripped out the mascot construction that
-// makes him read as himself. Correcting that, I overshot and demanded
-// swept-back quills, which he does not have either. He has a SMOOTH ROUNDED
-// RED HEAD and a WIDE CREAM MUZZLE. What gives him the look is the eyes and
-// the muzzle, not spikes.
+// He is SIMPLE. Flat solid red everywhere, thin noodle limbs, no clothes, no
+// shoes, no gloves, no muscles, no shading. Every generated reference before
+// this one had drifted somewhere — a muzzle here, quills there, sneakers and a
+// six-pack — and each drift cost a pack of stickers to find out. Anything that
+// is not in Todd's sheets is not on him.
 const EDIT_HOLD =
-  'CRITICAL — keep the character IDENTICAL to the source. He is: a SMOOTH ' +
-  'ROUNDED RED HEAD with no spikes, no quills and no hair; TWO ENORMOUS white ' +
-  'oval eyes that touch in the middle of his face, tilted, one bigger than the ' +
-  'other, each with one small black oval pupil, thin black outlines; a WIDE ' +
-  'PALE CREAM MUZZLE across the whole lower half of his face; a small black ' +
-  'triangle nose; and for a mouth ONE SMALL SOLID BLACK TRIANGLE — never open, ' +
-  'never lips, teeth or a tongue. A red body with a cream chest, red hands, ' +
-  'red and white shoes. Heavy black outlines, flat colours, no shading. Change ' +
-  'only what is asked. Keep the whole character in frame, centred, with margin ' +
-  'all round on a COMPLETELY FLAT single-colour background — no gradient, no ' +
-  'vignette, no texture, NO SHADOW under him and no shadow anywhere.';
+  'CRITICAL — keep the character IDENTICAL to the source. He is drawn SIMPLE ' +
+  'and FLAT: solid red all over with NO clothes, NO shoes, NO gloves and NO ' +
+  'muscles. Red hair swept over the top of his head and down ONE side in a ' +
+  'sheet with ragged torn ends. TWO ENORMOUS white oval eyes that touch in the ' +
+  'middle, tilted, one bigger, each with one black oval pupil. A big pale ' +
+  'cream face patch across the lower half of his head, carrying on as a narrow ' +
+  'cream strip down his front. A tiny black dot nose and ONE SMALL SOLID BLACK ' +
+  'TRIANGLE for a mouth — never open, never lips, teeth or a tongue. Thin ' +
+  'noodle arms and legs with simple mitten hands and plain oval feet. Heavy ' +
+  'black outlines, flat colour, NO shading or gradients. Change only what is ' +
+  'asked. Keep the whole character in frame, centred, with margin all round on ' +
+  'a COMPLETELY FLAT single-colour background — no gradient, no texture, NO ' +
+  'SHADOW under him and no shadow anywhere.';
 
 /**
  * Venice caps an edit prompt at 1500 characters and rejects the whole call over
@@ -155,79 +156,79 @@ export const STICKERS = [
   // KEK is the launchpad's own token, so it is the power-up in all of these
   // rather than a generic star — the two packs are meant to read as one set.
   {
-    slug: 'kek-power', word: 'KEK POWER', src: '13-kevin-canon.jpg', nudgeY: 0,
+    slug: 'kek-power', word: 'KEK POWER', src: '16-kevin-idle.png', nudgeY: 0,
     edit: 'Show his whole body, leaping in mid-air, one arm punched straight up above his head in a tight closed fist. Floating just above his knuckles, not held, is a round green coin with a thick black outline and the word KEK in fat white rounded capitals across the middle, knocked upward by the punch with short white impact lines flicking off it. Add no text or lettering anywhere',
     action: 'His WHOLE BODY drives upward off the ground, legs kicking beneath him, torso stretching tall, head rocking back, the fist punching up hard — the coin spins, flashes and bounces higher on the hit — then he squashes down and springs straight up into it again',
   },
   {
-    slug: 'kek-rain', word: 'KEK RAIN', src: '13-kevin-canon.jpg', nudgeY: 0,
+    slug: 'kek-rain', word: 'KEK RAIN', src: '16-kevin-idle.png', nudgeY: 0,
     edit: 'Show his whole body, both arms stretched up wide and head tipped back, catching a shower of falling coins. Many of a round green coin with a thick black outline and the word KEK in fat white rounded capitals across the middle, all different sizes, tumbling down through the air all around him and piling up around his feet. Add no text or lettering anywhere',
     action: 'His WHOLE BODY bounces on his feet with both arms swiping through the air to catch them, torso twisting side to side, head snapping to follow the coins, head bobbing — the coins tumble and spin down past him and bounce off the pile at his feet',
   },
   {
-    slug: 'kek-flex', word: 'KEK GAINS', src: '13-kevin-canon.jpg', nudgeY: 0,
-    edit: 'Make his arms and chest enormously muscular and bulging while his head stays exactly the same size, both arms up in a double bicep flex. A round green coin with a thick black outline and the word kek in fat white rounded capital letters across the middle is on the ground beside him, as big as he is. Add no text or lettering anywhere',
+    slug: 'kek-flex', word: 'KEK GAINS', src: '16-kevin-idle.png', nudgeY: 0,
+    edit: 'Both thin arms up in a double bicep flex with one tiny bump on each. A round green coin with a thick black outline and the word kek in fat white rounded capital letters across the middle is on the ground beside him, as big as he is. Add no text or lettering anywhere',
     action: 'His WHOLE BODY tenses and swells, biceps pumping bigger with each flex, chest puffing, legs braced and shaking with the effort, head tipping back proudly, head shaking — then he relaxes a beat and flexes even harder',
   },
   {
-    slug: 'kek-laugh', word: 'KEK', src: '13-kevin-canon.jpg', nudgeY: 0,
+    slug: 'kek-laugh', word: 'KEK', src: '16-kevin-idle.png', nudgeY: 0,
     edit: 'Show his whole body doubled over backwards laughing, one hand on his belly and the other pointing straight at the viewer. Several of a round green coin with a thick black outline and the word KEK in fat white rounded capitals across the middle bouncing in the air around his head. Add no text or lettering anywhere',
     action: 'His WHOLE BODY rocks backward and forward laughing, torso folding and unfolding, shoulders heaving, legs unsteady beneath him, head tipping back then snapping forward to point again, head bobbing with every laugh, the coins bouncing around him',
   },
   {
-    slug: 'kek-moon', word: 'TO THE MOON', src: '13-kevin-canon.jpg', nudgeY: 0,
+    slug: 'kek-moon', word: 'TO THE MOON', src: '16-kevin-idle.png', nudgeY: 0,
     edit: 'Show his whole body riding on top of a round green coin with a thick black outline and the word KEK in fat white rounded capitals across the middle like a rocket, the coin tipped up on edge and blasting upward with a long white flame trail behind it, both his arms thrown up in triumph. Add no text or lettering anywhere',
     action: 'His WHOLE BODY rides upward with the coin, legs gripping and bending to absorb the surge, torso arching back, arms punching the sky, head thrown back into the wind, the flame trail flaring and rippling underneath',
   },
   {
-    slug: 'kek-stack', word: 'STACKED', src: '13-kevin-canon.jpg', nudgeY: 0,
+    slug: 'kek-stack', word: 'STACKED', src: '16-kevin-idle.png', nudgeY: 0,
     edit: 'Show his whole body standing on top of a tall stack of many of a round green coin with a thick black outline and the word KEK in fat white rounded capitals across the middle piled up like poker chips, arms crossed, looking pleased with himself. Add no text or lettering anywhere',
     action: 'His WHOLE BODY settles and rebalances on the wobbling stack, knees bending, arms unfolding to windmill for balance then folding again, torso swaying, head bobbing, head bobbing as the whole stack teeters under him',
   },
   {
-    slug: 'kek-hodl', word: 'HODL', src: '13-kevin-canon.jpg', nudgeY: 0,
+    slug: 'kek-hodl', word: 'HODL', src: '16-kevin-idle.png', nudgeY: 0,
     edit: 'Show his whole body hugging a round green coin with a thick black outline and the word KEK in fat white rounded capitals across the middle tightly with both arms wrapped all the way round it. The coin is bigger than he is. His eyes are clenched shut, refusing to let go. Add no text or lettering anywhere',
     action: 'His WHOLE BODY clenches around the coin, arms squeezing tighter, legs gripping and scrabbling, head shaking hard side to side in refusal, head shaking, his whole frame trembling with the effort of holding on',
   },
   {
-    slug: 'kek-snack', word: 'SNACK TIME', src: '13-kevin-canon.jpg', nudgeY: 0,
+    slug: 'kek-snack', word: 'SNACK TIME', src: '16-kevin-idle.png', nudgeY: 0,
     edit: 'Show his whole body holding up a red fast-food fry carton in one hand, packed with many of a round green coin with a thick black outline and the word KEK in fat white rounded capitals across the middle standing up in it instead of fries, tipping one into his other hand. Add no text or lettering anywhere',
     action: 'His WHOLE BODY tips back as he shakes the carton, torso rocking, one arm shaking the carton and the other catching, head tilting up to watch, legs bouncing, head bobbing, the coins jumping and rattling in the carton',
   },
   {
-    slug: 'kek-spin', word: 'SPIN IT', src: '13-kevin-canon.jpg', nudgeY: 0,
+    slug: 'kek-spin', word: 'SPIN IT', src: '16-kevin-idle.png', nudgeY: 0,
     edit: 'Show his whole body with a round green coin with a thick black outline and the word KEK in fat white rounded capitals across the middle spinning fast and balanced on one upraised fingertip above his head, the other hand on his hip, looking very pleased. Add no text or lettering anywhere',
     action: 'His WHOLE BODY shifts and adjusts under the spinning coin, the balancing arm making small quick corrections, hips swaying, knees bending, head tilting to watch it, head bobbing — the coin spins fast and wobbles and he catches the balance again',
   },
   {
-    slug: 'kek-gm', word: 'GM', src: '13-kevin-canon.jpg', nudgeY: 0,
+    slug: 'kek-gm', word: 'GM', src: '16-kevin-idle.png', nudgeY: 0,
     edit: 'Show his whole body, eyes half closed and sleepy, eyes bleary, holding a big steaming white mug in both hands with a round green coin with a thick black outline and the word KEK in fat white rounded capitals across the middle printed on the side of the mug. Add no text or lettering anywhere',
     action: 'His WHOLE BODY sags and sways sleepily, head lolling forward then jerking back up, shoulders rising and falling with a huge yawn, torso rocking, head hanging heavy and rolling — then he lifts the mug with both arms and his whole body leans into the sip',
   },
 
   // --- the gym pack -------------------------------------------------------
   {
-    slug: 'gym-curl', word: 'CURLS', src: '13-kevin-canon.jpg', nudgeY: 0,
-    edit: 'Make his arms muscular while his head stays exactly the same size. Show his whole body curling a heavy black dumbbell in each hand, elbows tucked in, sweat drops flying off him. Add no text or lettering anywhere',
+    slug: 'gym-curl', word: 'CURLS', src: '16-kevin-idle.png', nudgeY: 0,
+    edit: 'Show his whole body curling a heavy black dumbbell in each hand, elbows tucked in, sweat drops flying off him. Add no text or lettering anywhere',
     action: 'His WHOLE BODY works the curl, both arms swinging the dumbbells up and down out of time with each other, shoulders rolling, chest swelling at the top of each rep, knees bouncing, torso rocking, head bobbing, sweat flicking off with every rep',
   },
   {
-    slug: 'gym-bench', word: 'BENCH', src: '13-kevin-canon.jpg', nudgeY: 0,
-    edit: 'Show his whole body lying on his back on a red weight bench, pressing a long black barbell loaded with huge black plates straight up off his chest, arms muscular, face straining. Add no text or lettering anywhere',
+    slug: 'gym-bench', word: 'BENCH', src: '16-kevin-idle.png', nudgeY: 0,
+    edit: 'Show his whole body lying on his back on a red weight bench, pressing a long black barbell loaded with huge black plates straight up off his chest, thin arms wobbling, face straining. Add no text or lettering anywhere',
     action: 'His WHOLE BODY drives the bar up and lowers it back down, arms shaking with the weight, chest heaving, legs braced and kicking against the floor, head pressing back into the bench, the bar bending slightly at the top of each press',
   },
   {
-    slug: 'gym-squat', word: 'LEG DAY', src: '13-kevin-canon.jpg', nudgeY: 0,
-    edit: 'Show his whole body squatting under a long black barbell loaded with enormous black plates across his shoulders, thighs muscular, knees bent deep, teeth gritted. Add no text or lettering anywhere',
+    slug: 'gym-squat', word: 'LEG DAY', src: '16-kevin-idle.png', nudgeY: 0,
+    edit: 'Show his whole body squatting under a long black barbell loaded with enormous black plates across his shoulders, thin legs bent deep under it, straining. Add no text or lettering anywhere',
     action: 'His WHOLE BODY sinks down into the squat and drives back up, thighs straining, the bar bending across his shoulders, arms gripping tight, torso leaning forward and back, legs trembling at the bottom, head bobbing with each rep',
   },
   {
-    slug: 'gym-flex', word: 'FLEX', src: '13-kevin-canon.jpg', nudgeY: 0,
-    edit: 'Make his arms, chest and shoulders enormously muscular and bulging while his head stays exactly the same size. Show his whole body in a double bicep flex, one eye winking. Add no text or lettering anywhere',
+    slug: 'gym-flex', word: 'FLEX', src: '16-kevin-idle.png', nudgeY: 0,
+    edit: 'Show his whole body in a double bicep flex with one tiny bump on each thin arm, one eye winking. Add no text or lettering anywhere',
     action: 'His WHOLE BODY tenses and swells, both biceps pumping visibly bigger with each flex, chest puffing out, shoulders rolling back, legs braced and shaking, head tipping proudly, head shaking — then he relaxes and flexes even harder',
   },
   {
-    slug: 'gym-shake', word: 'SHAKE IT', src: '13-kevin-canon.jpg', nudgeY: 0,
+    slug: 'gym-shake', word: 'SHAKE IT', src: '16-kevin-idle.png', nudgeY: 0,
     edit: 'Show his whole body tipping a huge black protein shaker bottle up to his mouth with both hands and chugging it, one leg kicked back, a little spill running down his chin. Add no text or lettering anywhere',
     action: 'His WHOLE BODY leans back further and further as he chugs, both arms tipping the bottle higher, throat working, one leg kicking up for balance, torso arching, head tipped back — then he slams the bottle down and his whole body shudders',
   },
@@ -236,27 +237,27 @@ export const STICKERS = [
     // tight for the first second or so and a speck for the rest, which dragged
     // the content box wide and cut him at a fifth of the size of the others.
     // Use the opening only. Recutting costs nothing — the raw is already paid for.
-    slug: 'gym-run', word: 'CARDIO', src: '13-kevin-canon.jpg', nudgeY: 0, start: 0, dur: 1.4,
+    slug: 'gym-run', word: 'CARDIO', src: '16-kevin-idle.png', nudgeY: 0, start: 0, dur: 1.4,
     edit: 'Show his whole body sprinting flat out on a treadmill, legs blurred, arms pumping, tongue of the treadmill belt streaking under him, sweat spraying off him. Add no text or lettering anywhere',
     action: 'His WHOLE BODY sprints on the spot, legs pumping fast and hard, arms driving back and forth, torso leaning into it, head bobbing with each stride, head down and driving, sweat flicking off him in all directions',
   },
   {
-    slug: 'gym-pullup', word: 'PULL UPS', src: '13-kevin-canon.jpg', nudgeY: 0,
-    edit: 'Make his arms and back muscular while his head stays exactly the same size. Show his whole body hanging from a black pull-up bar by both hands, chin just clearing the bar, legs dangling and crossed. Add no text or lettering anywhere',
+    slug: 'gym-pullup', word: 'PULL UPS', src: '16-kevin-idle.png', nudgeY: 0,
+    edit: 'Show his whole body hanging from a black pull-up bar by both hands, chin just clearing the bar, legs dangling and crossed. Add no text or lettering anywhere',
     action: 'His WHOLE BODY pulls up until his chin clears the bar then lowers all the way back down, arms and shoulders straining, back flaring, legs swinging and kicking beneath him, head craning up, head bobbing with every rep',
   },
   {
-    slug: 'gym-deadlift', word: 'DEADLIFT', src: '13-kevin-canon.jpg', nudgeY: 0,
+    slug: 'gym-deadlift', word: 'DEADLIFT', src: '16-kevin-idle.png', nudgeY: 0,
     edit: 'Show his whole body mid-deadlift, gripping a long black barbell loaded with enormous black plates, back straight, legs braced, the bar bending under the weight. Add no text or lettering anywhere',
     action: 'His WHOLE BODY hauls the bar up off the floor and sets it back down, legs driving, back straightening, arms locked and shaking, the bar bending and the plates wobbling, his whole frame trembling at the top, head bobbing',
   },
   {
-    slug: 'gym-spot', word: 'YOU GOT THIS', src: '13-kevin-canon.jpg', nudgeY: 0,
-    edit: 'Show his whole body standing with muscular arms held out, spotting and cheering on a second much smaller copy of himself who is struggling under a tiny barbell. Add no text or lettering anywhere',
+    slug: 'gym-spot', word: 'YOU GOT THIS', src: '16-kevin-idle.png', nudgeY: 0,
+    edit: 'Show his whole body standing with both thin arms held out, spotting and cheering on a second much smaller copy of himself who is struggling under a tiny barbell. Add no text or lettering anywhere',
     action: 'His WHOLE BODY bounces encouragingly on his feet, both arms gesturing up and up, head nodding hard, torso leaning in over the smaller one, head bobbing — while the little one wobbles and shakes under his tiny bar',
   },
   {
-    slug: 'gym-wrecked', word: 'WRECKED', src: '13-kevin-canon.jpg', nudgeY: 0,
+    slug: 'gym-wrecked', word: 'WRECKED', src: '16-kevin-idle.png', nudgeY: 0,
     edit: 'Show his whole body collapsed flat on his back on the gym floor, arms and legs sprawled out, a black dumbbell fallen beside each hand, completely spent. Add no text or lettering anywhere',
     action: 'His WHOLE BODY twitches once on the floor, one leg kicking up and flopping back down, an arm lifting weakly and dropping, chest heaving up and down, head rolling to the side, head lolling on the floor, then going still',
   },
