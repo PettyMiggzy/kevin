@@ -16,7 +16,40 @@ const BASE = 'https://api.groq.com/openai/v1';
  * this is a default rather than a hard-coded truth — `checkModel` below asks
  * the API what actually exists and tells you what to switch to.
  */
-export const DEFAULT_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+export const DEFAULT_MODEL = process.env.GROQ_MODEL || null;
+
+/**
+ * Chat models worth using, best first. Which of these a key can actually see
+ * varies by account and changes without notice, so this is a preference order
+ * resolved against the live list rather than a fixed choice.
+ */
+const PREFERRED = [
+  'openai/gpt-oss-120b',
+  'openai/gpt-oss-20b',
+  'qwen/qwen3.8-27b',
+  'qwen/qwen3.6-27b',
+  'llama-3.3-70b-versatile',
+  'groq/compound',
+  'groq/compound-mini',
+  'allam-2-7b',
+];
+
+/**
+ * Not everything a key lists can hold a conversation. Whisper transcribes,
+ * orpheus speaks, and the guard models are classifiers that answer "safe" or
+ * "unsafe" — point the bot at one of those and it starts replying with one
+ * word and nothing explains why.
+ */
+const NOT_CHAT = /whisper|orpheus|tts|prompt-guard|safeguard|embed|moderat/i;
+
+/** Pick a model: the configured one if it exists, else the best that does. */
+export function pickModel(ids, configured) {
+  if (configured && ids.includes(configured)) return configured;
+  for (const id of PREFERRED) if (ids.includes(id)) return id;
+  const any = ids.find((id) => !NOT_CHAT.test(id));
+  if (any) return any;
+  return null;
+}
 
 /** Key from the environment, or a gitignored file next to this one. */
 export async function loadKey() {
@@ -60,17 +93,28 @@ export async function listModels(key) {
 }
 
 /**
- * Fail loudly at startup rather than on the first message in a live group.
- * Returns the model to use — the configured one if it exists, otherwise throws
- * with the real list, because guessing a replacement silently is worse.
+ * Resolve the model at startup against what the key can actually see.
+ *
+ * The first version of this threw when the configured model was missing, which
+ * under systemd's Restart=always meant a crash loop printing the same list
+ * every five seconds forever. A bot that quietly picks the best available chat
+ * model and says which is strictly better than one that refuses to start:
+ * these ids get retired on the provider's schedule, not ours.
  */
-export async function checkModel(key, model) {
+export async function checkModel(key, configured) {
   const ids = await listModels(key);
-  if (ids.includes(model)) return model;
-  throw new Error(
-    `Model "${model}" is not available on this key.\nAvailable:\n  ${ids.join('\n  ')}\n` +
-    `Set GROQ_MODEL to one of those.`
-  );
+  const model = pickModel(ids, configured);
+  if (!model) {
+    throw new Error(
+      `This Groq key exposes no chat model.\nIt can see:\n  ${ids.join('\n  ')}`
+    );
+  }
+  if (configured && model !== configured) {
+    console.log(`GROQ_MODEL "${configured}" is not on this key — using ${model} instead.`);
+  } else if (!configured) {
+    console.log(`Model: ${model} (auto-picked; set GROQ_MODEL to override)`);
+  }
+  return model;
 }
 
 /**

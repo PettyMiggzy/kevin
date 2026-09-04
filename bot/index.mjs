@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { buildBrief } from './brief.mjs';
 import { systemPrompt, commandReply } from './persona.mjs';
 import { loadKey, listModels, checkModel, chat, DEFAULT_MODEL } from './groq.mjs';
+import { welcome, cleanName } from './welcome.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -30,6 +31,23 @@ const argOf = (f) => {
 const MEMORY_TURNS = 6;
 const MIN_GAP_MS = 2500;          // per chat, so one person cannot spin the bot
 const MAX_INPUT = 600;            // characters of a user message worth sending
+
+/**
+ * Groups the bot will talk in. DMs are always allowed.
+ *
+ * Without this, anybody can add the bot to their own group and spend the Groq
+ * quota, or stand up a convincing fake "official" chat with the real Kevin bot
+ * answering in it. A group id is not a secret — every member can see it — so
+ * this lives in the repo rather than in a key file.
+ */
+const ALLOWED_CHATS = new Set(
+  (process.env.KEVIN_CHATS || '-1002229054100')      // @kevinRBH
+    .split(',').map((s) => s.trim()).filter(Boolean)
+);
+
+// Raids: twenty people joining at once must not become twenty messages.
+const WELCOME_WINDOW_MS = 8000;   // joins inside this are greeted together
+const WELCOME_GAP_MS = 20000;     // and no faster than this per chat
 
 async function loadTelegramToken() {
   if (process.env.TELEGRAM_BOT_TOKEN) return process.env.TELEGRAM_BOT_TOKEN.trim();
@@ -60,6 +78,12 @@ async function tg(token, method, params) {
  * message in a token group gets muted within the hour, and being muted is the
  * same as not existing.
  */
+function allowed(chat) {
+  if (chat?.type === 'private') return true;
+  if (!ALLOWED_CHATS.size) return true;
+  return ALLOWED_CHATS.has(String(chat?.id));
+}
+
 function addressed(msg, me) {
   const chatType = msg.chat?.type;
   const text = msg.text || '';
@@ -130,13 +154,46 @@ async function main() {
 
   const memory = new Map();       // chatId -> [{role, content}]
   const lastReply = new Map();    // chatId -> ms
+  const joins = new Map();        // chatId -> {names[], timer, lastAt, lastOpener}
   let offset = 0;
   let backoff = 1000;
+
+  /**
+   * Greet whoever has arrived, once, a beat after they arrive.
+   *
+   * Buffered rather than immediate: people arrive in clumps, and eight
+   * separate hellos in eight seconds is what makes a group mute a bot. One
+   * message naming them all is warmer anyway.
+   */
+  function greet(chatId, users) {
+    const j = joins.get(chatId) ?? { names: [], timer: null, lastAt: 0, lastOpener: null };
+    joins.set(chatId, j);
+    for (const u of users) j.names.push(cleanName(u));
+    if (j.timer) return;
+
+    const wait = Math.max(WELCOME_WINDOW_MS, WELCOME_GAP_MS - (Date.now() - j.lastAt));
+    j.timer = setTimeout(async () => {
+      const names = j.names.splice(0, j.names.length);
+      j.timer = null;
+      j.lastAt = Date.now();
+      if (!names.length) return;
+      const { text, opener } = welcome(names, config, j.lastOpener);
+      j.lastOpener = opener;
+      await tg(token, 'sendMessage', {
+        chat_id: chatId,
+        text,
+        disable_web_page_preview: true,
+      }).catch((e) => console.error('welcome failed:', e.message));
+    }, wait);
+    j.timer.unref?.();
+  }
 
   for (;;) {
     let updates;
     try {
       updates = await tg(token, 'getUpdates', { offset, timeout: 25, allowed_updates: ['message'] });
+      // 'message' covers joins too — new_chat_members arrives as a service
+      // message on the same update type, which is why the filter stays as it is.
       backoff = 1000;
     } catch (e) {
       // A network blip must not end the bot. Back off, then carry on.
@@ -149,7 +206,15 @@ async function main() {
     for (const u of updates) {
       offset = u.update_id + 1;
       const msg = u.message;
-      if (!msg?.text || !addressed(msg, me)) continue;
+      if (!msg) continue;
+      if (!allowed(msg.chat)) continue;
+
+      // Somebody joined. Never greet the bot's own arrival, and never greet a
+      // bot — a group full of them would greet each other forever.
+      const arrivals = (msg.new_chat_members || []).filter((x) => x.id !== me.id && !x.is_bot);
+      if (arrivals.length) greet(msg.chat.id, arrivals);
+
+      if (!msg.text || !addressed(msg, me)) continue;
 
       const chatId = msg.chat.id;
       const now = Date.now();

@@ -42,9 +42,9 @@ node bot/index.mjs --ask "wen moon"
 node bot/index.mjs
 ```
 
-If `--models` errors, the key is wrong. If it lists models but startup then
-complains the configured one is missing, pick one from that list and put it in
-the service file below as `GROQ_MODEL`.
+If `--models` errors, the key is wrong. Otherwise the bot picks the best chat
+model your key can actually see and prints which — you do not have to choose.
+Set `GROQ_MODEL` in the service file only if you want to override it.
 
 ## Keeping it running
 
@@ -100,5 +100,39 @@ of telling people nobody has it yet.
 | Silent in a group | Group privacy still on — do step 3 above |
 | Answers everything in a group | It should not; it only replies to mentions, replies, commands and messages starting with "Kevin" |
 | "Kevin is on the fryer" replies | Groq call failed — check `journalctl -u kevin-bot` |
-| Startup dies naming the model | Model retired; pick one from `--models` |
+| Startup dies naming the model | Only if the key exposes no chat model at all |
+| Silent in a group that is not the official one | By design — see below |
 | Gives a contract address | Should be impossible while `contract` is null in config.js — `/ca` never touches the model. If it ever happens, stop the bot and tell me |
+
+## Which groups it talks in
+
+It answers DMs from anyone, but in groups only in the official one
+(`-1002229054100`, @kevinRBH). Otherwise anyone can add the bot to their own
+group, spend your Groq quota, and stand up a convincing fake "official" chat
+with the real Kevin bot answering in it.
+
+To add another group, get its id (add [@RawDataBot](https://t.me/RawDataBot)
+briefly, or read it off the logs) and set it in the service file:
+
+```
+Environment=KEVIN_CHATS=-1002229054100,-100XXXXXXXXXX
+```
+
+## Welcoming new members
+
+Automatic, no setup, as long as the bot can see join events — that is the same
+`/setprivacy` → Disable step as above.
+
+Messages are composed from two written pools, so a group of any size will not
+notice a repeat, and about a quarter of them carry a warning that nobody has
+the contract address and nobody from the group will DM you first. A join is
+exactly when a newcomer gets targeted, which is why that warning is in the
+rotation rather than in a pinned message nobody reads.
+
+Joins inside 8 seconds are greeted in one message rather than one each, and
+there is a 20-second floor between welcomes per chat, so a raid cannot turn the
+bot into the thing that makes people leave.
+
+Nothing about a join goes near the model. A username is text an attacker
+chooses, and feeding it into a prompt is how a bot ends up greeting
+"IGNORE PREVIOUS INSTRUCTIONS" by doing what it says.
