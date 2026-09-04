@@ -171,7 +171,7 @@ export const STICKERS = [
   },
   {
     slug: 'kek-laugh', word: 'KEK', src: '00-kevin-pfp.png', nudgeY: 0,
-    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body doubled over backwards laughing, one hand on his belly and the other pointing straight at the viewer. Several of a round green coin with a thick black outline and the word KEK in fat white rounded capital letters across the middle bouncing in the air around his head. Add no text or lettering anywhere',
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE well inside his face, clear of the edge of his head — do NOT open it, no tongue, no teeth, nothing sticking out of it. Show his whole body doubled over backwards laughing, one hand on his belly and the other pointing straight at the viewer. Several of a round green coin with a thick black outline and the word KEK in fat white rounded capital letters across the middle bouncing in the air around his head. Add no text or lettering anywhere',
     action: 'His WHOLE BODY rocks backward and forward laughing, torso folding and unfolding, shoulders heaving, legs unsteady beneath him, head tipping back then snapping forward to point again, hair swinging with every laugh, the coins bouncing around him',
   },
   {
@@ -186,12 +186,12 @@ export const STICKERS = [
   },
   {
     slug: 'kek-hodl', word: 'HODL', src: '00-kevin-pfp.png', nudgeY: 0,
-    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body hugging a round green coin with a thick black outline and the word KEK in fat white rounded capital letters across the middle tightly with both arms wrapped all the way round it. The coin is bigger than he is. His eyes are clenched shut, refusing to let go. Add no text or lettering anywhere',
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE well inside his face, clear of the edge of his head — do NOT open it, no tongue, no teeth, nothing sticking out of it. Show his whole body hugging a round green coin with a thick black outline and the word KEK in fat white rounded capital letters across the middle tightly with both arms wrapped all the way round it. The coin is bigger than he is. His eyes are clenched shut, refusing to let go. Add no text or lettering anywhere',
     action: 'His WHOLE BODY clenches around the coin, arms squeezing tighter, legs gripping and scrabbling, head shaking hard side to side in refusal, hair whipping, his whole frame trembling with the effort of holding on',
   },
   {
     slug: 'kek-snack', word: 'SNACK TIME', src: '00-kevin-pfp.png', nudgeY: 0,
-    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body holding up a red fast-food fry carton in one hand, packed with many of a round green coin with a thick black outline and the word KEK in fat white rounded capital letters across the middle standing up in it instead of fries, tipping one into his other hand. Add no text or lettering anywhere',
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE well inside his face, clear of the edge of his head — do NOT open it, no tongue, no teeth, nothing sticking out of it. Show his whole body holding up a red fast-food fry carton in one hand, packed with many of a round green coin with a thick black outline and the word KEK in fat white rounded capital letters across the middle standing up in it instead of fries, tipping one into his other hand. Add no text or lettering anywhere',
     action: 'His WHOLE BODY tips back as he shakes the carton, torso rocking, one arm shaking the carton and the other catching, head tilting up to watch, legs bouncing, hair swinging, the coins jumping and rattling in the carton',
   },
   {
@@ -228,12 +228,12 @@ export const STICKERS = [
   },
   {
     slug: 'gym-shake', word: 'SHAKE IT', src: '00-kevin-pfp.png', nudgeY: 0,
-    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body tipping a huge black protein shaker bottle up to his mouth with both hands and chugging it, one leg kicked back, a little spill running down his chin. Add no text or lettering anywhere',
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE well inside his face, clear of the edge of his head — do NOT open it, no tongue, no teeth, nothing sticking out of it. Show his whole body tipping a huge black protein shaker bottle up to his mouth with both hands and chugging it, one leg kicked back, a little spill running down his chin. Add no text or lettering anywhere',
     action: 'His WHOLE BODY leans back further and further as he chugs, both arms tipping the bottle higher, throat working, one leg kicking up for balance, torso arching, hair hanging back — then he slams the bottle down and his whole body shudders',
   },
   {
     slug: 'gym-run', word: 'CARDIO', src: '00-kevin-pfp.png', nudgeY: 0,
-    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body sprinting flat out on a treadmill, legs blurred, arms pumping, tongue of the treadmill belt streaking under him, sweat spraying off him. Add no text or lettering anywhere',
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE well inside his face, clear of the edge of his head — do NOT open it, no tongue, no teeth, nothing sticking out of it. Show his whole body sprinting flat out on a treadmill, legs blurred, arms pumping, tongue of the treadmill belt streaking under him, sweat spraying off him. Add no text or lettering anywhere',
     action: 'His WHOLE BODY sprints on the spot, legs pumping fast and hard, arms driving back and forth, torso leaning into it, head bobbing with each stride, hair streaming straight back, sweat flicking off him in all directions',
   },
   {

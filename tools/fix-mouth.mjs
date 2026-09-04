@@ -52,136 +52,155 @@ const repair = async (dataUri) => await page.evaluate(async (dataUri) => {
     Math.abs(p[k * 4] - CREAM[0]) <= 34 &&
     Math.abs(p[k * 4 + 1] - CREAM[1]) <= 34 &&
     Math.abs(p[k * 4 + 2] - CREAM[2]) <= 34;
-
-  // Seed on the tongue. Its pink appears nowhere else in the drawing — the hair
-  // is red, the face cream, the star yellow, the eyes white and black — which
-  // makes it a far more reliable handle on the mouth than any coordinate.
-  const seeds = [];
-  for (let k = 0; k < W * H; k++) {
+  const isPink = (k) => {
     const r = p[k * 4];
     const g = p[k * 4 + 1];
     const b = p[k * 4 + 2];
-    if (r > 190 && g > 100 && g < 200 && b > 110 && b < 210 && r - g > 40 && b > g) seeds.push(k);
-  }
-  // Not every bad mouth has a tongue in it — a gritted-teeth strain or a flat
-  // open O has none. Fall back to the largest dark island that sits wholly
-  // inside the cream of the face, which is what a mouth is and what the eyes,
-  // sitting in their own white, are not.
-  if (!seeds.length) {
-    const dark = (k) => p[k * 4] < 90 && p[k * 4 + 1] < 90 && p[k * 4 + 2] < 90 && p[k * 4 + 3] > 128;
-    const seenDark = new Uint8Array(W * H);
-    let bestIsland = null;
-    for (let k = 0; k < W * H; k++) {
-      if (seenDark[k] || !dark(k)) continue;
-      const st = [k];
-      seenDark[k] = 1;
-      const px = [];
-      let creamNbr = 0;
-      let otherNbr = 0;
-      while (st.length) {
-        const j = st.pop();
-        px.push(j);
-        const x = j % W;
-        const y = (j / W) | 0;
-        const look = (nk) => {
-          if (dark(nk)) { if (!seenDark[nk]) { seenDark[nk] = 1; st.push(nk); } }
-          else if (isCream(nk)) creamNbr++;
-          else otherNbr++;
-        };
-        if (x > 0) look(j - 1);
-        if (x < W - 1) look(j + 1);
-        if (y > 0) look(j - W);
-        if (y < H - 1) look(j + W);
-      }
-      // A mouth is ringed by face. An eye's pupil is ringed by white, and the
-      // line art is ringed by everything, so both fail this.
-      if (creamNbr < (creamNbr + otherNbr) * 0.92) continue;
-      if (px.length < 400) continue;
-      if (!bestIsland || px.length > bestIsland.length) bestIsland = px;
-    }
-    if (!bestIsland) return { skipped: 'no mouth found — left alone' };
-    seeds.push(...bestIsland);
-  }
+    return r > 190 && g > 100 && g < 200 && b > 110 && b < 210 && r - g > 40 && b > g;
+  };
 
-  // Grow out over everything that is not face, which stops dead at the cream
-  // surrounding the mouth. The nose comes along with it and is redrawn below.
-  const inMouth = new Uint8Array(W * H);
-  const stack = [];
-  for (const k of seeds) { inMouth[k] = 1; stack.push(k); }
-  while (stack.length) {
-    const k = stack.pop();
-    const x = k % W;
-    const y = (k / W) | 0;
-    const push = (nk) => { if (!inMouth[nk] && !isCream(nk)) { inMouth[nk] = 1; stack.push(nk); } };
-    if (x > 0) push(k - 1);
-    if (x < W - 1) push(k + 1);
-    if (y > 0) push(k - W);
-    if (y < H - 1) push(k + W);
-  }
-
-  let n = 0;
-  let minY = H;
-  let maxY = -1;
-  for (let k = 0; k < W * H; k++) if (inMouth[k]) { n++; const y = (k / W) | 0; if (y < minY) minY = y; if (y > maxY) maxY = y; }
-  // A fill that escaped the face would swallow the line art. Refuse rather than
-  // paint a cream slab across the drawing.
-  if (n > W * H * 0.06) return { skipped: `fill escaped (${n} px) — left alone` };
-
-  // Centre on the lower two thirds: the blob includes the nose, and averaging
-  // the whole of it drags the new mouth up into the middle of his face.
-  const lo = minY + Math.round((maxY - minY) / 3);
-  let sx = 0;
-  let sy = 0;
-  let m = 0;
-  for (let k = 0; k < W * H; k++) {
-    if (!inMouth[k]) continue;
-    const y = (k / W) | 0;
-    if (y < lo) continue;
-    sx += k % W; sy += y; m++;
-  }
-  const cx = Math.round(sx / m);
-  let cy = Math.round(sy / m);
-
-  // Width of the face on the mouth's OWN row. The full cream area also takes in
-  // his chest, which inflates it by half and sizes the triangle enormous.
-  const facey = (x) => isCream(cy * W + x) || inMouth[cy * W + x];
-  let x0 = cx; while (x0 > 0 && facey(x0)) x0--;
-  let x1 = cx; while (x1 < W - 1 && facey(x1)) x1++;
-  const runW = x1 - x0;
-
-  // Erase, dilated: the fill stops at the first cream-ish pixel, leaving a ring
-  // of half-and-half anti-aliasing that ghosts the old mouth's outline back in.
-  for (let pass = 0; pass < 3; pass++) {
-    const grow = [];
-    for (let k = 0; k < W * H; k++) {
-      if (inMouth[k]) continue;
+  const island = (seed, mark, ok) => {
+    const st = [seed];
+    mark[seed] = 1;
+    const px = [];
+    while (st.length) {
+      const k = st.pop();
+      px.push(k);
       const x = k % W;
       const y = (k / W) | 0;
-      if ((x > 0 && inMouth[k - 1]) || (x < W - 1 && inMouth[k + 1]) ||
-          (y > 0 && inMouth[k - W]) || (y < H - 1 && inMouth[k + W])) grow.push(k);
+      const go = (nk) => { if (!mark[nk] && ok(nk)) { mark[nk] = 1; st.push(nk); } };
+      if (x > 0) go(k - 1);
+      if (x < W - 1) go(k + 1);
+      if (y > 0) go(k - W);
+      if (y < H - 1) go(k + W);
     }
-    for (const k of grow) inMouth[k] = 1;
-  }
+    return px;
+  };
+
+  // One pass PER MOUTH, not one pass over every pink pixel at once. Some of
+  // these have two characters in them — Kevin spotting a smaller Kevin — and
+  // seeding both mouths together averages their positions into one triangle
+  // drawn on neither of them.
+  const seenPink = new Uint8Array(W * H);
+  const mouths = [];
   for (let k = 0; k < W * H; k++) {
-    if (!inMouth[k]) continue;
-    p[k * 4] = CREAM[0]; p[k * 4 + 1] = CREAM[1]; p[k * 4 + 2] = CREAM[2]; p[k * 4 + 3] = 255;
+    if (seenPink[k] || !isPink(k)) continue;
+    const px = island(k, seenPink, isPink);
+    if (px.length >= 60) mouths.push(px);
   }
-  x2d.putImageData(d, 0, 0);
+  // Not every bad mouth has a tongue in it — a flat open O, or one with a
+  // mouthful of coins in the way, has none. Fall back to dark islands that sit
+  // almost wholly inside the cream of the face: that is what a mouth is, and
+  // what an eye's pupil, sitting in its own white, is not.
+  if (!mouths.length) {
+    const dark = (k) => p[k * 4] < 90 && p[k * 4 + 1] < 90 && p[k * 4 + 2] < 90 && p[k * 4 + 3] > 128;
+    const seenDark = new Uint8Array(W * H);
+    for (let k = 0; k < W * H; k++) {
+      if (seenDark[k] || !dark(k)) continue;
+      let cream = 0;
+      let other = 0;
+      const px = island(k, seenDark, (nk) => {
+        if (dark(nk)) return true;
+        if (isCream(nk)) cream++; else other++;
+        return false;
+      });
+      if (px.length < 400) continue;
+      if (cream < (cream + other) * 0.92) continue;
+      mouths.push(px);
+    }
+  }
+  if (!mouths.length) return { results: [{ skipped: 'no mouth found' }] };
 
-  // The triangle itself: apex right, a shade under a quarter of the face wide,
-  // proportions taken off the PFP.
-  const w = Math.round(runW * 0.23);
-  const h = Math.round(w * 1.05);
-  cy -= Math.round(h * 0.12);
-  x2d.fillStyle = '#0A0A0A';
-  x2d.beginPath();
-  x2d.moveTo(cx - w / 2, cy - h / 2);
-  x2d.lineTo(cx - w / 2, cy + h / 2);
-  x2d.lineTo(cx + w / 2, cy);
-  x2d.closePath();
-  x2d.fill();
+  const results = [];
+  for (const tongue of mouths) {
+    // Grow out from the tongue to the cream that rings the mouth.
+    const mark = new Uint8Array(W * H);
+    for (const k of tongue) mark[k] = 1;
+    let blob = [];
+    const st = [...tongue];
+    let escaped = false;
+    while (st.length) {
+      const k = st.pop();
+      blob.push(k);
+      // A mouth is a fifth of a face. Anything this big has broken out through
+      // the head's own outline — the mouth's black line and the jaw's black
+      // line meet, and from there "not cream" reaches the entire drawing.
+      if (blob.length > W * H * 0.02) { escaped = true; break; }
+      const x = k % W;
+      const y = (k / W) | 0;
+      const go = (nk) => { if (!mark[nk] && !isCream(nk)) { mark[nk] = 1; st.push(nk); } };
+      if (x > 0) go(k - 1);
+      if (x < W - 1) go(k + 1);
+      if (y > 0) go(k - W);
+      if (y < H - 1) go(k + W);
+    }
+    if (escaped) { results.push({ skipped: 'mouth runs into the jaw outline' }); continue; }
 
-  return { data: c.toDataURL('image/png'), w, h, cx, cy, erased: n };
+    let minY = H;
+    let maxY = -1;
+    for (const k of blob) { const y = (k / W) | 0; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+    // Centre on the lower two thirds: the blob takes the nose with it, and
+    // averaging the whole of it drags the new mouth up his face.
+    const lo = minY + Math.round((maxY - minY) / 3);
+    let sx = 0;
+    let sy = 0;
+    let m = 0;
+    for (const k of blob) {
+      const y = (k / W) | 0;
+      if (y < lo) continue;
+      sx += k % W; sy += y; m++;
+    }
+    const cx = Math.round(sx / m);
+    let cy = Math.round(sy / m);
+
+    // Width of the face on the mouth's OWN row. The whole cream area also takes
+    // in his chest, and sizing off that makes the triangle enormous.
+    const onFace = (x) => isCream(cy * W + x) || mark[cy * W + x];
+    let x0 = cx; while (x0 > 0 && onFace(x0)) x0--;
+    let x1 = cx; while (x1 < W - 1 && onFace(x1)) x1++;
+    const runW = x1 - x0;
+
+    // Dilate before erasing: the fill stops at the first cream-ish pixel and
+    // leaves a ring of half-and-half anti-aliasing that ghosts the old mouth's
+    // outline back in.
+    const gone = new Uint8Array(W * H);
+    for (const k of blob) gone[k] = 1;
+    for (let pass = 0; pass < 3; pass++) {
+      const grow = [];
+      for (const k of blob) {
+        const x = k % W;
+        const y = (k / W) | 0;
+        const edge = (nk) => { if (!gone[nk]) { gone[nk] = 1; grow.push(nk); } };
+        if (x > 0) edge(k - 1);
+        if (x < W - 1) edge(k + 1);
+        if (y > 0) edge(k - W);
+        if (y < H - 1) edge(k + W);
+      }
+      blob = blob.concat(grow);
+    }
+    for (const k of blob) {
+      p[k * 4] = CREAM[0]; p[k * 4 + 1] = CREAM[1]; p[k * 4 + 2] = CREAM[2]; p[k * 4 + 3] = 255;
+    }
+    x2d.putImageData(d, 0, 0);
+
+    const w = Math.round(runW * 0.23);
+    const h = Math.round(w * 1.05);
+    cy -= Math.round(h * 0.12);
+    x2d.fillStyle = '#0A0A0A';
+    x2d.beginPath();
+    x2d.moveTo(cx - w / 2, cy - h / 2);
+    x2d.lineTo(cx - w / 2, cy + h / 2);
+    x2d.lineTo(cx + w / 2, cy);
+    x2d.closePath();
+    x2d.fill();
+    // Take the edit back into the pixel buffer so the next mouth in the same
+    // image reads the repaired state rather than the original.
+    const fresh = x2d.getImageData(0, 0, W, H);
+    p.set(fresh.data);
+    results.push({ w, h, cx, cy, erased: blob.length });
+  }
+
+  return { data: c.toDataURL('image/png'), results };
 }, dataUri);
 
 for (const file of files) {
@@ -189,12 +208,11 @@ for (const file of files) {
   try {
     const src = 'data:image/png;base64,' + (await readFile(file)).toString('base64');
     const out = await repair(src);
-    if (out.skipped) {
-      console.log(`  ${name} ${out.skipped}`);
-    } else {
-      await writeFile(file, Buffer.from(out.data.split(',')[1], 'base64'));
-      console.log(`  ${name} erased ${out.erased}px, drew a ${out.w}x${out.h} triangle at ${out.cx},${out.cy}`);
-    }
+    const fixed = out.results.filter((r) => !r.skipped);
+    const notes = out.results.filter((r) => r.skipped).map((r) => r.skipped);
+    if (fixed.length && out.data) await writeFile(file, Buffer.from(out.data.split(',')[1], 'base64'));
+    const done = fixed.map((r) => `${r.w}x${r.h} at ${r.cx},${r.cy}`).join(', ');
+    console.log(`  ${name} ${fixed.length} fixed${done ? ` (${done})` : ''}${notes.length ? ` | ${notes.join('; ')}` : ''}`);
   } catch (e) {
     console.log(`  ${name} FAILED — ${String(e.message).slice(0, 70)}`);
   }
