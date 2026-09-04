@@ -130,6 +130,20 @@ export const STICKERS = [
     edit: 'Put a golden crown on his head and a royal fur-trimmed cape on his shoulders, sitting back like a king on the office chair, fingers steepled. Add the words "CEO OF CHAOS" in bold black cartoon letters across the bottom',
     action: 'His WHOLE BODY settles back into the throne with authority, torso reclining, shoulders rolling, head tilting up and giving a slow deliberate nod, cape and dreadlocks shifting with the movement, fingers steepling',
   },
+  {
+    // Head and fist, NOT a full body — which is the whole reason the rest of the
+    // pack holds its model. Asked for a body head to toe, the model spends its
+    // detail budget inventing legs and the head degrades on the way: two
+    // attempts came back with a spiky mane, shrunken eyes and a narrow muzzle,
+    // from the portrait AND from the full-body moon shot. Every sticker that
+    // works here is a head-and-arms shot, so this one is too.
+    // nudgeY 0 because this still is asked for with no baked lettering; the
+    // default lift exists to crop the generator's own words out of frame and
+    // would otherwise slice his chin off for nothing.
+    slug: 'star-power', src: '01-hero-portrait.jpg', word: 'STAR POWER', nudgeY: 0,
+    edit: 'Keep his head exactly as it is — same size, same position, same enormous white oval eyes, same wide cream muzzle, same smooth rounded red hood with thick blunt dreadlock spikes. Leave clear empty space across the top of the frame. Change only his arms: one arm punched straight up into that empty space above his head with the hand in a tight closed fist, the other fist raised beside his shoulder. Resting right on top of the raised fist, put one big glossy yellow five-pointed cartoon power-up star with two simple black oval eyes and a thick black outline, knocked upward by the punch, with short white impact lines flicking off it. His mouth is wide open shouting and his eyes look up at the star. Add no text or lettering anywhere in the image',
+    action: 'His WHOLE BODY drives upward with the punch, torso stretching tall, shoulders lifting, head tipping back to shout up at it, hood and dreadlocks swinging with the motion, the raised fist punching up hard — the star spins, flashes and bounces higher on the hit — then he drops back into a squash and punches straight up into it again',
+  },
   // --- the fryer set ------------------------------------------------------
   // He works the fryer. It is the whole character, so it gets its own batch.
   {
