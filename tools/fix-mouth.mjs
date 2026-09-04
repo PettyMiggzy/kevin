@@ -104,8 +104,12 @@ const repair = async (dataUri) => await page.evaluate(async (dataUri) => {
         if (isCream(nk)) cream++; else other++;
         return false;
       });
-      if (px.length < 400) continue;
-      if (cream < (cream + other) * 0.92) continue;
+      // Loosened from 400/0.92: on the canon build his mouth is smaller and sits
+      // low on the muzzle, so it touches the jaw line and part of its border is
+      // ink rather than face. Still tight enough to reject an eye's pupil, which
+      // is ringed by its own white.
+      if (px.length < 180) continue;
+      if (cream < (cream + other) * 0.72) continue;
       mouths.push(px);
     }
   }
