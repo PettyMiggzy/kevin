@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kevin's Gym — this way</title>
+<meta name="robots" content="noindex">
+<link rel="canonical" href="https://iamkevin.lol/gym/">
+<!-- The gym lives at /gym. People type /game and /play, so both land here and
+     get sent on rather than hitting a 404 that reads as "the game is broken".
+     Meta refresh first so it works with JS off; the script only makes it
+     instant and keeps the bad URL out of the back button. -->
+<meta http-equiv="refresh" content="0; url=/gym/">
+<style>
+  body { margin:0; min-height:100vh; display:grid; place-items:center; text-align:center;
+    background:#FFE500; color:#0B0B0B; font:16px/1.5 ui-monospace,"SF Mono",Menlo,Consolas,monospace; padding:24px; }
+  a { color:inherit; font-weight:700; }
+</style>
+</head>
+<body>
+<p>The gym is at <a href="/gym/">iamkevin.lol/gym</a> — taking you there.</p>
+<script>location.replace('/gym/');</script>
+</body>
+</html>
