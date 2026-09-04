@@ -125,6 +125,28 @@ window.KEVIN = {
   //   assets/stickers/animated/<slug>.webm transparent VP9, Telegram-ready
   //   assets/stickers/animated/<slug>.gif  same loop on the yellow
   animated: [
+    // KEK — the launchpad's own token, so it is the power-up throughout.
+    { slug: 'kek-power', name: 'KEK Power' },
+    { slug: 'kek-rain', name: 'KEK Rain' },
+    { slug: 'kek-flex', name: 'KEK Gains' },
+    { slug: 'kek-laugh', name: 'KEK' },
+    { slug: 'kek-moon', name: 'To The Moon' },
+    { slug: 'kek-stack', name: 'Stacked' },
+    { slug: 'kek-hodl', name: 'HODL KEK' },
+    { slug: 'kek-snack', name: 'Snack Time' },
+    { slug: 'kek-spin', name: 'Spin It' },
+    { slug: 'kek-gm', name: 'KEK GM' },
+    // The gym.
+    { slug: 'gym-curl', name: 'Curls' },
+    { slug: 'gym-bench', name: 'Bench' },
+    { slug: 'gym-squat', name: 'Leg Day' },
+    { slug: 'gym-flex', name: 'Flex' },
+    { slug: 'gym-shake', name: 'Shake It' },
+    { slug: 'gym-run', name: 'Cardio' },
+    { slug: 'gym-pullup', name: 'Pull Ups' },
+    { slug: 'gym-deadlift', name: 'Deadlift' },
+    { slug: 'gym-spot', name: 'You Got This' },
+    { slug: 'gym-wrecked', name: 'Wrecked' },
     { slug: 'wagmi', name: 'WAGMI' },
     { slug: 'time-to-cook', name: 'Time To Cook' },
     { slug: 'let-him-cook', name: 'Let Him Cook' },

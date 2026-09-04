@@ -232,7 +232,11 @@ export const STICKERS = [
     action: 'His WHOLE BODY leans back further and further as he chugs, both arms tipping the bottle higher, throat working, one leg kicking up for balance, torso arching, hair hanging back — then he slams the bottle down and his whole body shudders',
   },
   {
-    slug: 'gym-run', word: 'CARDIO', src: '00-kevin-pfp.png', nudgeY: 0,
+    // The generator ignored HOLD on this one and dollied out hard: he is framed
+    // tight for the first second or so and a speck for the rest, which dragged
+    // the content box wide and cut him at a fifth of the size of the others.
+    // Use the opening only. Recutting costs nothing — the raw is already paid for.
+    slug: 'gym-run', word: 'CARDIO', src: '00-kevin-pfp.png', nudgeY: 0, start: 0, dur: 1.4,
     edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE well inside his face, clear of the edge of his head — do NOT open it, no tongue, no teeth, nothing sticking out of it. Show his whole body sprinting flat out on a treadmill, legs blurred, arms pumping, tongue of the treadmill belt streaking under him, sweat spraying off him. Add no text or lettering anywhere',
     action: 'His WHOLE BODY sprints on the spot, legs pumping fast and hard, arms driving back and forth, torso leaning into it, head bobbing with each stride, hair streaming straight back, sweat flicking off him in all directions',
   },
@@ -416,7 +420,8 @@ async function wordPlate(word, out) {
 async function toSticker(src, out, opts = {}) {
   // Some clips open on a close-up and pull out to a wide shot. Where the
   // costume IS the joke, start after the pull-out so the outfit is visible.
-  const { word = null, dur = 3 } = opts;
+  const { word = null } = opts;
+  const dur = opts.dur ?? 3;
   const start = opts.start ?? 0.3;
   const probe = await run(FFMPEG, ['-v', 'error', '-ss', String(start), '-i', src,
     '-vf', 'crop=8:8:0:0,scale=1:1', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'],
@@ -539,6 +544,7 @@ async function main() {
         word: WORDS ? s.word : null,
         wide: s.wide,
         start: s.start,
+        dur: s.dur,
         nudgeY: s.nudgeY ?? (WORDS ? 0 : NO_TEXT_LIFT),
       });
       await derive(webm, s.slug);
@@ -628,6 +634,7 @@ async function main() {
         word: WORDS ? s.word : null,
         wide: s.wide,
         start: s.start,
+        dur: s.dur,
         nudgeY: s.nudgeY ?? (WORDS ? 0 : NO_TEXT_LIFT),
       });
       await derive(webm, s.slug);
