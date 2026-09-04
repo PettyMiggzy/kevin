@@ -15,7 +15,8 @@ import { fileURLToPath } from 'node:url';
 import { buildBrief } from './brief.mjs';
 import { systemPrompt, commandReply } from './persona.mjs';
 import { loadKey, listModels, checkModel, chat, DEFAULT_MODEL } from './groq.mjs';
-import { welcome, cleanName, loadImages, pickImage } from './welcome.mjs';
+import { welcome, cleanName, loadImages, pickImage, liftLine } from './welcome.mjs';
+import { top, render, hasScores } from './scores.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -48,6 +49,21 @@ const ALLOWED_CHATS = new Set(
 // Raids: twenty people joining at once must not become twenty messages.
 const WELCOME_WINDOW_MS = 8000;   // joins inside this are greeted together
 const WELCOME_GAP_MS = 20000;     // and no faster than this per chat
+
+/**
+ * The unprompted "do you even lift bro?".
+ *
+ * Every number here exists to make it rare. A bot that speaks on a schedule
+ * gets muted, and muted is the same as absent — so it needs the room to be
+ * awake, needs to have been quiet itself for a long while, and then still only
+ * fires some of the time.
+ */
+const LIFT_MIN_GAP_MS = 6 * 3600e3;   // never twice inside six hours — four let a
+                                      // busy group get it nearly six times a day
+const LIFT_CHAT_ALIVE_MS = 10 * 60e3; // somebody must have spoken this recently
+const LIFT_BOT_QUIET_MS = 90 * 60e3;  // and the bot must not have
+const LIFT_CHANCE = 0.05;             // then a 6% roll, checked about once a minute
+const LIFT_ROLL_EVERY_MS = 60e3;
 
 async function loadTelegramToken() {
   if (process.env.TELEGRAM_BOT_TOKEN) return process.env.TELEGRAM_BOT_TOKEN.trim();
@@ -178,8 +194,29 @@ async function main() {
   const memory = new Map();       // chatId -> [{role, content}]
   const lastReply = new Map();    // chatId -> ms
   const joins = new Map();        // chatId -> {names[], timer, lastAt, lastOpener}
+  const rooms = new Map();        // chatId -> {lastHuman, lastBot, lastLift}
+  const room = (id) => {
+    if (!rooms.has(id)) rooms.set(id, { lastHuman: 0, lastBot: 0, lastLift: 0 });
+    return rooms.get(id);
+  };
   let offset = 0;
   let backoff = 1000;
+
+  const liftTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [chatId, r] of rooms) {
+      if (String(chatId).startsWith('-') === false) continue;      // groups only
+      if (now - r.lastHuman > LIFT_CHAT_ALIVE_MS) continue;        // room is asleep
+      if (now - r.lastBot < LIFT_BOT_QUIET_MS) continue;           // bot just spoke
+      if (now - r.lastLift < LIFT_MIN_GAP_MS) continue;            // asked recently
+      if (Math.random() > LIFT_CHANCE) continue;
+      r.lastLift = now;
+      r.lastBot = now;
+      tg(token, 'sendMessage', { chat_id: chatId, text: liftLine(), disable_web_page_preview: true })
+        .catch((e) => console.error('lift failed:', e.message));
+    }
+  }, LIFT_ROLL_EVERY_MS);
+  liftTimer.unref?.();
 
   /**
    * Greet whoever has arrived, once, a beat after they arrive.
@@ -251,12 +288,17 @@ async function main() {
       const arrivals = (msg.new_chat_members || []).filter((x) => x.id !== me.id && !x.is_bot);
       if (arrivals.length) greet(msg.chat.id, arrivals);
 
-      if (!msg.text || !addressed(msg, me)) continue;
+      if (!msg.text) continue;
+      // Every human line keeps the room marked awake, whether or not it was
+      // aimed at the bot — that is what the lift roll checks against.
+      if (!msg.from?.is_bot) room(msg.chat.id).lastHuman = Date.now();
+      if (!addressed(msg, me)) continue;
 
       const chatId = msg.chat.id;
       const now = Date.now();
       if (now - (lastReply.get(chatId) ?? 0) < MIN_GAP_MS) continue;
       lastReply.set(chatId, now);
+      room(chatId).lastBot = now;
 
       const reply = (text) =>
         tg(token, 'sendMessage', {
@@ -269,6 +311,8 @@ async function main() {
       // Canned answers first: they are the questions that get asked most, they
       // must never vary, and the contract one must never go near a model.
       const cmd = parseCommand(msg.text, me);
+      if (cmd === 'top' || cmd === 'lifts') { await reply(render('gym', await top('gym'))); continue; }
+      if (cmd === 'shifts' || cmd === 'topjob') { await reply(render('job', await top('job'))); continue; }
       if (cmd) {
         const canned = commandReply(cmd, config);
         if (canned) { await reply(canned); continue; }

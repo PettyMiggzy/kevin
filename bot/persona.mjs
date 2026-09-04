@@ -193,6 +193,8 @@ export function commandReply(name, config) {
         '/pools — what is in the pools',
         '/burn — the burn',
         '/gym — Kevin gym',
+        '/top — top of the gym',
+        '/shifts — top of the fry house',
         '',
         'Or just talk to Kevin. In a group, say Kevin name first.',
       ].join('\n');

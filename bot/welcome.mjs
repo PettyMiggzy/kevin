@@ -125,3 +125,27 @@ export function cleanName(user) {
   const raw = user.first_name || user.username || 'Somebody';
   return raw.replace(/\s+/g, ' ').trim().slice(0, 32) || 'Somebody';
 }
+
+
+/**
+ * The unprompted one.
+ *
+ * Kevin asking the room if they even lift is the whole joke, and it only works
+ * if it is RARE. A bot that pipes up on a timer is a bot people mute, so this
+ * fires at most once every few hours, only into a chat that is already talking,
+ * and never on top of a conversation the bot is part of. The gate lives in
+ * index.mjs; this just picks the words.
+ */
+const LIFTS = [
+  'Do you even lift bro?',
+  'Do you even lift bro?',          // the line, weighted — it is the joke
+  'Do you even lift bro?',
+  'Kevin been thinking. Do you even lift bro?',
+  'Question for the room. Do you even lift bro?',
+  'Do you even lift bro? Kevin is only asking.',
+  'Do you even lift bro? Kevin do. Kevin lift every day.',
+  'Sorry. Do you even lift bro?',
+  'Do you even lift bro? Kevin has a gym if you do not. iamkevin.lol/gym',
+];
+
+export const liftLine = () => rand(LIFTS);

@@ -136,3 +136,37 @@ bot into the thing that makes people leave.
 Nothing about a join goes near the model. A username is text an attacker
 chooses, and feeding it into a prompt is how a bot ends up greeting
 "IGNORE PREVIOUS INSTRUCTIONS" by doing what it says.
+
+## Leaderboards
+
+`/top` (the gym) and `/shifts` (the fry house) are wired but **nothing serves
+them yet**. The game keeps progress in `localStorage` on each player's own
+device — no account, no server — so two people playing have two private numbers
+that have never met. Until that changes, both commands say there is no board
+rather than inventing one. A leaderboard with made-up names on it is worse than
+no leaderboard.
+
+When there is a server, point the bot at it:
+
+```
+Environment=KEVIN_SCORES_URL=https://scores.iamkevin.lol
+```
+
+and have it answer `GET /top?board=gym&limit=10` with:
+
+```json
+{ "board": "gym", "rows": [ { "name": "Big Mike", "score": 96 } ] }
+```
+
+`board` is `gym` (muscle) or `job` (shift pay). Names are treated as untrusted
+throughout — rendered as plain text, never as markup, never into a prompt.
+
+## "Do you even lift bro?"
+
+Kevin asks the room, unprompted, at most once every six hours — and only when
+somebody has spoken in the last ten minutes and the bot itself has been quiet
+for ninety. Simulated over four weeks: about 3.8 times a day in a busy group,
+0.4 in a slow one, and never at all in a silent one.
+
+It is rare on purpose. A bot that pipes up on a schedule is a bot people mute,
+and muted is the same as absent.
