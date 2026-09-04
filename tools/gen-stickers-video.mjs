@@ -151,20 +151,112 @@ export const STICKERS = [
     edit: 'Put a golden crown on his head and a royal fur-trimmed cape on his shoulders, sitting back like a king on the office chair, fingers steepled. Add the words "CEO OF CHAOS" in bold black cartoon letters across the bottom',
     action: 'His WHOLE BODY settles back into the throne with authority, torso reclining, shoulders rolling, head tilting up and giving a slow deliberate nod, cape and dreadlocks shifting with the movement, fingers steepling',
   },
+  // --- the KEK pack -------------------------------------------------------
+  // KEK is the launchpad's own token, so it is the power-up in all of these
+  // rather than a generic star — the two packs are meant to read as one set.
   {
-    // Head and fist, NOT a full body — which is the whole reason the rest of the
-    // pack holds its model. Asked for a body head to toe, the model spends its
-    // detail budget inventing legs and the head degrades on the way: two
-    // attempts came back with a spiky mane, shrunken eyes and a narrow muzzle,
-    // from the portrait AND from the full-body moon shot. Every sticker that
-    // works here is a head-and-arms shot, so this one is too.
-    // nudgeY 0 because this still is asked for with no baked lettering; the
-    // default lift exists to crop the generator's own words out of frame and
-    // would otherwise slice his chin off for nothing.
-    slug: 'star-power', src: '00-kevin-pfp.png', word: 'STAR POWER', nudgeY: 0,
-    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE exactly as in the source — do NOT open it, no tongue, no teeth. The top of his hair stays smooth with no spikes or tufts. Leave empty space across the top of the frame. Change only his arms: one arm punched straight up into that space with a tight CLOSED fist, the other fist raised by his shoulder. Floating just above the raised knuckles — not touched, not held, not gripped — put one big glossy yellow five-pointed cartoon power-up star with two small black oval eyes and a thick black outline, knocked upward, with short white impact lines flicking off it. Add no text anywhere',
-    action: 'His WHOLE BODY drives upward with the punch, torso stretching tall, shoulders lifting, head tipping back to shout up at it, hood and dreadlocks swinging with the motion, the raised fist punching up hard — the star spins, flashes and bounces higher on the hit — then he drops back into a squash and punches straight up into it again',
+    slug: 'kek-power', word: 'KEK POWER', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body, leaping in mid-air, one arm punched straight up above his head in a tight closed fist. Floating just above his knuckles, not held, is a round green coin with a thick black outline and the word KEK in fat white rounded capital letters across the middle, knocked upward by the punch with short white impact lines flicking off it. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY drives upward off the ground, legs kicking beneath him, torso stretching tall, hair streaming down behind him, the fist punching up hard — the coin spins, flashes and bounces higher on the hit — then he squashes down and springs straight up into it again',
   },
+  {
+    slug: 'kek-rain', word: 'KEK RAIN', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body, both arms stretched up wide and head tipped back, catching a shower of falling coins. Many of a round green coin with a thick black outline and the word KEK in fat white rounded capital letters across the middle, all different sizes, tumbling down through the air all around him and piling up around his feet. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY bounces on his feet with both arms swiping through the air to catch them, torso twisting side to side, head snapping to follow the coins, hair swinging — the coins tumble and spin down past him and bounce off the pile at his feet',
+  },
+  {
+    slug: 'kek-flex', word: 'KEK GAINS', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Make his arms and chest enormously muscular and bulging while his head stays exactly the same size, both arms up in a double bicep flex. A round green coin with a thick black outline and the word kek in fat white rounded capital letters across the middle is on the ground beside him, as big as he is. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY tenses and swells, biceps pumping bigger with each flex, chest puffing, legs braced and shaking with the effort, head tipping back proudly, hair shaking — then he relaxes a beat and flexes even harder',
+  },
+  {
+    slug: 'kek-laugh', word: 'KEK', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body doubled over backwards laughing, one hand on his belly and the other pointing straight at the viewer. Several of a round green coin with a thick black outline and the word KEK in fat white rounded capital letters across the middle bouncing in the air around his head. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY rocks backward and forward laughing, torso folding and unfolding, shoulders heaving, legs unsteady beneath him, head tipping back then snapping forward to point again, hair swinging with every laugh, the coins bouncing around him',
+  },
+  {
+    slug: 'kek-moon', word: 'TO THE MOON', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body riding on top of a round green coin with a thick black outline and the word KEK in fat white rounded capital letters across the middle like a rocket, the coin tipped up on edge and blasting upward with a long white flame trail behind it, both his arms thrown up in triumph. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY rides upward with the coin, legs gripping and bending to absorb the surge, torso arching back, arms punching the sky, hair streaming straight down behind him in the wind, the flame trail flaring and rippling underneath',
+  },
+  {
+    slug: 'kek-stack', word: 'STACKED', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body standing on top of a tall stack of many of a round green coin with a thick black outline and the word KEK in fat white rounded capital letters across the middle piled up like poker chips, arms crossed, looking pleased with himself. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY settles and rebalances on the wobbling stack, knees bending, arms unfolding to windmill for balance then folding again, torso swaying, head bobbing, hair swinging as the whole stack teeters under him',
+  },
+  {
+    slug: 'kek-hodl', word: 'HODL', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body hugging a round green coin with a thick black outline and the word KEK in fat white rounded capital letters across the middle tightly with both arms wrapped all the way round it. The coin is bigger than he is. His eyes are clenched shut, refusing to let go. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY clenches around the coin, arms squeezing tighter, legs gripping and scrabbling, head shaking hard side to side in refusal, hair whipping, his whole frame trembling with the effort of holding on',
+  },
+  {
+    slug: 'kek-snack', word: 'SNACK TIME', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body holding up a red fast-food fry carton in one hand, packed with many of a round green coin with a thick black outline and the word KEK in fat white rounded capital letters across the middle standing up in it instead of fries, tipping one into his other hand. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY tips back as he shakes the carton, torso rocking, one arm shaking the carton and the other catching, head tilting up to watch, legs bouncing, hair swinging, the coins jumping and rattling in the carton',
+  },
+  {
+    slug: 'kek-spin', word: 'SPIN IT', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body with a round green coin with a thick black outline and the word KEK in fat white rounded capital letters across the middle spinning fast and balanced on one upraised fingertip above his head, the other hand on his hip, looking very pleased. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY shifts and adjusts under the spinning coin, the balancing arm making small quick corrections, hips swaying, knees bending, head tilting to watch it, hair swinging — the coin spins fast and wobbles and he catches the balance again',
+  },
+  {
+    slug: 'kek-gm', word: 'GM', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body, eyes half closed and sleepy, hair messy, holding a big steaming white mug in both hands with a round green coin with a thick black outline and the word KEK in fat white rounded capital letters across the middle printed on the side of the mug. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY sags and sways sleepily, head lolling forward then jerking back up, shoulders rising and falling with a huge yawn, torso rocking, hair hanging heavy and swinging — then he lifts the mug with both arms and his whole body leans into the sip',
+  },
+
+  // --- the gym pack -------------------------------------------------------
+  {
+    slug: 'gym-curl', word: 'CURLS', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Make his arms muscular while his head stays exactly the same size. Show his whole body curling a heavy black dumbbell in each hand, elbows tucked in, sweat drops flying off him. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY works the curl, both arms swinging the dumbbells up and down out of time with each other, shoulders rolling, chest swelling at the top of each rep, knees bouncing, torso rocking, hair swinging, sweat flicking off with every rep',
+  },
+  {
+    slug: 'gym-bench', word: 'BENCH', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body lying on his back on a red weight bench, pressing a long black barbell loaded with huge black plates straight up off his chest, arms muscular, face straining. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY drives the bar up and lowers it back down, arms shaking with the weight, chest heaving, legs braced and kicking against the floor, head pressing back into the bench, the bar bending slightly at the top of each press',
+  },
+  {
+    slug: 'gym-squat', word: 'LEG DAY', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body squatting under a long black barbell loaded with enormous black plates across his shoulders, thighs muscular, knees bent deep, teeth gritted. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY sinks down into the squat and drives back up, thighs straining, the bar bending across his shoulders, arms gripping tight, torso leaning forward and back, legs trembling at the bottom, hair swinging with each rep',
+  },
+  {
+    slug: 'gym-flex', word: 'FLEX', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Make his arms, chest and shoulders enormously muscular and bulging while his head stays exactly the same size. Show his whole body in a double bicep flex, one eye winking. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY tenses and swells, both biceps pumping visibly bigger with each flex, chest puffing out, shoulders rolling back, legs braced and shaking, head tipping proudly, hair shaking — then he relaxes and flexes even harder',
+  },
+  {
+    slug: 'gym-shake', word: 'SHAKE IT', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body tipping a huge black protein shaker bottle up to his mouth with both hands and chugging it, one leg kicked back, a little spill running down his chin. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY leans back further and further as he chugs, both arms tipping the bottle higher, throat working, one leg kicking up for balance, torso arching, hair hanging back — then he slams the bottle down and his whole body shudders',
+  },
+  {
+    slug: 'gym-run', word: 'CARDIO', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body sprinting flat out on a treadmill, legs blurred, arms pumping, tongue of the treadmill belt streaking under him, sweat spraying off him. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY sprints on the spot, legs pumping fast and hard, arms driving back and forth, torso leaning into it, head bobbing with each stride, hair streaming straight back, sweat flicking off him in all directions',
+  },
+  {
+    slug: 'gym-pullup', word: 'PULL UPS', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Make his arms and back muscular while his head stays exactly the same size. Show his whole body hanging from a black pull-up bar by both hands, chin just clearing the bar, legs dangling and crossed. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY pulls up until his chin clears the bar then lowers all the way back down, arms and shoulders straining, back flaring, legs swinging and kicking beneath him, head craning up, hair swinging with every rep',
+  },
+  {
+    slug: 'gym-deadlift', word: 'DEADLIFT', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body mid-deadlift, gripping a long black barbell loaded with enormous black plates, back straight, legs braced, the bar bending under the weight. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY hauls the bar up off the floor and sets it back down, legs driving, back straightening, arms locked and shaking, the bar bending and the plates wobbling, his whole frame trembling at the top, hair swinging',
+  },
+  {
+    slug: 'gym-spot', word: 'YOU GOT THIS', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body standing with muscular arms held out, spotting and cheering on a second much smaller copy of himself who is struggling under a tiny barbell. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY bounces encouragingly on his feet, both arms gesturing up and up, head nodding hard, torso leaning in over the smaller one, hair swinging — while the little one wobbles and shakes under his tiny bar',
+  },
+  {
+    slug: 'gym-wrecked', word: 'WRECKED', src: '00-kevin-pfp.png', nudgeY: 0,
+    edit: 'His mouth MUST stay ONE SMALL SOLID BLACK TRIANGLE — do NOT open it, no tongue, no teeth. Show his whole body collapsed flat on his back on the gym floor, arms and legs sprawled out, a black dumbbell fallen beside each hand, completely spent. Add no text or lettering anywhere',
+    action: 'His WHOLE BODY twitches once on the floor, one leg kicking up and flopping back down, an arm lifting weakly and dropping, chest heaving up and down, head rolling to the side, hair spilling across the floor, then going still',
+  },
+
   // --- the fryer set ------------------------------------------------------
   // He works the fryer. It is the whole character, so it gets its own batch.
   {

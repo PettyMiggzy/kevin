@@ -125,7 +125,6 @@ window.KEVIN = {
   //   assets/stickers/animated/<slug>.webm transparent VP9, Telegram-ready
   //   assets/stickers/animated/<slug>.gif  same loop on the yellow
   animated: [
-    { slug: 'star-power', name: 'Star Power' },
     { slug: 'wagmi', name: 'WAGMI' },
     { slug: 'time-to-cook', name: 'Time To Cook' },
     { slug: 'let-him-cook', name: 'Let Him Cook' },

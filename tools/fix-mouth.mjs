@@ -21,9 +21,9 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
 
-const file = process.argv[2];
-if (!file) {
-  console.error('usage: node tools/fix-mouth.mjs <png>');
+const files = process.argv.slice(2);
+if (!files.length) {
+  console.error('usage: node tools/fix-mouth.mjs <png> [png...]');
   process.exit(1);
 }
 
@@ -32,9 +32,8 @@ const browser = await chromium.launch({
   args: ['--force-color-profile=srgb', '--no-sandbox'],
 });
 const page = await browser.newPage({ viewport: { width: 64, height: 64 } });
-const src = 'data:image/png;base64,' + (await readFile(file)).toString('base64');
 
-const out = await page.evaluate(async (dataUri) => {
+const repair = async (dataUri) => await page.evaluate(async (dataUri) => {
   const img = new Image();
   img.src = dataUri;
   await img.decode();
@@ -64,7 +63,45 @@ const out = await page.evaluate(async (dataUri) => {
     const b = p[k * 4 + 2];
     if (r > 190 && g > 100 && g < 200 && b > 110 && b < 210 && r - g > 40 && b > g) seeds.push(k);
   }
-  if (!seeds.length) return { skipped: 'no tongue found — mouth may already be right' };
+  // Not every bad mouth has a tongue in it — a gritted-teeth strain or a flat
+  // open O has none. Fall back to the largest dark island that sits wholly
+  // inside the cream of the face, which is what a mouth is and what the eyes,
+  // sitting in their own white, are not.
+  if (!seeds.length) {
+    const dark = (k) => p[k * 4] < 90 && p[k * 4 + 1] < 90 && p[k * 4 + 2] < 90 && p[k * 4 + 3] > 128;
+    const seenDark = new Uint8Array(W * H);
+    let bestIsland = null;
+    for (let k = 0; k < W * H; k++) {
+      if (seenDark[k] || !dark(k)) continue;
+      const st = [k];
+      seenDark[k] = 1;
+      const px = [];
+      let creamNbr = 0;
+      let otherNbr = 0;
+      while (st.length) {
+        const j = st.pop();
+        px.push(j);
+        const x = j % W;
+        const y = (j / W) | 0;
+        const look = (nk) => {
+          if (dark(nk)) { if (!seenDark[nk]) { seenDark[nk] = 1; st.push(nk); } }
+          else if (isCream(nk)) creamNbr++;
+          else otherNbr++;
+        };
+        if (x > 0) look(j - 1);
+        if (x < W - 1) look(j + 1);
+        if (y > 0) look(j - W);
+        if (y < H - 1) look(j + W);
+      }
+      // A mouth is ringed by face. An eye's pupil is ringed by white, and the
+      // line art is ringed by everything, so both fail this.
+      if (creamNbr < (creamNbr + otherNbr) * 0.92) continue;
+      if (px.length < 400) continue;
+      if (!bestIsland || px.length > bestIsland.length) bestIsland = px;
+    }
+    if (!bestIsland) return { skipped: 'no mouth found — left alone' };
+    seeds.push(...bestIsland);
+  }
 
   // Grow out over everything that is not face, which stops dead at the cream
   // surrounding the mouth. The nose comes along with it and is redrawn below.
@@ -145,13 +182,22 @@ const out = await page.evaluate(async (dataUri) => {
   x2d.fill();
 
   return { data: c.toDataURL('image/png'), w, h, cx, cy, erased: n };
-}, src);
+}, dataUri);
+
+for (const file of files) {
+  const name = file.split('/').pop().padEnd(18);
+  try {
+    const src = 'data:image/png;base64,' + (await readFile(file)).toString('base64');
+    const out = await repair(src);
+    if (out.skipped) {
+      console.log(`  ${name} ${out.skipped}`);
+    } else {
+      await writeFile(file, Buffer.from(out.data.split(',')[1], 'base64'));
+      console.log(`  ${name} erased ${out.erased}px, drew a ${out.w}x${out.h} triangle at ${out.cx},${out.cy}`);
+    }
+  } catch (e) {
+    console.log(`  ${name} FAILED — ${String(e.message).slice(0, 70)}`);
+  }
+}
 
 await browser.close();
-
-if (out.skipped) {
-  console.log(`  ${file}: ${out.skipped}`);
-} else {
-  await writeFile(file, Buffer.from(out.data.split(',')[1], 'base64'));
-  console.log(`  ${file}: erased ${out.erased}px of open mouth, drew a ${out.w}x${out.h} triangle at ${out.cx},${out.cy}`);
-}
