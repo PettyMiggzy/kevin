@@ -34,7 +34,7 @@ function runs(grid, y) {
  * the fill colour — one flat colour behind the head reads correctly and costs
  * nothing, and nobody is looking at the back of a 32px head anyway.
  */
-function extrude(grid, { y0, y1, depth, unit, fill, faceDepth = 2 }) {
+export function extrude(grid, { y0, y1, depth, unit, fill, faceDepth = 2 }) {
   const geoms = [];
   const colour = new THREE.Color();
   const w = grid.w;
@@ -66,7 +66,10 @@ function extrude(grid, { y0, y1, depth, unit, fill, faceDepth = 2 }) {
       if (grid.cells[y * w + x] >= 0) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
     }
   }
-  if (maxX >= minX) {
+  // Skip it entirely when the runs are already full depth: a zero-thickness box
+  // is degenerate geometry that z-fights the face it sits behind. Callers that
+  // want an exact silhouette rather than a slab pass faceDepth === depth.
+  if (maxX >= minX && depth > faceDepth) {
     const back = new THREE.BoxGeometry((maxX - minX + 1) * unit, (y1 - y0 + 1) * unit, (depth - faceDepth) * unit);
     back.translate(
       (minX + (maxX - minX + 1) / 2) * unit - cx,
@@ -84,7 +87,7 @@ function extrude(grid, { y0, y1, depth, unit, fill, faceDepth = 2 }) {
 }
 
 /** One BufferGeometry out of many boxes, so a head is a single draw call. */
-function merge(geoms) {
+export function merge(geoms) {
   let verts = 0;
   for (const g of geoms) verts += g.attributes.position.count;
   const pos = new Float32Array(verts * 3);

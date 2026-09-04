@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kevin — character options</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #FFE500; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="importmap">
+{ "imports": { "three": "../gym/vendor/three.module.js", "three/addons/": "../gym/vendor/addons/" } }
+</script>
+<script type="module">
+// Four ways to put KEVIN — the red echidna off the PFP — into the gym, all
+// rendered by the engine that would actually render them, at one camera and one
+// light rig so the comparison is fair.
+//
+// The character in the game today is a generic 32x32 punk head on a blocky
+// body. None of these are that. Every option below is Kevin; they differ in how
+// he is built, not in who he is.
+import * as THREE from 'three';
+import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
+import { extrude, merge } from '../gym/js/voxel.js';
+
+const W = 560, H = 760;
+const canvas = document.getElementById('c');
+canvas.width = W; canvas.height = H;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(2);
+renderer.setSize(W, H, false);
+const effect = new OutlineEffect(renderer, { defaultThickness: 0.005, defaultColor: [0, 0, 0], defaultAlpha: 1 });
+
+function ramp() {
+  const t = new THREE.DataTexture(
+    new Uint8Array([120, 120, 120, 255, 215, 215, 215, 255, 255, 255, 255, 255]), 3, 1, THREE.RGBAFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
+}
+const RAMP = ramp();
+const OUTLINE = { thickness: 0.008, color: [0, 0, 0], alpha: 1 };
+function toon(color, opts = {}) {
+  const m = new THREE.MeshToonMaterial({ color, gradientMap: RAMP, ...opts });
+  m.userData.outlineParameters = OUTLINE;
+  return m;
+}
+
+const RED = '#E02128';
+const RED_DK = '#B0141B';
+const CREAM = '#F2E4C4';
+const WHITE = '#FFFFFF';
+const INK = '#0B0B0B';
+
+// --- the drawing, once ------------------------------------------------------
+/**
+ * Kevin's face, drawn with shapes rather than pixels so the same description
+ * rasterises at any grid size. Drawing him once and sampling at 32 and 64 is
+ * what makes the two voxel options an honest comparison of resolution rather
+ * than of two different people.
+ */
+function drawKevin(x, S) {
+  const u = S / 32;                        // everything below is in 32-unit space
+  x.clearRect(0, 0, S, S);
+  x.imageSmoothingEnabled = false;
+
+  const ell = (cx, cy, rx, ry, fill, rot = 0) => {
+    x.save(); x.translate(cx * u, cy * u); x.rotate(rot);
+    x.beginPath(); x.ellipse(0, 0, rx * u, ry * u, 0, 0, Math.PI * 2);
+    x.fillStyle = fill; x.fill(); x.restore();
+  };
+
+  // Dreadlocks, swept back and down. Drawn first so the head sits on top.
+  for (const [cx, cy, rx, ry, rot] of [
+    [7.5, 12.5, 2.4, 6.2, 0.30], [6.0, 17.5, 2.1, 5.4, 0.16],
+    [24.5, 12.5, 2.4, 6.2, -0.30], [26.0, 17.5, 2.1, 5.4, -0.16],
+  ]) ell(cx, cy, rx, ry, RED_DK, rot);
+
+  ell(16, 13, 10.5, 9.5, RED);             // head
+  ell(16, 8.5, 9.0, 4.0, RED);             // brow ridge, so the top reads round
+
+  // Eyes: big, close-set, tilted in. The single most recognisable thing here.
+  ell(12.6, 13.0, 3.5, 4.8, WHITE, 0.16);
+  ell(19.4, 13.0, 3.5, 4.8, WHITE, -0.16);
+  ell(12.9, 14.4, 1.35, 2.1, INK);
+  ell(19.1, 14.4, 1.35, 2.1, INK);
+
+  ell(16, 21.0, 7.6, 4.6, CREAM);          // muzzle
+  // Nose: a small dark wedge, the one straight-edged thing on his face.
+  x.fillStyle = INK;
+  x.beginPath();
+  x.moveTo(16 * u, 18.2 * u); x.lineTo(17.9 * u, 20.4 * u); x.lineTo(14.1 * u, 20.4 * u);
+  x.closePath(); x.fill();
+  ell(16, 23.4, 3.4, 1.0, INK);            // mouth line
+
+  // Shoulders and chest, filling the bottom rows the way the avatars do.
+  ell(16, 31.5, 9.0, 5.0, RED);
+  ell(9.5, 30.5, 3.2, 3.0, RED_DK);        // fists
+  ell(22.5, 30.5, 3.2, 3.0, RED_DK);
+}
+
+/** Rasterise the drawing into the {w,h,palette,cells} shape extrude() wants. */
+function kevinGrid(S) {
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  drawKevin(x, S);
+  const d = x.getImageData(0, 0, S, S).data;
+  const palette = [];
+  const index = new Map();
+  const cells = new Array(S * S).fill(-1);
+  for (let i = 0; i < S * S; i++) {
+    const a = d[i * 4 + 3];
+    if (a < 128) continue;                 // transparent stays empty
+    const hex = '#' + [0, 1, 2].map((k) => d[i * 4 + k].toString(16).padStart(2, '0')).join('');
+    if (!index.has(hex)) { index.set(hex, palette.length); palette.push(hex); }
+    cells[i] = index.get(hex);
+  }
+  return { w: S, h: S, palette, cells, traits: { hood: RED } };
+}
+
+function vcMat() {
+  const m = new THREE.MeshToonMaterial({ color: '#FFFFFF', gradientMap: RAMP, vertexColors: true });
+  m.userData.outlineParameters = { thickness: 0.009, color: [0, 0, 0], alpha: 1 };
+  return m;
+}
+
+// --- option 1: smooth 3D Kevin ---------------------------------------------
+/**
+ * Kevin, modelled. Spheres and capsules under a toon ramp and a black hull —
+ * the same two techniques the gym equipment already uses, so he stops being the
+ * one blocky thing in a room of smooth ones.
+ *
+ * Nothing here is a downloaded model or a rig. Every part is a primitive with a
+ * position, which means muscle stays what it is today: group scale.
+ */
+function smoothKevin() {
+  const g = new THREE.Group();
+  const red = toon(RED);
+  const dark = toon(RED_DK);
+  const cream = toon(CREAM);
+  const ink = toon(INK);
+  const white = toon(WHITE);
+
+  const legH = 0.40, torsoH = 0.46, headR = 0.30;
+  const headY = legH + torsoH + headR * 0.98;
+
+  // Torso: a tapered barrel. Wide chest into a narrow waist is the whole
+  // silhouette, and it is one geometry.
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.17, torsoH, 18), red);
+  torso.position.y = legH + torsoH / 2;
+  torso.scale.z = 0.78;
+  g.add(torso);
+  const chest = new THREE.Mesh(new THREE.SphereGeometry(0.26, 18, 14), red);
+  chest.position.set(0, legH + torsoH * 0.82, 0.02);
+  chest.scale.set(1, 0.72, 0.72);
+  g.add(chest);
+
+  for (const sx of [-1, 1]) {
+    const delt = new THREE.Mesh(new THREE.SphereGeometry(0.115, 16, 12), red);
+    delt.position.set(sx * 0.255, legH + torsoH * 0.90, 0);
+    g.add(delt);
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.068, 0.24, 4, 12), red);
+    arm.position.set(sx * 0.275, legH + torsoH * 0.48, 0);
+    arm.rotation.z = sx * 0.20;
+    g.add(arm);
+    // The fists are half the character. Oversized on purpose.
+    const fist = new THREE.Mesh(new THREE.SphereGeometry(0.115, 16, 12), dark);
+    fist.position.set(sx * 0.325, legH + torsoH * 0.12, 0.03);
+    g.add(fist);
+    // Two knuckle spikes, pointing straight out the front of the fist.
+    for (let k = 0; k < 2; k++) {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.030, 0.11, 10), cream);
+      spike.position.set(sx * (0.300 + k * 0.052), legH + torsoH * 0.15, 0.135);
+      spike.rotation.x = Math.PI / 2;
+      g.add(spike);
+    }
+    const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.082, legH * 0.52, 4, 12), red);
+    leg.position.set(sx * 0.098, legH * 0.56, 0);
+    g.add(leg);
+    const boot = new THREE.Mesh(new THREE.SphereGeometry(0.105, 14, 10), dark);
+    boot.position.set(sx * 0.098, 0.075, 0.035);
+    boot.scale.set(1, 0.75, 1.35);
+    g.add(boot);
+  }
+
+  const head = new THREE.Group();
+  head.position.y = headY;
+  g.add(head);
+
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(headR, 22, 18), red);
+  skull.scale.set(1.06, 1.0, 0.98);
+  head.add(skull);
+
+  // Dreadlocks: two a side, trailing BACK and down off the skull. Laying them
+  // sideways — which is what rotating in Z alone does — reads as antennae.
+  // Yaw then pitch, in that order, or the second rotation happens in the frame
+  // the first one already moved.
+  for (const sx of [-1, 1]) {
+    for (const [i, [ay, len, splay, droop]] of [[0.07, 0.44, 1.05, 0.30], [-0.10, 0.36, 0.80, 0.55]].entries()) {
+      const d = new THREE.Mesh(new THREE.CapsuleGeometry(0.062 - i * 0.008, len, 4, 12), dark);
+      d.rotation.order = 'YXZ';
+      // Out to the side as much as back. Tucked in behind the skull they are
+      // invisible from the front, which is the angle you play at.
+      d.position.set(sx * headR * 0.84, ay, -headR * 0.22);
+      d.rotation.y = sx * splay;
+      d.rotation.x = -Math.PI / 2 + droop;
+      head.add(d);
+    }
+  }
+
+  // Muzzle, then the eyes on top of it — in that order, or the eye whites end
+  // up buried in the cheek.
+  const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.150, 18, 14), cream);
+  muzzle.position.set(0, -0.115, headR * 0.86);
+  muzzle.scale.set(1.20, 0.74, 0.84);
+  head.add(muzzle);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.034, 0.050, 3), ink);
+  nose.position.set(0, -0.020, headR * 0.86 + 0.115);
+  nose.rotation.x = Math.PI;
+  head.add(nose);
+
+  // The eyes carry the whole likeness: tall, close-set, tilted in, and sitting
+  // proud of the skull rather than sunk into it.
+  // Sat proud of the skull. At 0.66 of the radius the sphere's front was still
+  // inside the head and only the top of each eye showed above the brow.
+  for (const sx of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.135, 18, 14), white);
+    eye.position.set(sx * 0.094, 0.075, headR * 0.86);
+    eye.scale.set(0.66, 1.10, 0.52);
+    eye.rotation.z = sx * 0.20;
+    head.add(eye);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.052, 14, 10), ink);
+    pupil.position.set(sx * 0.090, 0.036, headR * 0.86 + 0.058);
+    pupil.scale.set(0.60, 1.30, 0.28);
+    pupil.material.userData = { outlineParameters: { visible: false } };
+    head.add(pupil);
+  }
+  return { object: g, height: headY + headR * 1.35 };
+}
+
+// --- options 2 and 3: the same Kevin, voxelised ----------------------------
+/**
+ * The drawn Kevin, rasterised and extruded — the pipeline the game already has,
+ * pointed at a face that is actually his. 32 is the collection's grid; 64 is
+ * what it costs to make the dreadlocks and the muzzle read as curves.
+ */
+function voxelKevin(S, unit) {
+  const grid = kevinGrid(S);
+  const DEPTH = Math.max(3, Math.round(S / 5));
+  const g = new THREE.Group();
+  const upper = new THREE.Mesh(
+    // faceDepth === depth: every drawn run is full depth, so there is no slab
+    // behind the face. The crew heads want the slab — they are head-shaped. Kevin
+    // has dreadlocks sticking out of a round skull, and a slab squares all of
+    // that off into a brick.
+    merge(extrude(grid, { y0: 0, y1: S - 1, depth: DEPTH, unit, fill: RED_DK, faceDepth: DEPTH })),
+    vcMat()
+  );
+  const bodyH = S * unit;
+  const legH = bodyH * 0.34;
+  upper.position.y = legH - unit;          // extrude() measures from the base
+  g.add(upper);
+  for (const sx of [-1, 1]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(unit * S * 0.17, legH, unit * S * 0.17), toon(RED));
+    leg.position.set(sx * unit * S * 0.13, legH / 2, 0);
+    g.add(leg);
+    const boot = new THREE.Mesh(new THREE.BoxGeometry(unit * S * 0.20, unit * S * 0.08, unit * S * 0.26), toon(RED_DK));
+    boot.position.set(sx * unit * S * 0.13, unit * S * 0.04, unit * S * 0.03);
+    g.add(boot);
+  }
+  return { object: g, height: legH + bodyH };
+}
+
+// --- option 4: the artwork itself ------------------------------------------
+/**
+ * The PFP on a card that always faces you. Pixel-exact to the art — nothing is
+ * interpreted, so he can never be slightly wrong — and by far the cheapest
+ * thing to draw. It is also the option that stops being 3D.
+ */
+async function spriteKevin() {
+  const tex = await new THREE.TextureLoader().loadAsync('../assets/scenes/venice/pfp-nano-banana-pro.png');
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.1, 1.1),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true })
+  );
+  m.material.userData = { outlineParameters: { visible: false } };
+  m.position.y = 0.58;
+  const g = new THREE.Group();
+  g.add(m);
+  return { object: g, height: 1.16 };
+}
+
+// --- render -----------------------------------------------------------------
+
+const STYLES = [
+  ['1-smooth', () => smoothKevin()],
+  ['2-voxel32', () => voxelKevin(32, 0.030)],
+  ['3-voxel64', () => voxelKevin(64, 0.015)],
+  ['4-sprite', () => spriteKevin()],
+];
+
+const shots = {};
+for (const [name, build] of STYLES) {
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight('#FFFFFF', '#9A8F7A', 2.2));
+  const key = new THREE.DirectionalLight('#FFFFFF', 1.4);
+  key.position.set(4, 8, 7);
+  scene.add(key);
+
+  const { object, height } = await build();
+  scene.add(object);
+  object.rotation.y = 0.16;
+
+  const camera = new THREE.PerspectiveCamera(32, W / H, 0.05, 60);
+  const d = height * 2.3;
+  camera.position.set(d * 0.22, height * 0.60, d);
+  camera.lookAt(0, height * 0.48, 0);
+  effect.render(scene, camera);
+  shots[name] = canvas.toDataURL('image/png');
+}
+window.__shots = shots;
+window.__ready = true;
+</script>
+</body>
+</html>
