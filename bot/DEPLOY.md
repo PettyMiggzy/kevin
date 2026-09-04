@@ -170,3 +170,51 @@ for ninety. Simulated over four weeks: about 3.8 times a day in a busy group,
 
 It is rare on purpose. A bot that pipes up on a schedule is a bot people mute,
 and muted is the same as absent.
+
+## Reading Radar (or any campaign bot)
+
+Bot API 10.0, 8 May 2026, added bot-to-bot communication. **Verified against
+core.telegram.org/api/bots/bot-to-bot**, not taken on trust — the old rule
+("bots never see other bots") held for a decade and building on a wrong version
+of it would have cost a week.
+
+To read another bot's ordinary group posts, with no cooperation from that bot,
+**Kevin needs all three**:
+
+1. @BotFather → Kevin → **Bot-to-Bot Communication Mode** → on
+2. @BotFather → Kevin → **Group Privacy** → off
+3. Kevin is **admin** in the group
+
+With fewer than all three you only get bot messages that `/command@Iamkevinzbot`
+or reply to Kevin directly.
+
+### Capture the format before parsing it
+
+Campaign bots do not share a format, and a parser that guesses wrong pays the
+wrong people. So look first:
+
+```bash
+systemctl stop kevin-bot
+cd /opt/kevin && node bot/index.mjs --sniff
+```
+
+It logs every message any other bot posts — text, and the inline keyboard,
+because some bots put the whole standings in buttons where `message.text` is
+nearly empty. Leave it running over a Radar post, paste what it prints, and the
+parser gets tightened to what actually arrives.
+
+Ctrl-C and `systemctl start kevin-bot` when done.
+
+### What it does with them now
+
+Reads and logs. **Nothing is paid out**, and nothing should be until the parser
+has been checked against real posts.
+
+Kevin never *replies* to a bot. Telegram's own guidance is that two bots
+answering each other will do so forever at machine speed, so the safeguards are
+in from the start: dedupe by message id (an edited leaderboard arrives as a
+second event for the same message), and no outbound message to a bot at all.
+
+`edited_message` is handled — a campaign bot that edits its board in place
+rather than reposting produces no new message, and a listener that only watches
+`message` would silently see nothing all day.

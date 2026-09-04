@@ -5,6 +5,9 @@
 //   node bot/index.mjs --dry        assemble everything and print it, call nothing
 //   node bot/index.mjs --models     list the models this Groq key can use
 //   node bot/index.mjs --ask "..."  one question on the command line
+//   node bot/index.mjs --sniff      log every message other bots post, and stop
+//                                   there. Use this to see what Radar actually
+//                                   sends before writing a parser for it.
 //
 // Long polling, not a webhook: no public URL, no TLS certificate, no hosting
 // decision needed to get it running. It is the slower design and it is the one
@@ -17,6 +20,7 @@ import { systemPrompt, commandReply } from './persona.mjs';
 import { loadKey, listModels, checkModel, chat, DEFAULT_MODEL } from './groq.mjs';
 import { welcome, cleanName, loadImages, pickImage, liftLine } from './welcome.mjs';
 import { top, render, hasScores } from './scores.mjs';
+import { makeSeen, fromOtherBot, sniff, parseLeaderboard } from './botwatch.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -225,6 +229,10 @@ async function main() {
   const welcomeImages = await loadImages(join(HERE, 'assets/welcome'));
   if (welcomeImages.length) console.log(`${welcomeImages.length} welcome image(s) loaded`);
 
+  const sniffing = has('sniff');
+  if (sniffing) console.log('SNIFF MODE — logging what other bots post, replying to nobody.');
+  const seen = makeSeen();
+
   const memory = new Map();       // chatId -> [{role, content}]
   const lastReply = new Map();    // chatId -> ms
   const joins = new Map();        // chatId -> {names[], timer, lastAt, lastOpener}
@@ -299,7 +307,12 @@ async function main() {
   for (;;) {
     let updates;
     try {
-      updates = await tg(token, 'getUpdates', { offset, timeout: 25, allowed_updates: ['message'] });
+      updates = await tg(token, 'getUpdates', {
+        offset, timeout: 25,
+        // edited_message matters: a campaign bot that edits its leaderboard in
+        // place rather than reposting produces no new message at all.
+        allowed_updates: ['message', 'edited_message'],
+      });
       // 'message' covers joins too — new_chat_members arrives as a service
       // message on the same update type, which is why the filter stays as it is.
       backoff = 1000;
@@ -313,9 +326,27 @@ async function main() {
 
     for (const u of updates) {
       offset = u.update_id + 1;
-      const msg = u.message;
+      const msg = u.message || u.edited_message;
       if (!msg) continue;
       if (!allowed(msg.chat)) continue;
+
+      // --- another bot said something ---------------------------------------
+      // Kevin never REPLIES to a bot. Telegram's own guidance is that two bots
+      // answering each other will do it forever at machine speed, so this reads
+      // and records and says nothing back.
+      if (fromOtherBot(msg, me)) {
+        const key = `${msg.chat.id}:${msg.message_id}:${msg.edit_date || 0}`;
+        if (seen(key)) continue;
+        if (sniffing) { console.log(sniff(msg)); continue; }
+        const board = parseLeaderboard(msg.text ?? msg.caption ?? '');
+        if (board.length) {
+          console.log(`leaderboard from @${msg.from.username}: ${board.length} rows`);
+          // Recording only. Nothing is paid out on this yet, and it should not
+          // be until the parser has been checked against real posts.
+          for (const r of board) console.log(`   ${r.rank}. @${r.handle} ${r.score}`);
+        }
+        continue;
+      }
 
       // Somebody joined. Never greet the bot's own arrival, and never greet a
       // bot — a group full of them would greet each other forever.
