@@ -49,6 +49,9 @@ function toon(color, opts = {}) {
 }
 
 const RED = '#E02128';
+const TAN = '#E8C9A0';                     // the muscle tone in the poster
+const TAN_DK = '#CBA87C';
+const BELT = '#1A1A1E';
 const RED_DK = '#B0141B';
 const CREAM = '#F2E4C4';
 const WHITE = '#FFFFFF';
@@ -296,11 +299,171 @@ async function spriteKevin() {
 
 // --- render -----------------------------------------------------------------
 
+
+// --- option 5: Kevin in gym kit --------------------------------------------
+/**
+ * The poster, as close as primitives get.
+ *
+ * The difference from option A is not detail, it is costume. In the artwork
+ * Kevin is not red all over: the arms and legs are tan muscle and the RED is
+ * the kit — vest, shorts, belt, wristbands, trainers. Getting that split right
+ * does more for the likeness than any amount of extra geometry.
+ */
+function kitKevin() {
+  const g = new THREE.Group();
+  const red = toon(RED);
+  const dark = toon(RED_DK);
+  const cream = toon(CREAM);
+  const ink = toon(INK);
+  const white = toon(WHITE);
+  const tan = toon(TAN);
+  const tanDk = toon(TAN_DK);
+  const belt = toon(BELT);
+
+  const legH = 0.40, torsoH = 0.50, headR = 0.30;
+  const headY = legH + torsoH + headR * 1.12;   // room for a neck, not chin-on-collarbone
+
+  // Torso is bare muscle; the vest is a second, slightly larger shell over it,
+  // open at the arms. Two pieces, so the vest can end where the poster ends it.
+  const chestTan = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.20, torsoH, 18), tan);
+  chestTan.position.y = legH + torsoH / 2;
+  chestTan.scale.z = 0.80;
+  g.add(chestTan);
+  // Kept inside the vest. Any bigger and the sphere breaks through the neckline
+  // and reads as a torn shirt rather than a chest under one.
+  const pecs = new THREE.Mesh(new THREE.SphereGeometry(0.243, 18, 14), tan);
+  pecs.position.set(0, legH + torsoH * 0.84, 0.015);
+  pecs.scale.set(1, 0.56, 0.70);
+  g.add(pecs);
+
+  // Closed, not an open tube: an open cylinder shows its own inside wall over
+  // the shoulders and reads as a torn edge rather than a neckline.
+  // Ends above the belt, so the belt is a belt and not a line drawn on a dress.
+  const vest = new THREE.Mesh(new THREE.CylinderGeometry(0.258, 0.216, torsoH * 0.72, 18), red);
+  vest.position.y = legH + torsoH * 0.50;
+  vest.scale.z = 0.86;
+  g.add(vest);
+  // Two straps over the shoulders, which is what makes it a vest and not a tube.
+  for (const sx of [-1, 1]) {
+    const strap = new THREE.Mesh(new THREE.CapsuleGeometry(0.036, 0.15, 4, 10), red);
+    strap.position.set(sx * 0.135, legH + torsoH * 0.86, 0.02);
+    strap.rotation.z = sx * 0.22;
+    g.add(strap);
+  }
+  // The wordmark, on a card sitting proud of the vest.
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 96;
+  const cx = c.getContext('2d');
+  cx.clearRect(0, 0, 256, 96);          // transparent, or the card's own red
+  cx.fillStyle = '#FFFFFF';             // rectangle shows against the shaded vest
+  cx.font = '700 62px "Arial Black", Impact, sans-serif';
+  cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  cx.fillText('KEVIN', 128, 52);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const word = new THREE.Mesh(new THREE.PlaneGeometry(0.30, 0.11),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
+  word.material.userData = { outlineParameters: { visible: false } };
+  word.position.set(0, legH + torsoH * 0.44, 0.228);
+  g.add(word);
+
+  const beltMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.212, 0.208, 0.062, 18), belt);
+  beltMesh.position.y = legH + torsoH * 0.055;
+  beltMesh.scale.z = 0.88;
+  g.add(beltMesh);
+  const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.055, 0.03), toon('#C9C4B4'));
+  buckle.position.set(0, legH + torsoH * 0.055, 0.185);
+  g.add(buckle);
+  // Shorts: red, wider than the waist, ending above the knee.
+  const shorts = new THREE.Mesh(new THREE.CylinderGeometry(0.215, 0.235, 0.20, 18), red);
+  shorts.position.y = legH - 0.06;
+  shorts.scale.z = 0.88;
+  g.add(shorts);
+
+  for (const sx of [-1, 1]) {
+    const delt = new THREE.Mesh(new THREE.SphereGeometry(0.135, 16, 12), tan);
+    delt.position.set(sx * 0.268, legH + torsoH * 0.88, 0);
+    g.add(delt);
+    const bicep = new THREE.Mesh(new THREE.CapsuleGeometry(0.088, 0.16, 4, 12), tan);
+    bicep.position.set(sx * 0.295, legH + torsoH * 0.62, 0);
+    bicep.rotation.z = sx * 0.20;
+    g.add(bicep);
+    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.072, 0.15, 4, 12), tan);
+    fore.position.set(sx * 0.335, legH + torsoH * 0.30, 0.01);
+    fore.rotation.z = sx * 0.12;
+    g.add(fore);
+    // Wristband — the small red detail that ties hand back to kit.
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.080, 0.080, 0.052, 14), red);
+    band.position.set(sx * 0.352, legH + torsoH * 0.14, 0.012);
+    g.add(band);
+    const fist = new THREE.Mesh(new THREE.SphereGeometry(0.098, 16, 12), tan);
+    fist.position.set(sx * 0.360, legH + torsoH * 0.03, 0.02);
+    g.add(fist);
+
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.098, legH * 0.34, 4, 12), tan);
+    thigh.position.set(sx * 0.108, legH * 0.62, 0);
+    g.add(thigh);
+    const calf = new THREE.Mesh(new THREE.CapsuleGeometry(0.078, legH * 0.30, 4, 12), tanDk);
+    calf.position.set(sx * 0.108, legH * 0.26, 0);
+    g.add(calf);
+    // Red high-tops with a white sole, straight off the poster.
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.155, 0.085, 0.235), red);
+    shoe.position.set(sx * 0.108, 0.072, 0.042);
+    g.add(shoe);
+    const sole = new THREE.Mesh(new THREE.BoxGeometry(0.168, 0.048, 0.248), toon('#F4F1E6'));
+    sole.position.set(sx * 0.108, 0.026, 0.042);
+    g.add(sole);
+  }
+
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.105, 0.10, 14), tan);
+  neck.position.y = legH + torsoH * 0.98;
+  g.add(neck);
+
+  const head = new THREE.Group();
+  head.position.y = headY;
+  g.add(head);
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(headR, 22, 18), red);
+  skull.scale.set(1.06, 1.0, 0.98);
+  head.add(skull);
+  for (const sx of [-1, 1]) {
+    for (const [i, [ay, len, splay, droop]] of [[0.07, 0.44, 1.05, 0.30], [-0.10, 0.36, 0.80, 0.55]].entries()) {
+      const d = new THREE.Mesh(new THREE.CapsuleGeometry(0.062 - i * 0.008, len, 4, 12), dark);
+      d.rotation.order = 'YXZ';
+      d.position.set(sx * headR * 0.84, ay, -headR * 0.22);
+      d.rotation.y = sx * splay;
+      d.rotation.x = -Math.PI / 2 + droop;
+      head.add(d);
+    }
+  }
+  const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.150, 18, 14), cream);
+  muzzle.position.set(0, -0.115, headR * 0.86);
+  muzzle.scale.set(1.20, 0.74, 0.84);
+  head.add(muzzle);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.034, 0.050, 3), ink);
+  nose.position.set(0, -0.020, headR * 0.86 + 0.115);
+  nose.rotation.x = Math.PI;
+  head.add(nose);
+  for (const sx of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.135, 18, 14), white);
+    eye.position.set(sx * 0.094, 0.075, headR * 0.86);
+    eye.scale.set(0.66, 1.10, 0.52);
+    eye.rotation.z = sx * 0.20;
+    head.add(eye);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.052, 14, 10), ink);
+    pupil.position.set(sx * 0.090, 0.036, headR * 0.86 + 0.058);
+    pupil.scale.set(0.60, 1.30, 0.28);
+    pupil.material.userData = { outlineParameters: { visible: false } };
+    head.add(pupil);
+  }
+  return { object: g, height: headY + headR * 1.35 };
+}
+
 const STYLES = [
   ['1-smooth', () => smoothKevin()],
   ['2-voxel32', () => voxelKevin(32, 0.030)],
   ['3-voxel64', () => voxelKevin(64, 0.015)],
   ['4-sprite', () => spriteKevin()],
+  ['5-kit', () => kitKevin()],
 ];
 
 const shots = {};
