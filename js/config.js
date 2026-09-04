@@ -133,6 +133,12 @@ window.KEVIN = {
   //   assets/stickers/animated/<slug>.webm transparent VP9, Telegram-ready
   //   assets/stickers/animated/<slug>.gif  same loop on the yellow
   animated: [
+    // Real frame animation, cut from Todd's hand-drawn walk cycles.
+    { slug: 'walk-front', name: 'Walk Front' },
+    { slug: 'walk-back', name: 'Walk Back' },
+    { slug: 'walk-left', name: 'Walk Left' },
+    { slug: 'walk-right', name: 'Walk Right' },
+    { slug: 'walk-diagonal', name: 'Walk Diagonal' },
     { slug: 'wagmi', name: 'WAGMI' },
     { slug: 'time-to-cook', name: 'Time To Cook' },
     { slug: 'let-him-cook', name: 'Let Him Cook' },

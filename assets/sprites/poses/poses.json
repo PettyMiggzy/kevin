@@ -1,0 +1,67 @@
+[
+  {
+    "name": "idle",
+    "w": 303,
+    "h": 375
+  },
+  {
+    "name": "cheer",
+    "w": 361,
+    "h": 332
+  },
+  {
+    "name": "shades-point",
+    "w": 384,
+    "h": 341
+  },
+  {
+    "name": "thinking",
+    "w": 288,
+    "h": 400
+  },
+  {
+    "name": "kick",
+    "w": 332,
+    "h": 354
+  },
+  {
+    "name": "lying-think",
+    "w": 452,
+    "h": 291
+  },
+  {
+    "name": "phone",
+    "w": 303,
+    "h": 313
+  },
+  {
+    "name": "laughing",
+    "w": 424,
+    "h": 310
+  },
+  {
+    "name": "finger",
+    "w": 327,
+    "h": 369
+  },
+  {
+    "name": "smoking",
+    "w": 339,
+    "h": 377
+  },
+  {
+    "name": "lying-front",
+    "w": 353,
+    "h": 327
+  },
+  {
+    "name": "running",
+    "w": 460,
+    "h": 240
+  },
+  {
+    "name": "money",
+    "w": 299,
+    "h": 313
+  }
+]
