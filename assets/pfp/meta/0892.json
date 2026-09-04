@@ -1,0 +1,35 @@
+{
+  "name": "Kevin #892",
+  "description": "One of the crew. Kevin works the fryer.",
+  "image": "0892.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Cream"
+    },
+    {
+      "trait_type": "Fur",
+      "value": "Classic Red"
+    },
+    {
+      "trait_type": "Hat",
+      "value": "Red Cap"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Shades"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Lolly"
+    },
+    {
+      "trait_type": "Aura",
+      "value": "Flames"
+    },
+    {
+      "trait_type": "Tier",
+      "value": "Rare"
+    }
+  ]
+}

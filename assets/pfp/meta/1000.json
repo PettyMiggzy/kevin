@@ -1,0 +1,35 @@
+{
+  "name": "Kevin #1000",
+  "description": "One of the crew. Kevin works the fryer.",
+  "image": "1000.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Rays"
+    },
+    {
+      "trait_type": "Fur",
+      "value": "Kek Green"
+    },
+    {
+      "trait_type": "Hat",
+      "value": "None"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Shades"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Triangle"
+    },
+    {
+      "trait_type": "Aura",
+      "value": "Flames"
+    },
+    {
+      "trait_type": "Tier",
+      "value": "Epic"
+    }
+  ]
+}

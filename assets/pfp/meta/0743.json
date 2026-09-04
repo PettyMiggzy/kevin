@@ -1,0 +1,35 @@
+{
+  "name": "Kevin #743",
+  "description": "One of the crew. Kevin works the fryer.",
+  "image": "0743.png",
+  "attributes": [
+    {
+      "trait_type": "Background",
+      "value": "Fryer Blue"
+    },
+    {
+      "trait_type": "Fur",
+      "value": "Fryer Orange"
+    },
+    {
+      "trait_type": "Hat",
+      "value": "None"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Shades"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Triangle"
+    },
+    {
+      "trait_type": "Aura",
+      "value": "None"
+    },
+    {
+      "trait_type": "Tier",
+      "value": "Common"
+    }
+  ]
+}

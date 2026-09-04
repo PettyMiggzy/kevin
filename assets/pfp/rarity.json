@@ -1,0 +1,54 @@
+{
+  "Background": {
+    "Brand Yellow": 357,
+    "Kek Green": 141,
+    "Night Shift": 91,
+    "Fryer Blue": 131,
+    "Fry Red": 172,
+    "Gold Rush": 17,
+    "Rays": 30,
+    "Cream": 61
+  },
+  "Fur": {
+    "Kek Green": 104,
+    "Fryer Orange": 143,
+    "Classic Red": 501,
+    "Gold": 42,
+    "Bubblegum": 55,
+    "Cold Blue": 95,
+    "Grape": 60
+  },
+  "Hat": {
+    "Visor": 109,
+    "Red Cap": 164,
+    "None": 380,
+    "Halo": 60,
+    "Crown": 59,
+    "Headband": 117,
+    "Top Hat": 65,
+    "Horns": 46
+  },
+  "Eyes": {
+    "Normal": 429,
+    "Shades": 219,
+    "Spiral": 71,
+    "Money": 89,
+    "3D": 48,
+    "Laser": 115,
+    "Visor Shades": 29
+  },
+  "Mouth": {
+    "Triangle": 563,
+    "Joint": 126,
+    "Cigar": 156,
+    "Lolly": 87,
+    "Gold Tooth": 68
+  },
+  "Aura": {
+    "None": 697,
+    "Smoke": 93,
+    "Sparks": 135,
+    "Flames": 59,
+    "Rainbow": 16
+  }
+}
