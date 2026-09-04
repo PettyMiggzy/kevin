@@ -92,6 +92,12 @@
     border: 3px solid var(--ink); border-radius: 8px; background: var(--void); cursor: pointer; }
 
   /* --- boot ---------------------------------------------------------------- */
+  /* The game gets shared on its own. Without this, someone who lands here has
+     no way back to the token. */
+  #home { display: inline-block; margin-top: 22px; font: 700 13px/1 var(--mono);
+    text-transform: uppercase; letter-spacing: .06em; color: var(--ink); opacity: .55;
+    text-decoration: none; border-bottom: 2px solid currentColor; }
+  #home:hover { opacity: 1; }
   #boot { position: fixed; inset: 0; background: var(--void); display: grid; place-items: center;
     text-align: center; padding: 24px; z-index: 10; }
   #boot h1 { font-size: clamp(28px, 8vw, 54px); line-height: .95; letter-spacing: -.01em; text-transform: uppercase; }
@@ -237,6 +243,7 @@
     <button id="start">Open the doors</button>
     <small>WASD or the stick to move · E or the button to lift<br>Progress is saved in this browser only.</small>
     <div id="err"></div>
+    <a id="home" href="../">iamkevin.lol ↗</a>
   </div>
 </div>
 

@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'dist');
+const HOME = 'https://iamkevin.lol/';   // where a copy of this file sends people back to
 
 const MODULES = {
   three: 'gym/vendor/three.module.js',
@@ -143,7 +144,13 @@ async function main() {
   // the two cannot drift.
   const page = await readFile(join(ROOT, 'gym/index.html'), 'utf8');
   const style = page.match(/<style>([\s\S]*?)<\/style>/)[1];
-  const body = page.match(/<body>([\s\S]*?)<script type="importmap">/)[1];
+  let body = page.match(/<body>([\s\S]*?)<script type="importmap">/)[1];
+
+  // The served page links home with '../'. In a single file handed round as an
+  // attachment there is no parent, so point it at the site itself.
+  const before = body;
+  body = body.replace(/(id="home"[^>]*\shref=")\.\.\/(")/, '$1' + HOME + '$2');
+  if (body === before) throw new Error('the way home is gone from gym/index.html — put it back or drop this rewrite');
 
   const html = `<title>Kevin's Gym</title>
 <meta name="description" content="I work the fryer. I also lift. Miss a day and it comes off.">
