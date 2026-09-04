@@ -2,7 +2,8 @@
 // Render an animated Telegram sticker from the game's own Kevin.
 //
 //   node tools/render-sticker.mjs
-//   node tools/render-sticker.mjs --frames 60 --fps 24 --out assets/stickers/animated/lift.webm
+//   node tools/render-sticker.mjs --scene star
+//   node tools/render-sticker.mjs --scene lift --frames 60 --fps 24
 //
 // Telegram video stickers: WEBM, VP9, 512x512, ALPHA, 3 seconds or less, and
 // 256KB or less. That last limit is the one that bites — the encode ladder
@@ -20,9 +21,14 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const flag = (n, d) => { const i = args.indexOf(`--${n}`); return i === -1 ? d : args[i + 1]; };
 
+// A scene is tools/sticker-<name>.html rendering to assets/.../<name>.webm.
+const SCENE = flag('scene', 'lift');
 const FRAMES = Number(flag('frames', 48));
 const FPS = Number(flag('fps', 24));
-const OUT = join(ROOT, flag('out', 'assets/stickers/animated/lift.webm'));
+const OUT = join(ROOT, flag('out', `assets/stickers/animated/${SCENE}.webm`));
+// Which frame becomes the still. The pack's default of 4 is fine for a loop
+// with no single moment in it; a scene with a beat wants the beat.
+const STILL = Number(flag('still', 4));
 const PORT = 8791;
 const LIMIT = 256 * 1024;
 
@@ -53,8 +59,8 @@ async function main() {
   const page = await browser.newPage({ viewport: { width: 600, height: 600 } });
   page.on('pageerror', (e) => console.error('PAGE:', e.message));
 
-  console.log(`rendering ${FRAMES} frames...`);
-  await page.goto(`http://127.0.0.1:${PORT}/tools/sticker-lift.html?frames=${FRAMES}`, { waitUntil: 'load' });
+  console.log(`rendering ${FRAMES} frames of "${SCENE}"...`);
+  await page.goto(`http://127.0.0.1:${PORT}/tools/sticker-${SCENE}.html?frames=${FRAMES}`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 180000 });
   const frames = await page.evaluate(() => window.__frames);
   await browser.close();
@@ -133,7 +139,7 @@ async function derive(webm) {
   const png = join(ROOT, 'assets/stickers/png', `${slug.split('/').pop()}.png`);
   await mkdir(dirname(png), { recursive: true });
   await run('ffmpeg', ['-y', '-v', 'error', '-c:v', 'libvpx-vp9', '-i', webm,
-    '-vf', 'select=eq(n\\,4),scale=512:512', '-vframes', '1', '-pix_fmt', 'rgba', png]);
+    '-vf', `select=eq(n\\,${STILL}),scale=512:512`, '-vframes', '1', '-pix_fmt', 'rgba', png]);
   await run('ffmpeg', ['-y', '-v', 'error', '-c:v', 'libvpx-vp9', '-i', webm,
     '-filter_complex',
     'color=c=0xFFE500:s=512x512[bg];[bg][0:v]overlay=shortest=1,fps=14,' +

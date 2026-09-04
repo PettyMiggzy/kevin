@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kevin punches the star — sticker frames</title>
+<style>html,body{margin:0;background:transparent}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="importmap">
+{ "imports": { "three": "../gym/vendor/three.module.js", "three/addons/": "../gym/vendor/addons/" } }
+</script>
+<script type="module">
+// Kevin leaping to punch a star, as frames for an animated Telegram sticker.
+//
+// Same buildKitKevin the gym instantiates — this is the character people play,
+// not a drawing of him. Transparent, 512x512, seamless loop.
+import * as THREE from 'three';
+import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
+import { buildKitKevin } from '../gym/js/kevin.js';
+
+const SIZE = 512;
+const FRAMES = Number(new URL(location.href).searchParams.get('frames') || 48);
+
+const canvas = document.getElementById('c');
+canvas.width = canvas.height = SIZE;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(1);
+renderer.setSize(SIZE, SIZE, false);
+renderer.setClearAlpha(0);
+const effect = new OutlineEffect(renderer, { defaultThickness: 0.006, defaultColor: [0, 0, 0], defaultAlpha: 1 });
+
+const RAMP = (() => {
+  const t = new THREE.DataTexture(
+    new Uint8Array([120, 120, 120, 255, 215, 215, 215, 255, 255, 255, 255, 255]), 3, 1, THREE.RGBAFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
+})();
+const OUTLINE = { thickness: 0.009, color: [0, 0, 0], alpha: 1 };
+const toon = (color) => new THREE.MeshToonMaterial({ color, gradientMap: RAMP });
+const inked = (color) => {
+  const m = toon(color);
+  m.userData.outlineParameters = OUTLINE;
+  return m;
+};
+
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight('#FFFFFF', '#9A8F7A', 2.2));
+const key = new THREE.DirectionalLight('#FFFFFF', 1.4);
+key.position.set(4, 8, 7);
+scene.add(key);
+
+const kevin = buildKitKevin({ toon });
+kevin.group.rotation.order = 'YXZ';
+kevin.group.position.x = -0.30;
+scene.add(kevin.group);
+
+// --- the star ---------------------------------------------------------------
+/**
+ * Five points, extruded, with a face on the front. Built rather than imported
+ * so it carries the same ink outline as Kevin — a star in a different rendering
+ * style next to him reads as clip art dropped on top.
+ */
+function buildStar() {
+  const g = new THREE.Group();
+  const shape = new THREE.Shape();
+  // Sized against the skull (headR 0.335), not picked by eye. Kevin is chibi —
+  // a star as big as his head eats the whole top of a square frame and forces
+  // the camera so far back that he stops being readable at sticker size.
+  const OUT = 0.30;
+  const IN = 0.126;
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 ? IN : OUT;
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const x = Math.cos(a) * r;
+    const y = Math.sin(a) * r;
+    i ? shape.lineTo(x, y) : shape.moveTo(x, y);
+  }
+  shape.closePath();
+  const body = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, {
+    depth: 0.076, bevelEnabled: true, bevelThickness: 0.022, bevelSize: 0.020, bevelSegments: 2, curveSegments: 1,
+  }), inked('#FFCE1F'));
+  body.position.z = -0.038;
+  g.add(body);
+
+  // Eyes on the front face. Ovals, wide apart, low — that spacing is the whole
+  // difference between "power-up" and "a shape with dots on it".
+  for (const sx of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.040, 14, 12), inked('#0B0B0B'));
+    eye.position.set(sx * 0.066, -0.010, 0.047);
+    eye.scale.set(0.72, 1.25, 0.42);
+    eye.material.userData = { outlineParameters: { visible: false } };
+    g.add(eye);
+  }
+  return g;
+}
+
+// Worked from the model, not by eye. legH .635 + torso .52 puts the shoulder at
+// 1.093 and the top of the skull at ~1.72; a fully raised arm only puts the fist
+// at 1.58 — Kevin's arms are SHORTER than his head is tall, so a raised fist
+// lands beside the head, never above it. Everything below follows from that: the
+// star has to clear the skull, not the fist, or he jumps straight through it.
+//
+// Which is why the star is up and OUT rather than straight overhead. Stacked
+// vertically, the art filled 204 of the frame's 512 columns and all 512 rows —
+// three fifths of a square sticker spent on empty sky. Put on the diagonal it
+// uses the corner, and the same Kevin renders about a fifth larger.
+const STAR_X = 0.66;
+const STAR_Y = 1.82;
+const star = buildStar();
+star.position.set(STAR_X, STAR_Y, 0);
+scene.add(star);
+
+/**
+ * The impact flash. Tapered spikes pointing out of the star, hidden except for
+ * the few frames around the punch — it is the hit that sells the jump, and a
+ * flash that lingers reads as decoration instead.
+ */
+const burst = new THREE.Group();
+burst.visible = false;
+for (let i = 0; i < 8; i++) {
+  const a = (i / 8) * Math.PI * 2;
+  const ray = new THREE.Mesh(new THREE.ConeGeometry(0.026, 0.18, 4), toon('#FFFFFF'));
+  ray.material.userData = { outlineParameters: { visible: false } };
+  ray.position.set(Math.cos(a) * 0.34, Math.sin(a) * 0.34, -0.02);
+  ray.rotation.z = a - Math.PI / 2;
+  burst.add(ray);
+}
+star.add(burst);
+
+// Kevin stands 1.83 and the star sits at 2.06, so the square has to hold both
+// with the punch landing between them. Framed once for the whole loop: a camera
+// that tracks the jump takes the jump out of it.
+// Content runs from the soles at -0.13 (deepest point of the landing) up to the
+// tip of the topmost burst ray at 2.40 — which is the real ceiling, NOT the
+// star's own top point: the burst is a child of the star, so it takes the hit
+// scale AND the star's pop on top of it and reaches a good deal higher than the
+// star does. Framed to that box and no wider; every centimetre of spare sky
+// costs Kevin pixels he cannot afford at 512. Fixed for the whole loop, because
+// a camera that tracks the jump removes the jump.
+const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 40);
+camera.position.set(0.70, 1.36, 4.93);
+camera.lookAt(0.21, 1.14, 0);
+
+// --- the loop ---------------------------------------------------------------
+const clamp01 = (v) => Math.min(1, Math.max(0, v));
+const smooth = (v) => v * v * (3 - 2 * v);
+/** 0 -> 1 -> 0 across [a,b], flat zero outside it. */
+const bump = (t, a, b) => (t < a || t > b ? 0 : Math.sin(clamp01((t - a) / (b - a)) * Math.PI));
+
+const AIR_A = 0.17;
+const AIR_B = 0.78;
+const HEIGHT = 0.26;
+
+/**
+ * Crouch, leap, punch at the top, land, absorb. Every term is zero at both t=0
+ * and t=1 — he is standing at each end — so the last frame hands back to the
+ * first with no seam. A sticker that jumps on loop is the one thing people
+ * notice immediately.
+ */
+function pose(t) {
+  const u = clamp01((t - AIR_A) / (AIR_B - AIR_A));
+  const airborne = t >= AIR_A && t <= AIR_B;
+  const lift = airborne ? 4 * u * (1 - u) : 0;            // parabola: 0 -> 1 -> 0
+  const dip = bump(t, 0, AIR_A) + bump(t, AIR_B, 1);      // wind-up, then the landing
+
+  kevin.group.position.y = lift * HEIGHT;
+  kevin.rig.position.y = -0.13 * dip;
+  kevin.group.rotation.y = 0.30 + Math.sin(t * Math.PI * 2) * 0.04;
+  kevin.rig.rotation.x = -0.10 * lift;
+
+  // The punching arm reaches full stretch exactly at the apex, which is where
+  // the star is. Tied to lift rather than to time so the two cannot drift.
+  // arms[1] is the sx=+1 side, which is screen right — the side the star is on.
+  // Punching with the other one throws the fist across his own chest.
+  const reach = smooth(clamp01(lift * 1.6));
+  kevin.arms[1].rotation.set(-2.80 * reach, 0, 0.16 + 0.34 * reach);
+  kevin.arms[0].rotation.set(0.55 * lift - 0.30 * dip, 0, -0.16 - 0.10 * dip);
+  kevin.rig.rotation.z = -0.09 * reach;                   // leans into the punch
+
+  // Legs trail and tuck in the air. Both bend out a little on the crouch.
+  kevin.legs[0].rotation.set(-0.30 * lift, 0, -0.05 - 0.12 * dip);
+  kevin.legs[1].rotation.set(0.46 * lift, 0, 0.05 + 0.12 * dip);
+
+  kevin.head.rotation.x = -0.30 * reach;                  // he watches the star
+  const swell = 1 + 0.05 * lift;
+  kevin.torso.scale.set(swell, 1 - 0.06 * dip, swell);
+
+  // The star rocks and bobs, then takes the hit: kicked up, popped bigger, and
+  // flashed, all on the same short bump so they read as one event.
+  const hit = bump(t, 0.40, 0.60);
+  star.position.y = STAR_Y + Math.sin(t * Math.PI * 2) * 0.030 + hit * 0.105;
+  star.position.x = STAR_X + hit * 0.045;
+  star.rotation.y = Math.sin(t * Math.PI * 2) * 0.55;
+  star.rotation.z = Math.sin(t * Math.PI * 2 + 1.1) * 0.12 - hit * 0.30;
+  const pop = 1 + hit * 0.10;
+  star.scale.setScalar(pop);
+  burst.visible = hit > 0.05;
+  burst.scale.setScalar(0.60 + hit * 0.35);
+}
+
+const frames = [];
+for (let i = 0; i < FRAMES; i++) {
+  pose(i / FRAMES);
+  effect.render(scene, camera);
+  frames.push(canvas.toDataURL('image/png'));
+}
+window.__frames = frames;
+window.__ready = true;
+</script>
+</body>
+</html>
