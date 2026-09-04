@@ -206,6 +206,14 @@ export const STICKERS = [
     action: 'His WHOLE BODY sags and sways sleepily, head lolling forward then jerking back up, shoulders rising and falling with a huge yawn, torso rocking, head hanging heavy and rolling — then he lifts the mug with both arms and his whole body leans into the sip',
   },
 
+  {
+    // Political costume parody on our own character, not a likeness of anyone:
+    // Kevin in the suit and cap, holding a sign about his own token.
+    slug: 'kevin-great', word: 'MAKE KEVIN GREAT', src: '16-kevin-idle.png', nudgeY: 0,
+    edit: 'Show his whole body dressed in a dark navy business suit with a white shirt and a very long bright red tie, and a plain bright red baseball cap on his head with no writing on it. He is holding up a big white rectangular protest sign on a wooden stick in one hand, high beside his head. Written across the sign in bold black hand-lettered capitals, on three lines, are the words MAKE KEVIN GREAT. Add no other text anywhere in the image',
+    action: 'His WHOLE BODY bounces on his feet as he pumps the sign up and down, torso twisting side to side, head nodding along with it, the cap shifting, the long tie swinging out with every bounce',
+  },
+
   // --- the gym pack -------------------------------------------------------
   {
     slug: 'gym-curl', word: 'CURLS', src: '16-kevin-idle.png', nudgeY: 0,
