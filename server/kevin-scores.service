@@ -1,0 +1,37 @@
+# The scores service.
+#   cp server/kevin-scores.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now kevin-scores
+#
+# The admin key is NOT here. It lives in /opt/kevin/server/.admin.key, chmod
+# 600, gitignored — this repo is public.
+[Unit]
+Description=Kevin scores
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/kevin
+ExecStart=/usr/bin/env node server/index.mjs
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kevin-scores
+
+# Bound to localhost by the reverse proxy in front of it; see server/README.md.
+Environment=PORT=8787
+# Only the site should be able to call this from a browser.
+Environment=KEVIN_ORIGIN=https://iamkevin.lol
+
+# It only ever needs its own directory.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/kevin/server/data
+
+[Install]
+WantedBy=multi-user.target

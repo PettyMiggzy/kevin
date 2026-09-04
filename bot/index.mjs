@@ -77,6 +77,40 @@ async function loadTelegramToken() {
 }
 
 /**
+ * Mint a code that ties somebody's game save to their Telegram account.
+ *
+ * The code goes by DM, never into the group. Posted in a room, anybody could
+ * grab it and attach THEIR save to the requester's name — which is the whole
+ * leaderboard compromised by a five-second copy and paste.
+ */
+async function linkCode(tgToken, msg) {
+  const base = process.env.KEVIN_SCORES_URL;
+  const admin = process.env.KEVIN_ADMIN_KEY;
+  if (!base || !admin) return 'Kevin cannot do that yet. There is no board.';
+  try {
+    const r = await fetch(new URL('/link/code', base), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${admin}` },
+      body: JSON.stringify({ tgId: msg.from.id, name: cleanName(msg.from) }),
+      signal: AbortSignal.timeout(6000),
+    });
+    const body = await r.json();
+    if (!body.code) return 'Kevin could not make a code. Try again in a bit.';
+
+    const dm = await tg(tgToken, 'sendMessage', {
+      chat_id: msg.from.id,
+      text: `Your code is ${body.code}\n\nPut it in the gym at iamkevin.lol/gym to put your name on the board. It last fifteen minute. Do not give it to anybody.`,
+    }).catch(() => null);
+
+    return dm
+      ? 'Kevin send you the code in a message.'
+      : 'Kevin cannot message you until you talk to Kevin first. Open @' + (process.env.KEVIN_BOT || 'the bot') + ' and press start, then ask again.';
+  } catch {
+    return 'Kevin cannot reach the board right now.';
+  }
+}
+
+/**
  * sendPhoto, which unlike every other call here needs multipart rather than
  * JSON because it carries a file.
  */
@@ -311,6 +345,7 @@ async function main() {
       // Canned answers first: they are the questions that get asked most, they
       // must never vary, and the contract one must never go near a model.
       const cmd = parseCommand(msg.text, me);
+      if (cmd === 'link') { await reply(await linkCode(token, msg)); continue; }
       if (cmd === 'top' || cmd === 'lifts') { await reply(render('gym', await top('gym'))); continue; }
       if (cmd === 'shifts' || cmd === 'topjob') { await reply(render('job', await top('job'))); continue; }
       if (cmd) {

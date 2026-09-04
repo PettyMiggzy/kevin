@@ -195,6 +195,7 @@ export function commandReply(name, config) {
         '/gym — Kevin gym',
         '/top — top of the gym',
         '/shifts — top of the fry house',
+        '/link — put your gym score on the board',
         '',
         'Or just talk to Kevin. In a group, say Kevin name first.',
       ].join('\n');

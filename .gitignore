@@ -25,3 +25,7 @@ dist/
 # Bot keys — never commit these
 bot/.groq.key
 bot/.telegram.key
+
+# Scores service admin key — never commit
+server/.admin.key
+server/data/
