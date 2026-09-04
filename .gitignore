@@ -29,3 +29,6 @@ bot/.telegram.key
 # Scores service admin key — never commit
 server/.admin.key
 server/data/
+
+# Scratch frames from tools/render-sticker.mjs
+.sticker-frames/

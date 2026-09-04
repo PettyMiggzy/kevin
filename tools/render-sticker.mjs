@@ -23,6 +23,10 @@ const flag = (n, d) => { const i = args.indexOf(`--${n}`); return i === -1 ? d :
 
 // A scene is tools/sticker-<name>.html rendering to assets/.../<name>.webm.
 const SCENE = flag('scene', 'lift');
+// The generic animator takes a sticker slug and a motion name; bespoke scenes
+// (sticker-<name>.html) ignore both.
+const SLUG = flag('slug', '');
+const MOTION = flag('motion', '');
 const FRAMES = Number(flag('frames', 48));
 const FPS = Number(flag('fps', 24));
 const OUT = join(ROOT, flag('out', `assets/stickers/animated/${SCENE}.webm`));
@@ -65,7 +69,9 @@ async function main() {
   page.on('pageerror', (e) => console.error('PAGE:', e.message));
 
   console.log(`rendering ${FRAMES} frames of "${SCENE}"...`);
-  await page.goto(`http://127.0.0.1:${PORT}/tools/sticker-${SCENE}.html?frames=${FRAMES}`, { waitUntil: 'load' });
+  const extra = (SLUG ? `&slug=${encodeURIComponent(SLUG)}` : '') +
+    (MOTION ? `&motion=${encodeURIComponent(MOTION)}` : '');
+  await page.goto(`http://127.0.0.1:${PORT}/tools/sticker-${SCENE}.html?frames=${FRAMES}${extra}`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 180000 });
   const frames = await page.evaluate(() => window.__frames);
   await browser.close();

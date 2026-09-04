@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sticker motion</title>
+<style>html,body{margin:0;background:transparent}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+// Animate a sticker still LOCALLY. No model, so no drift: every frame is the
+// drawing Todd's reference produced, moved.
+//
+// The video stage was not animating these, it was redrawing them — noodle arms
+// came back as bodybuilder arms, ears and snouts appeared, the camera pulled
+// out until Kevin was a sixth of his height. This cannot do that. What it gives
+// up is real articulation: it moves the whole sprite, so the motion has to be
+// sold with weight and timing rather than with limbs that bend.
+const P = new URL(location.href).searchParams;
+const SLUG = P.get('slug');
+const MOTION = P.get('motion') || 'bounce';
+const FRAMES = Number(P.get('frames') || 48);
+const SIZE = 512;
+
+const canvas = document.getElementById('c');
+canvas.width = canvas.height = SIZE;
+const ctx = canvas.getContext('2d');
+
+const img = new Image();
+img.src = `../assets/stickers/stills/${SLUG}.png`;
+await img.decode();
+
+/** Lift the art off its flat backdrop and measure what is left. */
+function cutout() {
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  const s = document.createElement('canvas');
+  s.width = w;
+  s.height = h;
+  const sx = s.getContext('2d', { willReadFrequently: true });
+  sx.drawImage(img, 0, 0);
+  const d = sx.getImageData(0, 0, w, h);
+  const p = d.data;
+  const bg = [p[4 * (4 * w + 4)], p[4 * (4 * w + 4) + 1], p[4 * (4 * w + 4) + 2]];
+  const near = (k, t) =>
+    Math.abs(p[k * 4] - bg[0]) <= t && Math.abs(p[k * 4 + 1] - bg[1]) <= t &&
+    Math.abs(p[k * 4 + 2] - bg[2]) <= t;
+
+  // Fill in from the frame edge rather than keying a colour: his eyes are
+  // white and the KEK coin carries greens a loose key would eat, and the ink
+  // outline is what actually separates him from the backdrop.
+  const gone = new Uint8Array(w * h);
+  const st = [];
+  for (let x = 0; x < w; x++) { if (near(x, 30)) { gone[x] = 1; st.push(x); } const b = (h - 1) * w + x; if (near(b, 30)) { gone[b] = 1; st.push(b); } }
+  for (let y = 0; y < h; y++) { const l = y * w; const r = l + w - 1; if (near(l, 30)) { gone[l] = 1; st.push(l); } if (near(r, 30)) { gone[r] = 1; st.push(r); } }
+  while (st.length) {
+    const k = st.pop();
+    const x = k % w;
+    const y = (k / w) | 0;
+    const go = (nk) => { if (!gone[nk] && near(nk, 30)) { gone[nk] = 1; st.push(nk); } };
+    if (x > 0) go(k - 1);
+    if (x < w - 1) go(k + 1);
+    if (y > 0) go(k - w);
+    if (y < h - 1) go(k + w);
+  }
+  // One erosion pass: the half-and-half ring between ink and backdrop reads as
+  // a yellow halo the moment the sticker sits on anything but yellow.
+  const edge = [];
+  for (let k = 0; k < w * h; k++) {
+    if (gone[k]) continue;
+    const x = k % w;
+    const y = (k / w) | 0;
+    if ((x > 0 && gone[k - 1]) || (x < w - 1 && gone[k + 1]) ||
+        (y > 0 && gone[k - w]) || (y < h - 1 && gone[k + w])) edge.push(k);
+  }
+  for (const k of edge) gone[k] = 1;
+  for (let k = 0; k < w * h; k++) if (gone[k]) p[k * 4 + 3] = 0;
+  sx.putImageData(d, 0, 0);
+
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let k = 0; k < w * h; k++) {
+    if (p[k * 4 + 3] === 0) continue;
+    const x = k % w;
+    const y = (k / w) | 0;
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+  }
+  return { canvas: s, box: { x0, y0, x1, y1 } };
+}
+
+const { canvas: art, box } = cutout();
+const bw = box.x1 - box.x0 + 1;
+const bh = box.y1 - box.y0 + 1;
+// Fit to 86% so the motion has somewhere to go without clipping.
+const scale = (SIZE * 0.86) / Math.max(bw, bh);
+const drawW = art.width * scale;
+const drawH = art.height * scale;
+const originX = SIZE / 2 - (box.x0 + bw / 2) * scale;
+const originY = SIZE * 0.965 - (box.y1 + 1) * scale;
+const FOOT = SIZE * 0.965;
+
+const clamp01 = (v) => Math.min(1, Math.max(0, v));
+const smooth = (v) => v * v * (3 - 2 * v);
+const bump = (t, a, b) => (t < a || t > b ? 0 : Math.sin(clamp01((t - a) / (b - a)) * Math.PI));
+const TAU = Math.PI * 2;
+
+/**
+ * Each motion is a pure function of t in [0,1) that returns a transform, and
+ * every term is zero at both ends — a sticker that jumps on loop is the one
+ * thing people notice immediately. Scaling happens about his feet so a squash
+ * plants him instead of shrinking him toward the middle of the frame.
+ */
+const MOTIONS = {
+  // Idle weight shift. The default, and deliberately small.
+  bounce: (t) => ({ y: -Math.abs(Math.sin(t * Math.PI)) * 10, sy: 1 + Math.sin(t * TAU) * 0.02,
+    sx: 1 - Math.sin(t * TAU) * 0.02, rot: Math.sin(t * TAU) * 0.012 }),
+  // Wind up, drive, recoil.
+  punch: (t) => {
+    const dip = bump(t, 0, 0.24);
+    const rise = bump(t, 0.24, 0.64);
+    const u = clamp01((t - 0.6) / 0.4);
+    const ring = Math.sin(u * Math.PI * 3) * (1 - u) * (1 - u) * 6;
+    return { y: dip * 9 - rise * 30 + ring, sy: 1 - dip * 0.05 + rise * 0.04,
+      sx: 1 + dip * 0.045 - rise * 0.03, rot: -rise * 0.025 };
+  },
+  // Tenses, swells, holds, releases.
+  flex: (t) => {
+    const p = smooth(bump(t, 0.05, 0.75));
+    return { y: -p * 6, sy: 1 + p * 0.06, sx: 1 + p * 0.045, rot: Math.sin(t * TAU) * 0.01 };
+  },
+  // A rep: down under load, drive up, settle.
+  press: (t) => {
+    const down = bump(t, 0, 0.4);
+    const up = bump(t, 0.4, 0.9);
+    return { y: down * 16 - up * 12, sy: 1 - down * 0.07 + up * 0.05,
+      sx: 1 + down * 0.06 - up * 0.04, rot: 0 };
+  },
+  // Fast judder, as if straining against something.
+  shake: (t) => ({ y: Math.sin(t * TAU * 4) * 5, sy: 1 + Math.sin(t * TAU * 4) * 0.025,
+    sx: 1 - Math.sin(t * TAU * 4) * 0.025, rot: Math.sin(t * TAU * 4 + 1) * 0.02 }),
+  // Slow, heavy, tired.
+  sway: (t) => ({ y: Math.sin(t * TAU) * 5, sy: 1 - Math.sin(t * TAU) * 0.025,
+    sx: 1 + Math.sin(t * TAU) * 0.02, rot: Math.sin(t * TAU) * 0.045 }),
+  // Running on the spot: quick vertical, forward lean.
+  run: (t) => ({ y: -Math.abs(Math.sin(t * TAU * 2)) * 13, sy: 1 + Math.sin(t * TAU * 2) * 0.03,
+    sx: 1 - Math.sin(t * TAU * 2) * 0.03, rot: 0.02 + Math.sin(t * TAU * 2) * 0.02 }),
+  // Rocking with laughter, back then forward.
+  rock: (t) => ({ y: -Math.abs(Math.sin(t * TAU)) * 8, sy: 1 + Math.sin(t * TAU) * 0.035,
+    sx: 1 - Math.sin(t * TAU) * 0.03, rot: Math.sin(t * TAU) * 0.075 }),
+  // Drifting upward, as if carried.
+  rise: (t) => ({ y: -14 - Math.cos(t * TAU) * 12, sy: 1 + Math.sin(t * TAU) * 0.02,
+    sx: 1 - Math.sin(t * TAU) * 0.02, rot: Math.sin(t * TAU + 0.7) * 0.03 }),
+};
+
+const move = MOTIONS[MOTION] || MOTIONS.bounce;
+const frames = [];
+for (let i = 0; i < FRAMES; i++) {
+  const m = move(i / FRAMES);
+  ctx.clearRect(0, 0, SIZE, SIZE);
+  ctx.save();
+  ctx.translate(SIZE / 2, FOOT + (m.y || 0));
+  ctx.rotate(m.rot || 0);
+  ctx.scale(m.sx ?? 1, m.sy ?? 1);
+  ctx.translate(-SIZE / 2, -FOOT);
+  ctx.drawImage(art, originX, originY, drawW, drawH);
+  ctx.restore();
+  frames.push(canvas.toDataURL('image/png'));
+}
+window.__frames = frames;
+window.__ready = true;
+</script>
+</body>
+</html>
