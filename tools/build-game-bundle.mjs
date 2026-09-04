@@ -27,6 +27,7 @@ const MODULES = {
   'three/addons/effects/OutlineEffect.js': 'gym/vendor/addons/effects/OutlineEffect.js',
   'kevin/save.js': 'gym/js/save.js',
   'kevin/voxel.js': 'gym/js/voxel.js',
+  'kevin/kevin.js': 'gym/js/kevin.js',
   'kevin/gear.js': 'gym/js/gear.js',
   'kevin/reps.js': 'gym/js/reps.js',
   'kevin/audio.js': 'gym/js/audio.js',

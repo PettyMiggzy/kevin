@@ -20,6 +20,7 @@ import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
 import { load, save, settle, workout, projectedLoss, payShift, leaderboard,
   DECAY_PER_DAY, DAILY_GOAL } from './save.js';
 import { buildCrewBody, applyCrewMuscle } from './voxel.js';
+import { buildKitKevin } from './kevin.js';
 import { Set as RepSet, REPS_PER_SET, rankOf } from './reps.js';
 import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, mirrorPanel, stripLight,
   skyTexture, concreteTexture, facadeTexture, bannerTexture, billboardTexture, boardTexture } from './gear.js';
@@ -492,11 +493,66 @@ async function loadCrew() {
   }
 }
 
+/**
+ * The body you play as.
+ *
+ * 0 is Kevin, and Kevin is modelled rather than extruded: he is the face on the
+ * poster, he predates the collection, and at 32 pixels the skull and the
+ * dreadlocks — the two things that make him him — do not survive. Everything
+ * above 0 is a crew token, extruded from its own grid exactly as it is drawn.
+ *
+ * They deliberately do not match. Kevin is the character; the crew are the
+ * collection.
+ */
 function makePlayer(gridIndex = 0) {
+  if (!gridIndex) return buildKitKevin({ toon });
   if (!CREW?.crew?.length) return buildKevin();
   const mat = toon('#FFFFFF', { vertexColors: true });
   mat.userData.outlineParameters = { thickness: 0.010, color: [0, 0, 0], alpha: 1 };
   return buildCrewBody(CREW.crew[gridIndex % CREW.crew.length], { material: mat });
+}
+
+/**
+ * Put a body in the world and hang the gear off it.
+ *
+ * Split out of init() because swapping character has to do all of it again —
+ * the barbell is parented to the rig and the dumbbells to the hands, so a new
+ * body with the old gear leaves a bar floating where the last one stood.
+ */
+function spawnPlayer(gridIndex, at) {
+  const body = makePlayer(gridIndex);
+  // Facing (Y) has to compose with lying back (X), not fight it.
+  body.group.rotation.order = 'YXZ';
+  body.group.position.copy(at);
+  scene.add(body.group);
+
+  const gearMat = toon('#FFFFFF', { vertexColors: true });
+  gearMat.userData.outlineParameters = { thickness: 0.009, color: [0, 0, 0], alpha: 1 };
+  bar = makeBarbell(gearMat, { length: 1.7 });
+  bar.visible = false;
+  (body.rig ?? body.group).add(bar);
+  bells.length = 0;
+  for (const arm of body.arms) {
+    const d = makeDumbbell(gearMat);
+    d.position.y = -body.torsoH * 0.95;
+    d.visible = false;
+    arm.add(d);
+    bells.push(d);
+  }
+  return body;
+}
+
+/** Change character. Keeps where you were standing and what you have built. */
+function swapPlayer(gridIndex) {
+  if (set) abortSet();
+  const at = kevin.group.position.clone();
+  const facing = kevin.group.rotation.y;
+  scene.remove(kevin.group);
+  state.crewId = gridIndex;
+  save(state);
+  kevin = spawnPlayer(gridIndex, at);
+  kevin.group.rotation.y = facing;
+  applyMuscle(kevin, state.muscle / 100);
 }
 
 // --- the rest of the crew ---------------------------------------------------
@@ -850,27 +906,9 @@ async function init() {
   board = buildLeaderboard(scene, { flat: flatMat });
 
   await loadCrew();
-  kevin = makePlayer(state.crewId ?? 0);
-  // Facing (Y) has to compose with lying back (X), not fight it.
-  kevin.group.rotation.order = 'YXZ';
   // On the forecourt facing the door, and clear of the market — 15.5 put the
   // player standing in the middle of the stalls, which now live at z 15.4.
-  kevin.group.position.set(0, 0, 11.5);
-  scene.add(kevin.group);
-
-  // Gear rides on the body so it never drifts out of his hands.
-  const gearMat = toon('#FFFFFF', { vertexColors: true });
-  gearMat.userData.outlineParameters = { thickness: 0.009, color: [0, 0, 0], alpha: 1 };
-  bar = makeBarbell(gearMat, { length: 1.7 });
-  bar.visible = false;
-  (kevin.rig ?? kevin.group).add(bar);
-  for (const arm of kevin.arms) {
-    const d = makeDumbbell(gearMat);
-    d.position.y = -kevin.torsoH * 0.95;
-    d.visible = false;
-    arm.add(d);
-    bells.push(d);
-  }
+  kevin = spawnPlayer(state.crewId ?? 0, new THREE.Vector3(0, 0, 11.5));
 
   // Everyone shares one material, so the whole crew costs one shader. They do
   // NOT get collision: they move, so a static solid would leave an invisible
@@ -1439,21 +1477,60 @@ function renderCrew() {
   const grid = $('#nftGrid');
   const crew = CREW?.crew ?? [];
   $('#nftNote').textContent = crew.length
-    ? 'Not minted. No contract, no sale, no mint — these are the faces already walking around the gym. When there is something real to say, it gets said in the group first.'
+    ? 'Pick who you walk around as. Nothing here is minted or for sale — there is no contract yet, so nothing checks who owns what and everybody can wear everybody. When that changes, this is where it gets wired in.'
     : 'The crew could not be loaded. Reload and they should turn up.';
 
-  if (grid.childElementCount) return;         // draw once; they never change
-  const frag = document.createDocumentFragment();
-  // Kevin is index 0 and is not part of the collection — he is the player.
-  for (let i = 1; i < crew.length; i++) {
-    const fig = document.createElement('figure');
-    fig.append(gridCanvas(crew[i]));
-    const cap = document.createElement('figcaption');
-    cap.textContent = '#' + String(i).padStart(3, '0');
-    fig.append(cap);
-    frag.append(fig);
+  // Drawn once — the art never changes. Only the selection does, and that is
+  // re-marked below on every open.
+  if (!grid.childElementCount) {
+    const frag = document.createDocumentFragment();
+    // Kevin is not a token. He is index 0 and he is the default.
+    frag.append(pickTile(0, 'KEVIN', null));
+    for (let i = 1; i < crew.length; i++) {
+      frag.append(pickTile(i, '#' + String(i).padStart(3, '0'), crew[i]));
+    }
+    grid.append(frag);
   }
-  grid.append(frag);
+  for (const el of grid.querySelectorAll('figure')) {
+    el.classList.toggle('on', Number(el.dataset.id) === (state.crewId ?? 0));
+  }
+}
+
+/** One selectable face. Kevin gets his own tile because he has no grid. */
+function pickTile(id, label, grid) {
+  const fig = document.createElement('figure');
+  fig.dataset.id = String(id);
+  fig.setAttribute('role', 'button');
+  fig.tabIndex = 0;
+  fig.append(grid ? gridCanvas(grid) : kevinTile());
+  const cap = document.createElement('figcaption');
+  cap.textContent = label;
+  fig.append(cap);
+  return fig;
+}
+
+/** A drawn stand-in for Kevin's tile — he is modelled, so there is no grid. */
+function kevinTile() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const x = c.getContext('2d');
+  const ell = (cx, cy, rx, ry, fill) => {
+    x.beginPath();
+    x.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    x.fillStyle = fill;
+    x.fill();
+  };
+  x.fillStyle = '#B0141B';
+  ell(6.5, 15, 2.6, 6.4, '#B0141B');
+  ell(25.5, 15, 2.6, 6.4, '#B0141B');
+  ell(16, 13, 10, 9.5, '#E02128');
+  ell(12.4, 12.6, 3.4, 4.8, '#FFFFFF');
+  ell(19.6, 12.6, 3.4, 4.8, '#FFFFFF');
+  ell(12.7, 14.2, 1.3, 2.1, '#0B0B0B');
+  ell(19.3, 14.2, 1.3, 2.1, '#0B0B0B');
+  ell(16, 21, 7.2, 4.4, '#F2E4C4');
+  ell(16, 30, 8.5, 5, '#E02128');
+  return c;
 }
 
 /** One 32x32 grid, painted at native size and scaled up by CSS. */
@@ -1724,6 +1801,21 @@ $('#shopBtn').onclick = () => {
 };
 $('#closeShop').onclick = () => { play('ui'); $('#shop').classList.remove('on'); };
 $('#closeNft').onclick = () => { play('ui'); $('#nft').classList.remove('on'); };
+$('#nftGrid').onclick = (e) => {
+  const fig = e.target.closest('figure');
+  if (!fig) return;
+  const id = Number(fig.dataset.id);
+  if (id === (state.crewId ?? 0)) return;
+  play('buy');
+  swapPlayer(id);
+  renderCrew();
+  toast(id ? `Now playing as #${String(id).padStart(3, '0')}` : 'Now playing as Kevin', 1800);
+};
+$('#nftGrid').onkeydown = (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault();
+  e.target.closest('figure')?.click();
+};
 
 // The tray, and the number keys that shadow it. Delegated, because the buttons
 // are rebuilt whenever the item list changes.

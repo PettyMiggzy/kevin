@@ -100,7 +100,13 @@
   #nftGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; max-height: 210px; overflow-y: auto; }
   #nftGrid canvas { width: 100%; height: auto; display: block; border: 3px solid var(--ink); border-radius: 8px;
     image-rendering: pixelated; background: var(--ink); }
-  #nftGrid figure { margin: 0; }
+  /* Tiles are buttons now — you pick who you play as. */
+  #nftGrid figure { margin: 0; cursor: pointer; padding: 3px; border-radius: 10px; }
+  #nftGrid figure:hover { background: #0001; }
+  #nftGrid figure:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+  #nftGrid figure.on { background: var(--ink); }
+  #nftGrid figure.on canvas { border-color: var(--red); }
+  #nftGrid figure.on figcaption { color: var(--void); opacity: 1; }
   #nftGrid figcaption { font-size: 9px; letter-spacing: .06em; text-align: center; margin-top: 3px; opacity: .7; }
 
   /* --- the shift ----------------------------------------------------------- */
