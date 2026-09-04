@@ -261,6 +261,28 @@ async function main() {
   liftTimer.unref?.();
 
   /**
+   * Has this person already been greeted here, recently?
+   *
+   * Being added to a group can produce BOTH a new_chat_members service message
+   * and a chat_member update, and a rejoin produces a fresh pair. Without this
+   * the same arrival gets welcomed twice, which looks worse than not welcoming
+   * them at all.
+   */
+  const greeted = new Map();
+  const GREETED_TTL_MS = 10 * 60 * 1000;
+  function joined(chatId, userId) {
+    const key = `${chatId}:${userId}`;
+    const at = greeted.get(key) ?? 0;
+    const now = Date.now();
+    if (now - at < GREETED_TTL_MS) return true;
+    greeted.set(key, now);
+    if (greeted.size > 2000) {
+      for (const [k, t] of greeted) if (now - t > GREETED_TTL_MS) greeted.delete(k);
+    }
+    return false;
+  }
+
+  /**
    * Greet whoever has arrived, once, a beat after they arrive.
    *
    * Buffered rather than immediate: people arrive in clumps, and eight
@@ -311,10 +333,27 @@ async function main() {
         offset, timeout: 25,
         // edited_message matters: a campaign bot that edits its leaderboard in
         // place rather than reposting produces no new message at all.
-        allowed_updates: ['message', 'edited_message'],
+        allowed_updates: ['message', 'edited_message', 'chat_member'],
       });
-      // 'message' covers joins too — new_chat_members arrives as a service
-      // message on the same update type, which is why the filter stays as it is.
+      // Joins arrive by TWO different routes and the bot has to watch both.
+      //
+      // new_chat_members is a service message on a 'message' update, and it
+      // fires when somebody is ADDED to the group — which is what the API docs
+      // actually say: "New members that were added to the group or supergroup".
+      // Someone who joins a supergroup themselves, off an invite link or out of
+      // search, was not added by anybody and produces no such message. That is
+      // the common case for a public group, and it is why nobody was greeted.
+      //
+      // Those self-joins come through as 'chat_member' instead, which the docs
+      // are explicit about: "The bot must be an administrator in the chat and
+      // must explicitly specify chat_member in the list of allowed_updates."
+      // It is excluded from the default set, so it has to be asked for by name
+      // — and asking for one update type by name means naming them all, which
+      // is why 'message' and 'edited_message' are listed here too.
+      //
+      // Privacy mode is NOT the culprit and turning it off will not fix this:
+      // "All bots will also receive, regardless of privacy mode: All service
+      // messages.
       backoff = 1000;
     } catch (e) {
       // A network blip must not end the bot. Back off, then carry on.
@@ -326,6 +365,26 @@ async function main() {
 
     for (const u of updates) {
       offset = u.update_id + 1;
+
+      // --- somebody joined by themselves ------------------------------------
+      // A status change into the group off an invite link or a search. Only
+      // count a transition INTO membership: chat_member also fires for
+      // promotions, restrictions and leaving, and greeting somebody for being
+      // made an admin reads as a bot that is not paying attention.
+      if (u.chat_member) {
+        const cm = u.chat_member;
+        if (!allowed(cm.chat)) continue;
+        const was = cm.old_chat_member?.status;
+        const now2 = cm.new_chat_member?.status;
+        const inNow = now2 === 'member' || now2 === 'administrator' || now2 === 'creator';
+        const inBefore = was === 'member' || was === 'administrator' || was === 'creator';
+        const who = cm.new_chat_member?.user;
+        if (inNow && !inBefore && who && !who.is_bot && who.id !== me.id && !joined(cm.chat.id, who.id)) {
+          greet(cm.chat.id, [who]);
+        }
+        continue;
+      }
+
       const msg = u.message || u.edited_message;
       if (!msg) continue;
       if (!allowed(msg.chat)) continue;
@@ -350,7 +409,8 @@ async function main() {
 
       // Somebody joined. Never greet the bot's own arrival, and never greet a
       // bot — a group full of them would greet each other forever.
-      const arrivals = (msg.new_chat_members || []).filter((x) => x.id !== me.id && !x.is_bot);
+      const arrivals = (msg.new_chat_members || [])
+        .filter((x) => x.id !== me.id && !x.is_bot && !joined(msg.chat.id, x.id));
       if (arrivals.length) greet(msg.chat.id, arrivals);
 
       if (!msg.text) continue;

@@ -120,8 +120,35 @@ Environment=KEVIN_CHATS=-1002229054100,-100XXXXXXXXXX
 
 ## Welcoming new members
 
-Automatic, no setup, as long as the bot can see join events — that is the same
-`/setprivacy` → Disable step as above.
+**The bot must be an ADMIN in the group.** This is not optional and it is not
+the same thing as the privacy setting.
+
+People arrive by two different routes and Telegram reports them differently:
+
+| How they arrived | What the bot gets | Needs |
+|---|---|---|
+| Someone **added** them | `new_chat_members` service message | nothing |
+| They **joined themselves** — invite link, or found the group in search | `chat_member` update | bot is admin |
+
+The API docs are explicit that `new_chat_members` is "New members that were
+**added** to the group or supergroup". Somebody who clicks an invite link was
+not added by anyone, so no such message exists — and for a public group that is
+nearly everybody. Those arrivals only appear as `chat_member`, and the docs say
+"The bot must be an administrator in the chat and must explicitly specify
+`chat_member` in the list of `allowed_updates`". It is also excluded from the
+default update set, so it has to be asked for by name. The bot asks; you have
+to make it an admin.
+
+**Privacy mode is not the problem here and turning it off will not fix it** —
+"All bots will also receive, regardless of privacy mode: All service messages."
+Turn it off anyway for the mentions, but do not expect it to bring joins back.
+
+To make it admin: group → Manage → Administrators → Add Admin → pick the bot.
+It needs no permissions ticked; being an admin at all is what unlocks the
+updates. Then `systemctl restart kevin-bot` and watch a join land in
+`journalctl -u kevin-bot -f`.
+
+The greeting itself needs no setup beyond that.
 
 Messages are composed from two written pools, so a group of any size will not
 notice a repeat, and about a quarter of them carry a warning that nobody has
