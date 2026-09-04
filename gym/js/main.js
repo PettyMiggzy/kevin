@@ -462,12 +462,14 @@ let CREW = null;
 async function loadCrew() {
   if (INLINE?.grids) { CREW = INLINE.grids; return CREW; }
   try {
-    const r = await fetch('../assets/crew/grids.json');
-    if (!r.ok) return null;
-    CREW = await r.json();
+    CREW = await withTimeout((async () => {
+      const r = await fetch('../assets/crew/grids.json');
+      if (!r.ok) throw new Error(`crew grids: HTTP ${r.status}`);
+      return r.json();
+    })(), CREW_TIMEOUT, 'the crew');
     return CREW;
   } catch {
-    return null;                                     // fall back to primitives
+    return null;                    // fall back to primitives — never a dead boot
   }
 }
 
@@ -725,16 +727,75 @@ const npcs = [];
 function fail(msg) {
   $('#err').textContent = msg;
   $('#start').textContent = 'Reload';
+  // Clicking Open the doors disables this button. Without putting that back,
+  // every failure below ends on a greyed-out Reload that cannot be pressed —
+  // which from the outside is indistinguishable from the button doing nothing.
+  $('#start').disabled = false;
   $('#start').onclick = () => location.reload();
 }
 
+/** Boot-screen progress. The button is the only thing anyone is looking at. */
+function booting(msg) {
+  const b = $('#start');
+  if (b && !b.textContent.startsWith('Reload')) b.textContent = msg;
+}
+
+/**
+ * A promise that can also lose.
+ *
+ * fetch() and GLTFLoader hang forever on a stalled connection — they neither
+ * resolve nor reject — and every await in init() was unguarded, so a single
+ * dead request left the boot screen reading "Opening…" with nothing to press.
+ * A prop that never arrives is already survivable; a prop that never *answers*
+ * was not.
+ */
+function withTimeout(promise, ms, label) {
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise).finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms);
+    }),
+  ]);
+}
+
+const CREW_TIMEOUT = 15000;
+const PROP_TIMEOUT = 25000;
+const BOOT_TIMEOUT = 75000;   // the whole opening, including slow parsing
+const PROP_LANES = 4;         // how many props load at once
+
 async function init() {
-  try {
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  } catch (e) {
-    fail('This browser could not start WebGL. The gym needs it.');
+  booting('Opening…');
+
+  // Ask for a context on a throwaway canvas first. A WebGLRenderer built where
+  // WebGL is blocked does not reliably throw — it can hand back a renderer
+  // whose context is already gone, and the failure then surfaces as a blank
+  // screen much later, far from the cause.
+  const probe = document.createElement('canvas');
+  if (!(probe.getContext('webgl2') || probe.getContext('webgl'))) {
+    fail('This browser has WebGL turned off, and the gym needs it. Try Chrome or Safari, or turn off Low Power Mode.');
     return;
   }
+
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+  } catch {
+    // Some phones refuse the high-performance GPU but will give up the other one.
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    } catch (e) {
+      fail(`This browser could not start WebGL. The gym needs it. (${e.message})`);
+      return;
+    }
+  }
+
+  // Running out of memory shows up here rather than as an exception.
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    renderer.setAnimationLoop(null);
+    $('#boot').classList.remove('gone');
+    fail('The browser dropped the graphics context — usually low memory. Close some tabs and reload.');
+  });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));   // above 2 costs a lot and shows nothing
   renderer.setClearColor('#8FC8EA');
 
@@ -798,19 +859,27 @@ async function init() {
   loader.setMeshoptDecoder(MeshoptDecoder);
 
   const need = [...new Set([...STATIONS.map((s) => s.prop), ...SCENERY.map((s) => s[0])])];
-  const loaded = await Promise.all(need.map(async (name) => {
-    try {
-      if (INLINE?.props?.[name]) {
-        const g = await loader.parseAsync(INLINE.props[name], '');
-        return [name, g.scene];
+
+  // Four lanes, not twenty-two at once. A phone opening twenty-two connections
+  // is slower than one opening four, and decoding that many meshopt buffers
+  // concurrently is what pushes a mobile tab over its memory ceiling — which
+  // from the outside looks exactly like the button doing nothing.
+  const queue = need.slice();
+  let done = 0;
+  const lane = async () => {
+    for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
+      try {
+        const g = INLINE?.props?.[name]
+          ? await loader.parseAsync(INLINE.props[name], '')
+          : await withTimeout(loader.loadAsync(`./assets/props/${name}.glb`), PROP_TIMEOUT, name);
+        props.set(name, g.scene);
+      } catch {
+        /* missing, slow or broken — the room opens without it rather than not at all */
       }
-      const g = await loader.loadAsync(`./assets/props/${name}.glb`);
-      return [name, g.scene];
-    } catch {
-      return [name, null];             // a missing prop must not empty the room
+      booting(`Opening… ${++done}/${need.length}`);
     }
-  }));
-  for (const [name, obj] of loaded) if (obj) props.set(name, obj);
+  };
+  await Promise.all(Array.from({ length: PROP_LANES }, lane));
 
   const spawn = (name, opts, tag) => {
     const src = props.get(name);
@@ -1366,8 +1435,21 @@ $('#act').onclick = () => { input.act = true; };
 
 $('#start').onclick = () => {
   $('#start').disabled = true;
-  $('#start').textContent = 'Opening…';
-  init().catch((e) => fail(`Could not start: ${e.message}`));
+  booting('Opening…');
+  // Every wait inside init() is bounded now, but a slow device can still take
+  // longer than anyone will sit through. Say so, with something to press,
+  // rather than leaving the button reading "Opening…" indefinitely.
+  const watchdog = setTimeout(() => {
+    if (!$('#boot').classList.contains('gone')) {
+      fail('The gym is taking longer than it should. Check your connection and try again.');
+    }
+  }, BOOT_TIMEOUT);
+  init()
+    .then(() => clearTimeout(watchdog))
+    .catch((e) => {
+      clearTimeout(watchdog);
+      fail(`Could not start: ${e.message}`);
+    });
 };
 
 // Re-settle when the tab comes back after a long time away, so somebody who
