@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kevin punches the star — sticker frames</title>
+<style>html,body{margin:0;background:transparent}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+// Kevin punching the star, animated from the PACK'S OWN ARTWORK.
+//
+// The character here is the drawn one — assets/stickers/stills/star-power.png,
+// produced by tools/gen-stickers-video.mjs off the hero-portrait reference —
+// not the low-poly model the gym runs. Normally that still would go to Venice's
+// video model to be animated; this animates it locally instead, which costs
+// nothing and cannot drift off-model, because every frame IS the drawing.
+const SIZE = 512;
+const FRAMES = Number(new URL(location.href).searchParams.get('frames') || 48);
+const SRC = '../assets/stickers/stills/star-power.png';
+
+// Where the star sits in the 1024px source. The burst is drawn here.
+const STAR = { x: 692, y: 172 };
+
+const canvas = document.getElementById('c');
+canvas.width = canvas.height = SIZE;
+const ctx = canvas.getContext('2d');
+
+const img = new Image();
+img.src = SRC;
+await img.decode();
+
+// --- cut the backdrop out ----------------------------------------------------
+/**
+ * Flood fill inward from the border rather than keying a colour.
+ *
+ * A colour key cannot do this job: the backdrop is rgb(248,215,0) and the
+ * star's fill is rgb(250,229,0) — fourteen levels apart in one channel. Any key
+ * loose enough to clear the backdrop takes the star with it. The star has a
+ * heavy black outline all the way round, so a fill that starts at the frame
+ * edge simply cannot get inside it.
+ */
+function cutout() {
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  const s = document.createElement('canvas');
+  s.width = w;
+  s.height = h;
+  const sx = s.getContext('2d', { willReadFrequently: true });
+  sx.drawImage(img, 0, 0);
+  const d = sx.getImageData(0, 0, w, h);
+  const p = d.data;
+  const bg = [p[4 * (4 * w + 4)], p[4 * (4 * w + 4) + 1], p[4 * (4 * w + 4) + 2]];
+
+  const near = (i, tr, tg, tb) =>
+    Math.abs(p[i] - bg[0]) <= tr && Math.abs(p[i + 1] - bg[1]) <= tg && Math.abs(p[i + 2] - bg[2]) <= tb;
+
+  const gone = new Uint8Array(w * h);
+  const stack = [];
+  const push = (x, y) => {
+    const k = y * w + x;
+    if (!gone[k] && near(k * 4, 26, 26, 26)) { gone[k] = 1; stack.push(k); }
+  };
+  for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }
+  for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
+  while (stack.length) {
+    const k = stack.pop();
+    const x = k % w;
+    const y = (k / w) | 0;
+    if (x > 0) push(x - 1, y);
+    if (x < w - 1) push(x + 1, y);
+    if (y > 0) push(x, y - 1);
+    if (y < h - 1) push(x, y + 1);
+  }
+
+  // Backdrop trapped inside the drawing — between his arm and his body — is
+  // walled off from the border, so the fill above never reaches it. It is
+  // exact backdrop colour though, and the star is not: a tight, deliberately
+  // LOPSIDED tolerance clears the pockets while leaving the star alone,
+  // because the whole of the star's difference lives in the green channel.
+  for (let k = 0; k < w * h; k++) if (!gone[k] && near(k * 4, 10, 6, 10)) gone[k] = 1;
+
+  // Two passes of erosion. Between the black line art and the backdrop is a
+  // ring of half-and-half pixels, too dark to read as backdrop and too yellow
+  // to read as ink; left in, they ring the whole character in yellow the moment
+  // it sits on anything but yellow — which is every chat it will ever be in.
+  for (let pass = 0; pass < 2; pass++) {
+    const edge = [];
+    for (let k = 0; k < w * h; k++) {
+      if (gone[k]) continue;
+      const x = k % w;
+      const y = (k / w) | 0;
+      if ((x > 0 && gone[k - 1]) || (x < w - 1 && gone[k + 1]) ||
+          (y > 0 && gone[k - w]) || (y < h - 1 && gone[k + w])) edge.push(k);
+    }
+    for (const k of edge) gone[k] = 1;
+  }
+
+  for (let k = 0; k < w * h; k++) if (gone[k]) p[k * 4 + 3] = 0;
+  sx.putImageData(d, 0, 0);
+
+  // Measure what is actually left, so the framing follows the art instead of
+  // a number typed in by hand that goes stale the next time the still changes.
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let k = 0; k < w * h; k++) {
+    if (p[k * 4 + 3] === 0) continue;
+    const x = k % w;
+    const y = (k / w) | 0;
+    if (x < x0) x0 = x;
+    if (x > x1) x1 = x;
+    if (y < y0) y0 = y;
+    if (y > y1) y1 = y;
+  }
+  return { canvas: s, box: { x0, y0, x1, y1 } };
+}
+
+const { canvas: art, box } = cutout();
+
+// Fit the art into the square. Anchored low rather than centred: the drawing
+// runs off the bottom of its own frame, so there is no chin to leave room for,
+// and the space is worth more above his fist where the star travels.
+const bw = box.x1 - box.x0 + 1;
+const bh = box.y1 - box.y0 + 1;
+const scale = (SIZE * 0.88) / Math.max(bw, bh);
+const drawW = art.width * scale;
+const drawH = art.height * scale;
+const originX = SIZE / 2 - (box.x0 + bw / 2) * scale;
+const originY = SIZE * 0.975 - (box.y1 + 1) * scale;
+const starX = originX + STAR.x * scale;
+const starY = originY + STAR.y * scale;
+
+// --- the loop ----------------------------------------------------------------
+const clamp01 = (v) => Math.min(1, Math.max(0, v));
+/** 0 -> 1 -> 0 across [a,b], flat zero outside it. */
+const bump = (t, a, b) => (t < a || t > b ? 0 : Math.sin(clamp01((t - a) / (b - a)) * Math.PI));
+
+/**
+ * Wind up, drive, hit, settle. Every term is zero at both t=0 and t=1, so the
+ * last frame hands back to the first with no seam — a sticker that jumps on
+ * loop is the one thing people notice immediately.
+ *
+ * The drawing cannot be re-posed, so the punch is sold with weight instead:
+ * he compresses before he throws it, stretches through it, and the recoil rings
+ * out afterwards rather than stopping dead.
+ */
+function pose(t) {
+  const dip = bump(t, 0, 0.24);
+  const rise = bump(t, 0.24, 0.64);
+  const hit = bump(t, 0.38, 0.54);
+  // Recoil: a decaying wobble that has to reach exactly zero by t=1.
+  const u = clamp01((t - 0.60) / 0.40);
+  const ring = Math.sin(u * Math.PI * 3) * (1 - u) * (1 - u) * 7;
+
+  const lift = dip * 9 - rise * 34 + ring;
+  const sy = 1 - dip * 0.055 + rise * 0.045;
+  const sx = 1 + dip * 0.050 - rise * 0.035;
+  const tilt = (rise * 0.030 - dip * 0.012) * -1;
+
+  ctx.clearRect(0, 0, SIZE, SIZE);
+  ctx.save();
+  // Scale about the feet, so a squash plants him rather than shrinking him
+  // toward the middle of the frame.
+  ctx.translate(SIZE / 2, SIZE * 0.975 + lift);
+  ctx.rotate(tilt);
+  ctx.scale(sx, sy);
+  ctx.translate(-SIZE / 2, -(SIZE * 0.975));
+  ctx.drawImage(art, originX, originY, drawW, drawH);
+  ctx.restore();
+
+  if (hit > 0.02) {
+    // The burst travels with him, so it has to be placed through the same
+    // transform the drawing just went through.
+    const cx = SIZE / 2 + (starX - SIZE / 2) * sx;
+    const cy = SIZE * 0.975 + lift + (starY - SIZE * 0.975) * sy;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.globalAlpha = Math.min(1, hit * 1.4);
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 6;
+    const r = 30 + hit * 26;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+      ctx.lineTo(Math.cos(a) * (r + 16 + hit * 14), Math.sin(a) * (r + 16 + hit * 14));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+const frames = [];
+for (let i = 0; i < FRAMES; i++) {
+  pose(i / FRAMES);
+  frames.push(canvas.toDataURL('image/png'));
+}
+window.__frames = frames;
+window.__ready = true;
+</script>
+</body>
+</html>

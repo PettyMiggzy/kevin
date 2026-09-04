@@ -45,6 +45,11 @@ async function main() {
       const body = await readFile(p);
       const type = p.endsWith('.html') ? 'text/html'
         : p.endsWith('.js') || p.endsWith('.mjs') ? 'text/javascript'
+        // Scenes that animate the pack's own artwork load it as an image, and
+        // it has to come back same-origin and correctly typed or the canvas is
+        // tainted and toDataURL throws instead of handing back a frame.
+        : p.endsWith('.png') ? 'image/png'
+        : p.endsWith('.jpg') || p.endsWith('.jpeg') ? 'image/jpeg'
         : 'application/octet-stream';
       res.writeHead(200, { 'content-type': type });
       res.end(body);
