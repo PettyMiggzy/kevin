@@ -43,8 +43,17 @@ window.KEVIN = {
   gta6: '2026-11-19T00:00:00Z',
 
   // Contract address. Paste it here the moment it exists; the copy button
-  // stays disabled until then.
-  contract: null,
+  // stays disabled until then. EIP-55 checksum verified before publishing —
+  // a mixed-case address that fails its own checksum is a typo, and a typo
+  // here is somebody's money.
+  contract: '0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A',
+
+  // When it actually starts trading. Publishing the address BEFORE this is
+  // deliberate and protective: the group gets to memorise the real one while
+  // it is calm, so on launch day, when the fakes appear, they already know.
+  // Until this passes, the site and the bot both say plainly that it is not
+  // live yet and not to try to buy.
+  contractLiveAt: '2026-09-07T00:00:00Z',
 
   // Where people actually buy. Auction lives on the kekfun launchpad.
   links: {

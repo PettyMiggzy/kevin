@@ -747,3 +747,10 @@ section[id], header[id] { scroll-margin-top: 88px; }
 .gym__url { font-size: 15px; margin: 14px 0 0; opacity: .85; }
 .gym__url a { color: inherit; text-decoration: none; border-bottom: 2px solid currentColor; }
 .gym__url a:hover { opacity: .7; }
+
+/* --- contract, before it trades ----------------------------------------- */
+.ca__pending {
+  display: block; width: 100%; margin-top: 8px;
+  font-size: 13px; font-weight: 700; line-height: 1.4;
+  color: var(--red);
+}

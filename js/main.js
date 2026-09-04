@@ -26,9 +26,21 @@
   // --- contract address ---------------------------------------------------
   var caValue = $('#ca-value');
   var caCopy = $('#ca-copy');
+  var caLive = !K.contractLiveAt || Date.now() >= Date.parse(K.contractLiveAt);
   if (caValue && K.contract) {
     caValue.textContent = K.contract;
     caCopy.disabled = false;
+    // Before it trades, say so next to it. An address on a token site reads as
+    // "buy this now" unless something states otherwise, and for the next few
+    // days that would send people somewhere nothing is listed.
+    if (!caLive) {
+      var note = document.createElement('span');
+      note.className = 'ca__pending';
+      note.textContent = 'Not live until ' + new Date(K.contractLiveAt)
+        .toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) +
+        '. Verify it here now; do not try to buy yet.';
+      caValue.parentNode.appendChild(note);
+    }
     caCopy.addEventListener('click', function () {
       var done = function () {
         caCopy.textContent = 'Copied';

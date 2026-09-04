@@ -10,12 +10,12 @@
 // decision needed to get it running. It is the slower design and it is the one
 // you can start on a laptop in a minute.
 import { readFile } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildBrief } from './brief.mjs';
 import { systemPrompt, commandReply } from './persona.mjs';
 import { loadKey, listModels, checkModel, chat, DEFAULT_MODEL } from './groq.mjs';
-import { welcome, cleanName } from './welcome.mjs';
+import { welcome, cleanName, loadImages, pickImage } from './welcome.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -58,6 +58,24 @@ async function loadTelegramToken() {
       'No Telegram token. Put it in bot/.telegram.key (gitignored) or set TELEGRAM_BOT_TOKEN.'
     );
   }
+}
+
+/**
+ * sendPhoto, which unlike every other call here needs multipart rather than
+ * JSON because it carries a file.
+ */
+async function sendPhoto(token, chatId, path, caption) {
+  const form = new FormData();
+  form.append('chat_id', String(chatId));
+  form.append('caption', caption);
+  form.append('photo', new Blob([await readFile(path)]), basename(path));
+  const r = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+    method: 'POST',
+    body: form,
+  });
+  const body = await r.json().catch(() => ({}));
+  if (!body.ok) throw new Error(`Telegram sendPhoto: ${body.description || r.status}`);
+  return body.result;
 }
 
 async function tg(token, method, params) {
@@ -152,6 +170,11 @@ async function main() {
   console.log(`Kevin is on the fryer as @${me.username} (model ${model})`);
   if (!config.contract) console.log('No contract in config.js — /ca will refuse to give an address. Correct.');
 
+  // Art for the welcomes, if any has been dropped in. Read once — adding a
+  // picture is a restart either way.
+  const welcomeImages = await loadImages(join(HERE, 'assets/welcome'));
+  if (welcomeImages.length) console.log(`${welcomeImages.length} welcome image(s) loaded`);
+
   const memory = new Map();       // chatId -> [{role, content}]
   const lastReply = new Map();    // chatId -> ms
   const joins = new Map();        // chatId -> {names[], timer, lastAt, lastOpener}
@@ -179,6 +202,20 @@ async function main() {
       if (!names.length) return;
       const { text, opener } = welcome(names, config, j.lastOpener);
       j.lastOpener = opener;
+
+      // With art, the greeting rides as the caption so it is one message
+      // rather than two. Telegram caps a caption at 1024 characters; these are
+      // nowhere near it, but send them apart rather than truncate if that ever
+      // changes.
+      const image = pickImage(welcomeImages, j.lastImage);
+      if (image && text.length <= 1024) {
+        j.lastImage = image;
+        const sent = await sendPhoto(token, chatId, image, text)
+          .catch((e) => { console.error('welcome photo failed:', e.message); return null; });
+        if (sent) return;
+        // Fall through to text — a group with no greeting because an image
+        // failed is worse than a greeting with no image.
+      }
       await tg(token, 'sendMessage', {
         chat_id: chatId,
         text,

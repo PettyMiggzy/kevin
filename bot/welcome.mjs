@@ -14,6 +14,8 @@
 //
 // Two pools crossed gives a few hundred combinations, which is more than enough
 // that nobody in a group will notice a repeat.
+import { readdir } from 'node:fs/promises';
+import { join } from 'node:path';
 
 const OPENERS = [
   'Kevin see you come in. Hello.',
@@ -64,6 +66,29 @@ const ASIDES = [
 ];
 
 const rand = (a) => a[Math.floor(Math.random() * a.length)];
+
+/**
+ * Images to post alongside a welcome. Read once at startup — a group's join
+ * rate does not justify hitting the disk every time, and adding art is a
+ * restart either way.
+ */
+export async function loadImages(dir) {
+  try {
+    const files = (await readdir(dir))
+      .filter((f) => /\.(png|jpe?g|webp)$/i.test(f))
+      .sort();
+    return files.map((f) => join(dir, f));
+  } catch {
+    return [];                       // no folder, no images, no problem
+  }
+}
+
+/** One image, avoiding an immediate repeat when there is more than one. */
+export function pickImage(images, last) {
+  if (!images.length) return null;
+  const pool = images.length > 1 ? images.filter((i) => i !== last) : images;
+  return rand(pool);
+}
 
 /**
  * One welcome.

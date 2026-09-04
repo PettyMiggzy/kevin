@@ -28,6 +28,24 @@ export async function loadConfig() {
 const fmt = (v, fallback = 'not published yet') =>
   v === null || v === undefined || v === '' ? fallback : String(v);
 
+/** Is the contract actually trading yet? */
+export const contractLive = (c) =>
+  Boolean(c.contract) && (!c.contractLiveAt || Date.now() >= Date.parse(c.contractLiveAt));
+
+/**
+ * The address exists before it trades, and those are different facts. Stating
+ * only the address for three days would have people buying at a contract that
+ * is not listed anywhere.
+ */
+function contractNote(c) {
+  if (!c.contract || contractLive(c)) return '';
+  const when = new Date(c.contractLiveAt).toUTCString();
+  return `\n  IT IS NOT LIVE YET. It starts trading ${when}. Until then the address is\n` +
+    `  published only so people can check the real one against the fakes that\n` +
+    `  will appear. Kevin must say it is not live and that nobody should try to\n` +
+    `  buy yet.`;
+}
+
 /** The hard facts, stated plainly. The persona layer makes them sound like him. */
 function factSheet(c) {
   const pools = c.pools.map((p) => `${p.ticker} ${p.weight}%`).join(' / ');
@@ -43,7 +61,7 @@ function factSheet(c) {
 - Sale runs ${m.saleDays} days, ${m.perDay}% of supply released per day.
   Buyers vest linearly over ${m.vestDays} days from settle.
 - Explorer: ${m.explorer}
-- CONTRACT ADDRESS: ${fmt(c.contract)}
+- CONTRACT ADDRESS: ${fmt(c.contract)}${contractNote(c)}
 - Auction opens: ${fmt(c.auction.startsAt, 'already open — it is live now')}
 - Auction closes: ${fmt(c.auction.endsAt, 'not announced')}
 
@@ -77,6 +95,12 @@ THE GYM (a free browser game, built by the team)
 - You play as Kevin. If you want, you can switch to any of the crew faces at
   the crew stall.
 
+THINGS KEVIN SAYS (the lines on the site — Kevin may repeat these)
+${c.ticker.map((t) => `- ${t}`).join('\n')}
+
+STICKERS
+- There is a Telegram sticker pack: ${c.animated.map((a) => a.name).join(', ')}.
+
 KEVIN'S CREW (the NFT collection)
 - 32x32 pixel characters, the people Kevin works with.
 - NOT MINTED. There is no contract, no sale and no mint date. Anyone saying
@@ -87,6 +111,7 @@ KEVIN'S CREW (the NFT collection)
 function unknowns(c) {
   const gaps = [];
   if (!c.contract) gaps.push('the contract address');
+  if (c.contract && !contractLive(c)) gaps.push('where to buy it — it is not trading yet');
   if (!c.auction.endsAt) gaps.push('when exactly the auction closes');
   if (!c.burn.wallet) gaps.push('the burn wallet address');
   if (!c.links.chart) gaps.push('a chart link');
@@ -114,9 +139,10 @@ function trimDoc(md, maxChars) {
 /** Everything Kevin knows, as one block of text for the system prompt. */
 export async function buildBrief() {
   const config = await loadConfig();
-  const [lore, launch] = await Promise.all([
+  const [lore, launch, brand] = await Promise.all([
     readFile(join(ROOT, 'docs/LORE.md'), 'utf8').catch(() => ''),
     readFile(join(ROOT, 'docs/LAUNCH.md'), 'utf8').catch(() => ''),
+    readFile(join(ROOT, 'docs/BRAND.md'), 'utf8').catch(() => ''),
   ]);
 
   const gaps = unknowns(config);
@@ -129,7 +155,10 @@ ${gaps.map((g) => `- ${g}`).join('\n')}
 ${trimDoc(lore, 5200)}
 
 --- BACKGROUND: HOW THE LAUNCH WORKS ---
-${trimDoc(launch, 3600)}`;
+${trimDoc(launch, 3600)}
+
+--- BACKGROUND: WHO KEVIN IS TO LOOK AT ---
+${trimDoc(brand, 2200)}`;
 
   return { config, brief, gaps };
 }
