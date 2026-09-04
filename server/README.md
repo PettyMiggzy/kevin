@@ -25,28 +25,20 @@ person top" has a better answer than "the number says so".
 ## Running it
 
 ```bash
-cd /opt/kevin
-openssl rand -hex 32 > server/.admin.key      # shared with the bot
-chmod 600 server/.admin.key
-
-node server/index.mjs                          # foreground, to watch it
-curl localhost:8787/health
-
-cp server/kevin-scores.service /etc/systemd/system/
-systemctl daemon-reload && systemctl enable --now kevin-scores
-journalctl -u kevin-scores -f
+cd /opt/kevin && ./setup.sh
 ```
 
-Then point the bot at it, in `/etc/systemd/system/kevin-bot.service`:
+That is the whole thing. It generates the admin key if there is not one,
+installs both service files, wires the bot to the scores service over
+localhost, starts them, and tells you whether they came up.
 
-```
-Environment=KEVIN_SCORES_URL=http://127.0.0.1:8787
-Environment=KEVIN_ADMIN_KEY=<the same key>
-Environment=KEVIN_BOT=Iamkevinzbot
-```
+Safe to run again after every `git pull` — it keeps every key it finds and only
+creates one that does not exist.
 
-`systemctl daemon-reload && systemctl restart kevin-bot`, and `/top`, `/shifts`
-and `/link` start working.
+The bot gets its settings from a systemd **drop-in**
+(`/etc/systemd/system/kevin-bot.service.d/local.conf`) rather than from the unit
+file, because `git pull` replaces the unit file and anything written into it
+would be lost on the next update.
 
 ### Putting it on the internet
 
