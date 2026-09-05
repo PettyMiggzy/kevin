@@ -38,5 +38,11 @@
   "bin": "SM_ToiletBin.glb",
   "heat-lamp": "SM_RoofLamp.glb",
   "soda-cup": "SM_Cup.glb",
-  "plate": "SM_Plate.glb"
+  "plate": "SM_Plate.glb",
+  "jukebox": "SM_Jukebox.glb",
+  "sink": "SM_Sink.glb",
+  "armchair": "SM_Chair.glb",
+  "cook-pot": "SM_Pot01.glb",
+  "frying-pan": "SM_Pan.glb",
+  "wall-sign": "SM_Signs07.glb"
 }

@@ -69,6 +69,8 @@ const BONUS = [
   // Restaurant dressing. Not placed yet, but a fast-food pack is bought for the
   // burger on the tray as much as for the fryer, and a matcher that only knows
   // the fourteen names above throws the dressing away.
+  // Kevin's crib. A card room and a flat, furnished out of the same diner kit.
+  'jukebox', 'sink', 'armchair', 'cook-pot', 'frying-pan', 'wall-sign',
   'diner-table', 'diner-chair', 'drinks-machine', 'coffee-machine', 'microwave',
   'extractor-hood', 'fry-basket', 'heat-lamp', 'menu-board', 'napkin-dispenser',
   'ketchup-bottle', 'burger', 'fries', 'soda-cup', 'food-tray', 'pizza',

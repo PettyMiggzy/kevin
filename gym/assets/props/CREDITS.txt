@@ -39,6 +39,9 @@ blenders, extraction), back-of-house (wall shelving, walk-in fridges), the
 dining room (booths, trays, ketchup, kitchen bin) and the lot (lamp posts,
 dumpsters).
 
+Also used in Kevin's crib, which is a card room in a flat and takes the same
+kit sideways: jukebox, sink, armchair, cooking pot, frying pan and wall sign.
+
 This is a diner pack, not a fast-food one: it has no fryer, no till and no cars,
 so those three stay hand-built boxes. aliases.json records "null" against them
 rather than leaving them absent, so the next pack's ingest does not guess a
