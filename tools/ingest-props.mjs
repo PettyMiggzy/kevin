@@ -43,6 +43,22 @@ const NEEDED = [
   'gym-clock', 'gym-mirror',
 ];
 
+/**
+ * Equipment the game does not place yet but would take if a pack had it.
+ *
+ * A pack is bought for what is in it, and a matcher that only knows the
+ * twenty-two names already in use throws away the boxing ring. These get
+ * ingested under a clean name so they are sitting in props/ ready to place —
+ * the placement is a line in SCENERY, which is the easy half.
+ */
+const BONUS = [
+  'boxing-ring', 'yoga-mat', 'exercise-bike', 'smith-machine', 'incline-bench',
+  'barbell', 'weight-plate', 'jump-rope', 'ab-bench', 'dip-station',
+  'battle-rope', 'sled', 'foam-roller', 'gym-ball', 'chalk-bucket',
+  'bench-press', 'preacher-curl', 'hack-squat', 'stair-climber', 'elliptical',
+  'weight-bench', 'barbell-rack', 'wall-clock', 'poster', 'bin', 'stool',
+];
+
 /** Tokens that say nothing about what a thing is. */
 const NOISE = new Set(['sm', 'sk', 'prop', 'props', 'static', 'mesh', 'gym', 'fitness',
   'polygon', 'synty', 'kenney', 'lod0', 'lod', 'a', 'b', 'c', '01', '02', '03', 'low', 'high']);
@@ -117,6 +133,9 @@ async function main() {
   let aliases = {};
   if (existsSync(ALIASES)) aliases = JSON.parse(await readFile(ALIASES, 'utf8'));
 
+  // Bonus names are matched too, but only when a pack actually has them, and
+  // never at the expense of something the game already asks for.
+  const WANTED = [...NEEDED, ...BONUS];
   const picks = [];
   const missing = [];
   const taken = new Set();
@@ -124,7 +143,7 @@ async function main() {
 
   // Aliases first and unconditionally: a name somebody wrote down beats
   // anything a scorer works out.
-  for (const want of NEEDED) {
+  for (const want of WANTED) {
     if (!aliases[want]) continue;
     const a = String(aliases[want]).toLowerCase();
     const hit = found.find((f) => basename(f).toLowerCase() === a) ||
@@ -139,28 +158,44 @@ async function main() {
   // one file "squat-rack" needed and leaves the better match for neither —
   // which is exactly what it did: both got handed the same rack.
   const pairs = [];
-  for (const want of NEEDED) {
+  for (const want of WANTED) {
     if (claimed.has(want)) continue;
     for (const f of found) {
       const sc = score(want, basename(f));
       if (sc >= 0.6) pairs.push({ want, file: f, sc });
     }
   }
-  pairs.sort((a, b) => b.sc - a.sc);
+  const rank = (w) => (NEEDED.includes(w) ? 0 : 1);
+  pairs.sort((a, b) => rank(a.want) - rank(b.want) || b.sc - a.sc);
   for (const pr of pairs) {
     if (claimed.has(pr.want) || taken.has(pr.file)) continue;
     picks.push({ want: pr.want, file: pr.file, how: `guess ${pr.sc.toFixed(2)}` });
     taken.add(pr.file); claimed.add(pr.want);
   }
   for (const want of NEEDED) if (!claimed.has(want)) missing.push(want);
-  picks.sort((a, b) => NEEDED.indexOf(a.want) - NEEDED.indexOf(b.want));
+  picks.sort((a, b) => WANTED.indexOf(a.want) - WANTED.indexOf(b.want));
 
   for (const p of picks) {
-    console.log(`  ok  ${p.want.padEnd(15)} <- ${basename(p.file).padEnd(38)} ${p.how}`);
+    const tag = NEEDED.includes(p.want) ? 'ok ' : '++ ';
+    console.log(`  ${tag} ${p.want.padEnd(15)} <- ${basename(p.file).padEnd(38)} ${p.how}`);
   }
   for (const m of missing) console.log(`  --  ${m.padEnd(15)} nothing close enough; add an alias`);
 
-  console.log(`\n${picks.length}/${NEEDED.length} matched`);
+  // Everything the pack has that nothing asked for. Printed rather than
+  // silently dropped: this is the list to read when deciding what else the
+  // gym could have, and an unmatched name here is usually a missing alias
+  // rather than a model nobody wants.
+  const spare = found.filter((f) => !taken.has(f));
+  if (spare.length) {
+    console.log(`\n${spare.length} model(s) in the pack that nothing claimed:`);
+    for (const f of spare.slice(0, 40)) console.log(`      ${basename(f)}`);
+    if (spare.length > 40) console.log(`      … and ${spare.length - 40} more`);
+    console.log('  To use one: add it to BONUS in this file, or alias it to a name in NEEDED.');
+  }
+
+  const core = picks.filter((p) => NEEDED.includes(p.want)).length;
+  console.log(`\n${core}/${NEEDED.length} the game places now` +
+    (picks.length > core ? `, plus ${picks.length - core} extra ingested and ready to place` : ''));
   if (DRY) { console.log('\n--dry: nothing copied. Check the matches, then run without --dry.'); return; }
 
   await mkdir(RAW, { recursive: true });
