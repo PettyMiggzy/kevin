@@ -294,11 +294,14 @@ export const fryHouseTexture = () =>
     x.textAlign = 'center';
     x.textBaseline = 'middle';
     x.fillStyle = '#FFE500';
-    x.font = '700 128px ui-monospace, Menlo, monospace';
-    x.fillText("KEVIN'S", w / 2, h * 0.40);
+    // The place is called McKevin's. The fascia said KEVIN'S in the big type
+    // with McKEVIN'S in the small, which is the rename half-done and reads as
+    // the wrong shop from across its own car park.
+    x.font = '700 116px ui-monospace, Menlo, monospace';
+    x.fillText("McKEVIN'S", w / 2, h * 0.40);
     x.fillStyle = '#FFFFFF';
     x.font = '700 44px ui-monospace, Menlo, monospace';
-    x.fillText("MCKEVIN'S  ·  OVER 3 SERVED", w / 2, h * 0.74);
+    x.fillText('OVER 3 SERVED', w / 2, h * 0.74);
   });
 
 /** The menu above the counter. Prices in $KEVIN, which is a score. */

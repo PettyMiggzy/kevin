@@ -15,7 +15,8 @@ WASD or the on-screen stick to move, **E** or the button to work a station.
 
 **Kevin's Crib** is home and the hub — first person, with the card table in it
 and a telly that takes you anywhere. **Kevin's Gym** is the gym, inside and out.
-**McKevin's** is the fry house.
+**McKevin's** is the fry house, with a car park, a drive-thru lane, picnic
+tables and a pylon sign around it.
 
 They are joined by doors, not a menu: the crib's front door puts you on the
 gym's forecourt, the far end of that forecourt goes to McKevin's, and both have

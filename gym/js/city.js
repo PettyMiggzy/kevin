@@ -24,13 +24,21 @@ export const MARKET = [
 ];
 
 /** The fry house, and the counter you clock in at. */
-export const FRY = { x: 7.6, z: 17.6, w: 8.4, d: 5.2, h: 3.6, counterZ: 14.6 };
+// Turned to face the camera.
+//
+// It used to sit at the far end of the gym's forecourt with its serving side
+// pointing AWAY from the player's side of the street, which was invisible while
+// the shift had its own locked-off camera and became the whole view the moment
+// McKevin's was its own world: the chase camera sits behind the player, so it
+// was looking at the back of a beige box. The building is at low z now with its
+// front at high z, exactly like the gym, so you walk up to it and see a shop.
+export const FRY = { x: 0, z: -4.0, w: 9.6, d: 5.6, h: 3.8, counterZ: 0.6 };
 
 /** Where customers stand while they wait. First in the list is being served. */
 export const QUEUE = [
   // A line receding from the window rather than a huddle, so the camera can see
   // past whoever is being served to whoever is next.
-  { x: 7.7, z: 13.2 }, { x: 6.5, z: 12.1 }, { x: 8.0, z: 11.1 }, { x: 6.8, z: 10.0 },
+  { x: 0.1, z: 2.2 }, { x: -1.1, z: 3.3 }, { x: 0.4, z: 4.3 }, { x: -0.8, z: 5.4 },
 ];
 
 /**
@@ -57,9 +65,9 @@ export function buildCity(scene, { flat, solids, blockers },
     return m;
   };
 
-  buildSkyline(solid);
-  const stalls = MARKET.map((s) => buildStall(s, { solid, quad, solids }));
-  const counter = buildFryHouse({ solid, quad, solids, blockers });
+  if (parts.skyline) buildSkyline(solid);
+  const stalls = parts.market ? MARKET.map((s) => buildStall(s, { solid, quad, solids })) : [];
+  const counter = parts.fry ? buildFryHouse({ solid, quad, solids, blockers }) : null;
 
   return { stalls, counter };
 }
@@ -121,38 +129,44 @@ function buildStall(s, { solid, quad, solids }) {
 /** The fry house: a unit with a service window you can be served at, or work. */
 function buildFryHouse({ solid, quad, solids, blockers }) {
   const { x, z, w, d, h, counterZ } = FRY;
-  const front = z - d / 2;
+  const front = z + d / 2;                    // the side you queue at
 
   solid(w, h, d, '#E8DFD0', x, h / 2, z);
   // Fascia above the front, standing proud like the gym's does.
-  quad(w + 0.6, 2.0, fryHouseTexture(), x, h + 0.9, front - 0.02, Math.PI);
-  solid(w + 0.8, 2.1, 0.3, '#E8232B', x, h + 0.9, front + 0.12);
+  // The band goes on FIRST and the sign in front of it. Painted at front+0.02
+  // with the band at front-0.12, the band's own front face lands at front-0.12
+  // +0.15 = front+0.03 and wins the depth test by a hundredth of a unit: the
+  // fascia renders, is covered, and the shop has a blank red stripe where its
+  // name should be.
+  solid(w + 0.8, 2.1, 0.3, '#E8232B', x, h + 0.9, front - 0.12);
+  quad(w + 0.6, 2.0, fryHouseTexture(), x, h + 0.9, front + 0.06);
   // Roof trim so the box has an edge.
   solid(w + 0.5, 0.3, d + 0.5, '#C7382F', x, h + 0.1, z);
 
   // Service window: a dark recess with a bright counter under it.
-  solid(4.2, 1.5, 0.2, '#1A1A20', x, 2.0, front - 0.06);
-  solid(4.8, 0.22, 1.0, '#D8D2C4', x, 1.24, counterZ);
-  solid(4.8, 1.2, 0.5, '#C8C2B4', x, 0.6, counterZ + 0.2);
+  solid(4.6, 1.6, 0.2, '#1A1A20', x, 2.0, front + 0.06);
+  solid(5.2, 0.22, 1.0, '#D8D2C4', x, 1.24, counterZ);
+  solid(5.2, 1.2, 0.5, '#C8C2B4', x, 0.6, counterZ - 0.2);
   // Menu inside the window, and a fryer glow so the recess is not just black.
-  quad(1.9, 1.33, menuTexture(), x + 1.2, 2.1, front - 0.18, Math.PI);
-  solid(1.4, 0.5, 0.4, '#FFC64A', x - 1.3, 1.85, front - 0.4);
+  quad(1.9, 1.33, menuTexture(), x - 1.4, 2.1, front + 0.18);
+  solid(1.4, 0.5, 0.4, '#FFC64A', x + 1.5, 1.85, front + 0.4);
 
   // The building blocks; the counter you stand at does not, or you could never
   // reach it. A rectangle, not a circle — a circle at this width leaves gaps at
   // the corners you can walk through into the wall.
   blockers.push({
     x0: x - w / 2 - 0.3, x1: x + w / 2 + 0.3,
-    z0: front - 0.4, z1: z + d / 2 + 0.3,
+    z0: z - d / 2 - 0.3, z1: front + 0.4,
   });
-  solids.push({ x, z: counterZ + 0.4, r: 1.9 });
+  solids.push({ x, z: counterZ - 0.4, r: 2.1 });
 
   // A bin and a stack of trays outside, because a fast food place has them.
-  solid(0.7, 1.0, 0.7, '#3A3A40', x - 3.4, 0.5, front + 0.4);
-  solid(0.6, 0.5, 0.6, '#C7382F', x + 3.3, 0.25, front + 0.6);
+  solid(0.7, 1.0, 0.7, '#3A3A40', x - 3.9, 0.5, front - 0.4);
+  solid(0.6, 0.5, 0.6, '#C7382F', x + 3.8, 0.25, front - 0.6);
 
-  return { x, z: counterZ, workX: x, workZ: counterZ - 1.5 };
+  return { x, z: counterZ, workX: x, workZ: counterZ + 1.5 };
 }
+
 
 /**
  * The board on the gym's back wall.

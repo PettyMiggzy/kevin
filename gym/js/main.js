@@ -28,6 +28,7 @@ import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, 
 import { play, setMuted, isMuted } from './audio.js';
 import { buildCity, buildLeaderboard, paintLeaderboard, MARKET, FRY, QUEUE } from './city.js';
 import { buildCrib, CRIB } from './crib.js';
+import { buildMcKevins, LOT } from './mckevins.js';
 import { disposeWorld, captureInto } from './worlds.js';
 import { Shift, ITEMS, SHIFT_LENGTH } from './job.js';
 
@@ -310,7 +311,15 @@ function buildRoom(scene) {
  * and no arrival. Now you start on the concrete, read the sign, and walk in
  * through the roller door.
  */
-function buildExterior(scene) {
+/**
+ * @param unit  build the gym's own frontage — its doorway, facade, banner and
+ *              side walls. Off for any world that is not the gym: McKevin's was
+ *              showing a KEVIN'S GYM sign across the back of its own forecourt,
+ *              which is the sort of thing splitting the worlds was meant to
+ *              stop and did not, because only the ground and the sky are
+ *              actually shared.
+ */
+function buildExterior(scene, { unit = true, ground = true } = {}) {
   const flat = (color, map = null) => {
     const m = toon(color, map ? { map } : {});
     m.userData.outlineParameters = { visible: false };
@@ -345,6 +354,7 @@ function buildExterior(scene) {
   // Front wall, in two pieces with the doorway between them.
   const leftW = (ROOM.w / 2) + DOOR.x0;
   const rightW = (ROOM.w / 2) - DOOR.x1;
+  if (unit) {
   solid(leftW, EAVES, 0.5, '#C9C4BA', DOOR.x0 - leftW / 2, EAVES / 2, FZ);
   solid(rightW, EAVES, 0.5, '#C9C4BA', DOOR.x1 + rightW / 2, EAVES / 2, FZ);
   solid(DOOR.x1 - DOOR.x0, EAVES - LINTEL, 0.5, '#C9C4BA', 0, LINTEL + (EAVES - LINTEL) / 2, FZ);
@@ -361,30 +371,40 @@ function buildExterior(scene) {
 
   // Banner strung under it.
   solid(ROOM.w - 2.4, 1.0, 0.1, '#FFFFFF', 0, EAVES - 0.05, FZ + 0.34, bannerTexture());
+  }
 
   // Billboard, out on the grass past the kerb. It used to stand at x 7-10,
   // which is where the fry house now is; out here it is scenery you read
   // across the yard rather than something you walk into.
+  if (unit) {
   solid(0.34, 6.4, 0.34, '#5A5A62', -9.6, 3.2, 27.0);
   solid(0.34, 6.4, 0.34, '#5A5A62', -6.0, 3.2, 27.0);
   solid(5.2, 3.5, 0.24, '#FFFFFF', -7.8, 6.6, 27.0, billboardTexture());
+  }
 
   // Hand-painted board by the door.
-  solid(0.22, 2.4, 0.22, '#6B5B41', -6.2, 1.2, 10.2);
-  solid(3.0, 2.25, 0.16, '#FFFFFF', -6.2, 2.9, 10.2, boardTexture());
+  if (unit) {
+    solid(0.22, 2.4, 0.22, '#6B5B41', -6.2, 1.2, 10.2);
+    solid(3.0, 2.25, 0.16, '#FFFFFF', -6.2, 2.9, 10.2, boardTexture());
+  }
 
   // A kerb and a strip of grass, so the concrete has an edge instead of
-  // running to the horizon.
+  // running to the horizon. The gym's, not everyone's — McKevin's lays a car
+  // park over the same ground and two surfaces at one height tear.
+  if (ground) {
   solid(60, 0.28, 0.6, '#B4B0A8', 0, 0.14, YARD.z + 1.2);
   const grass = new THREE.Mesh(new THREE.PlaneGeometry(60, 26), flat('#4E8A3C'));
   grass.rotation.x = -Math.PI / 2;
   grass.position.set(0, 0.02, YARD.z + 14);
   scene.add(grass);
   blockers.push({ x0: -30, x1: 30, z0: YARD.z + 0.9, z1: YARD.z + 1.5 });
+  }
 
   // Side walls of the unit, seen from outside.
-  solid(0.5, EAVES, 3.0, '#BDB8AE', -ROOM.w / 2, EAVES / 2, FZ + 1.4);
-  solid(0.5, EAVES, 3.0, '#BDB8AE', ROOM.w / 2, EAVES / 2, FZ + 1.4);
+  if (unit) {
+    solid(0.5, EAVES, 3.0, '#BDB8AE', -ROOM.w / 2, EAVES / 2, FZ + 1.4);
+    solid(0.5, EAVES, 3.0, '#BDB8AE', ROOM.w / 2, EAVES / 2, FZ + 1.4);
+  }
 
   return { sky };
 }
@@ -1434,13 +1454,16 @@ async function buildGymWorld() {
  * end of the gym's forecourt any more — and so the gym does not pay for it.
  */
 function buildWorkWorld() {
-  buildExterior(scene);
+  // Sky and skyline only from the shared builders — the gym's forecourt, kerb
+  // and grass belong to the gym, and McKevin's lays its own tarmac.
+  buildExterior(scene, { unit: false, ground: false });
   buildCity(scene, { flat: flatMat, solids, blockers }, { skyline: true, market: false, fry: true });
+  buildMcKevins(scene, { flat: flatMat, solids, blockers });
   places.push({ kind: 'work', label: "McKevin's", note: 'clock in',
-    act: 'Work', x: FRY.x, z: FRY.counterZ - 1.4 });
+    act: 'Work', x: FRY.x, z: FRY.counterZ + 1.6 });
   places.push({ kind: 'door', to: 'gym', label: 'Back to the gym', note: 'up the road',
-    act: 'Go', x: FRY.x - 7.0, z: FRY.counterZ - 3.0 });
-  return { fp: false, spawn: { x: FRY.x, z: FRY.counterZ - 4.0 } };
+    act: 'Go', x: FRY.x - 9.5, z: FRY.counterZ + 8.0 });
+  return { fp: false, spawn: { x: FRY.x, z: FRY.counterZ + 5.0 } };
 }
 
 function buildCribWorld() {
@@ -2104,8 +2127,10 @@ function clockIn() {
   // and anything at eye level ends up behind it — aiming at the queue's feet
   // lifts their heads into the clear half.
   shiftCam = {
-    pos: new THREE.Vector3(FRY.x - 4.6, 3.5, FRY.counterZ - 7.4),
-    at: new THREE.Vector3(FRY.x - 0.3, 0.9, FRY.counterZ - 1.6),
+    // On the customer's side of the counter, which moved when the building
+    // was turned round to face the camera.
+    pos: new THREE.Vector3(FRY.x - 4.6, 3.5, FRY.counterZ + 7.4),
+    at: new THREE.Vector3(FRY.x - 0.3, 0.9, FRY.counterZ + 1.6),
   };
 
   shift = new Shift(performance.now());
