@@ -66,3 +66,24 @@ should not be reproducible from a timestamp, and unbiasing it costs nothing.
 - **Real stakes.** Chips are a number in a page. Nothing is on chain and
   nothing should be until there is a server that holds the deck, because a
   client that knows every card is a client that can read them.
+
+## The seats
+
+Each character is a row in `js/characters.js` — an id, a name, a play style, and
+a slug that resolves to two files: a cut-out still for the seat at rest and the
+rigged loop for whoever is acting. Nothing in the game reaches past that
+registry, so a minted character is a new row, not a new code path.
+
+**Art comes in pre-cut.** This used to download eight 1024px stills on flat
+brand yellow and flood-fill the backdrop off each one in JavaScript before the
+table could be dealt — about eight million pixels of fill on the main thread,
+for 3.9MB of PNG. `tools/build-static-stickers.mjs` does that same cut ahead of
+time now and writes 512px WebP with real alpha, so the roster is 267KB and
+arrives ready to draw. Same fill, one place instead of two.
+
+**One seat moves at a time.** Every character has a rigged animation as well as
+a still, but running all six would have a phone decoding six video streams to
+fill six 78-pixel circles. Exactly one plays: whoever the table is waiting on.
+That is also the read the player wants — the seat that is moving is the seat it
+is on. If the clip will not start (codec, data saver, a policy that ignores
+muted autoplay) the still stays put rather than leaving a hole in the seat.

@@ -78,9 +78,18 @@ THE BURN
 WHERE TO GO
 - Site: https://iamkevin.lol
 - Game: https://iamkevin.lol/gym  (also /game and /play)
+- Card room: https://iamkevin.lol/poker
 - Telegram: ${c.links.telegram}
 - X: ${c.links.x}
 - Chart: ${fmt(c.links.chart, 'no chart yet — nothing is trading')}
+
+THE CARD ROOM (a free browser game, built by the team)
+- Texas hold'em at https://iamkevin.lol/poker. Six seats, works on a phone, free.
+- The other five seats are Kevin characters with real playing styles — a rock
+  folds weak hands, a caller pays you off, a shark bets hard, a maniac raises
+  with anything.
+- The chips are a score in the player's own browser. They are NOT the token and
+  they touch no wallet and no chain.
 
 THE GYM (a free browser game, built by the team)
 - Walk into Kevin's Gym at https://iamkevin.lol/gym. Works on a phone. Free.

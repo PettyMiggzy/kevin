@@ -48,6 +48,37 @@ function cardEl(code, { small = false, faceDown = false, dim = false } = {}) {
   return el;
 }
 
+/**
+ * Bring the acting seat to life, and only the acting seat.
+ *
+ * Every character has a rigged loop as well as a still. Running all eight at
+ * once would have a phone decoding eight video streams to draw eight
+ * 78-pixel circles, so exactly one plays: whoever the table is waiting on.
+ * That is also the read the player wants — the seat that is moving is the seat
+ * it is on.
+ */
+function setLive(el, character, live) {
+  const pic = el.querySelector('.pic');
+  const has = pic.querySelector('video');
+  if (live === !!has) return;                 // already in the right state
+  if (!live) { has.remove(); pic.classList.remove('live'); return; }
+  if (!character?.anim) return;
+  const v = document.createElement('video');
+  v.muted = true;                             // autoplay is refused with sound
+  v.loop = true;
+  v.playsInline = true;                       // or iOS takes it fullscreen
+  v.preload = 'auto';
+  v.src = character.anim;
+  // If the clip will not play — codec, data saver, a policy that ignores
+  // muted autoplay — drop back to the still rather than leaving a black hole
+  // in the seat.
+  v.addEventListener('error', () => { v.remove(); pic.classList.remove('live'); });
+  const started = v.play();
+  if (started?.catch) started.catch(() => { v.remove(); pic.classList.remove('live'); });
+  pic.classList.add('live');
+  pic.append(v);
+}
+
 let seatEls = [];
 function buildSeats() {
   for (const el of seatEls) el.remove();
@@ -80,8 +111,10 @@ function render() {
 
   game.seats.forEach((s, i) => {
     const el = seatEls[i];
+    const acting = game.turn === i && !s.folded && !s.out && game.street !== 'showdown';
     el.classList.toggle('turn', game.turn === i);
     el.classList.toggle('folded', s.folded || s.out);
+    setLive(el, s.character, acting);
     el.querySelector('.name').textContent = s.name + (s.human ? '' : ` · ${s.character?.style ?? ''}`);
     el.querySelector('.chips').textContent = s.out ? 'BUSTED' : `${s.chips.toLocaleString()}`;
     const bet = el.querySelector('.bet');

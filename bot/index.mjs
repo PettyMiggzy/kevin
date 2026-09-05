@@ -199,7 +199,7 @@ async function main() {
     console.log(`system prompt: ${system.length} chars (~${Math.round(system.length / 4)} tokens)`);
     console.log(`gaps Kevin must admit: ${gaps.join(', ')}`);
     console.log(`contract in facts: ${config.contract ?? 'null (bot will refuse to give one)'}`);
-    for (const c of ['start', 'help', 'ca', 'links', 'pools', 'burn', 'gym']) {
+    for (const c of ['start', 'help', 'ca', 'links', 'pools', 'burn', 'gym', 'cards']) {
       console.log(`\n--- /${c} ---\n${commandReply(c, config)}`);
     }
     return;

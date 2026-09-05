@@ -6,14 +6,16 @@
 // adding a row here (or fetching rows from a contract) rather than touching
 // the table, the dealer or the UI.
 //
-// The art is the sticker stills, cut out at load. They are Todd's Kevin and
-// they are already in the repo — no new assets, and every seat is on-model.
+// The art is the Todd-drawn sticker set, in both states: a cut-out still for
+// the seat at rest, and the rigged animation for whoever is acting. Both are
+// already in the repo — no new assets, and every seat is on-model.
 
 /**
  * @typedef {Object} Character
  * @property {string} id     stable key; an NFT would use its token id
  * @property {string} name   shown on the seat
- * @property {string} art    path to a transparent-able still
+ * @property {string} art    cut-out still, shown at rest
+ * @property {string} anim   rigged loop, shown while this seat is acting
  * @property {string} style  how the bot plays: 'rock' | 'caller' | 'shark' | 'maniac'
  * @property {string} [owner] wallet, once these are minted
  */
@@ -33,15 +35,19 @@ export const STYLES = {
 };
 
 export const ROSTER = [
-  { id: 'kevin',     name: 'Kevin',      art: '../assets/stickers/stills/kek-power.png',  style: 'maniac' },
-  { id: 'kevin-gm',  name: 'Sleepy Kev', art: '../assets/stickers/stills/kek-gm.png',     style: 'rock' },
-  { id: 'kevin-flex',name: 'Big Kev',    art: '../assets/stickers/stills/gym-flex.png',   style: 'shark' },
-  { id: 'kevin-hodl',name: 'HODL Kev',   art: '../assets/stickers/stills/kek-hodl.png',   style: 'rock' },
-  { id: 'kevin-snack',name:'Snack Kev',  art: '../assets/stickers/stills/kek-snack.png',  style: 'caller' },
-  { id: 'kevin-suit',name: 'Suit Kev',   art: '../assets/stickers/stills/kevin-great.png',style: 'shark' },
-  { id: 'kevin-spin',name: 'Spin Kev',   art: '../assets/stickers/stills/kek-spin.png',   style: 'caller' },
-  { id: 'kevin-run', name: 'Cardio Kev', art: '../assets/stickers/stills/gym-run.png',    style: 'maniac' },
-];
+  { id: 'kevin',      name: 'Kevin',      slug: 'kek-power',   style: 'maniac' },
+  { id: 'kevin-gm',   name: 'Sleepy Kev', slug: 'kek-gm',      style: 'rock' },
+  { id: 'kevin-flex', name: 'Big Kev',    slug: 'gym-flex',    style: 'shark' },
+  { id: 'kevin-hodl', name: 'HODL Kev',   slug: 'kek-hodl',    style: 'rock' },
+  { id: 'kevin-snack',name: 'Snack Kev',  slug: 'kek-snack',   style: 'caller' },
+  { id: 'kevin-suit', name: 'Suit Kev',   slug: 'kevin-great', style: 'shark' },
+  { id: 'kevin-spin', name: 'Spin Kev',   slug: 'kek-spin',    style: 'caller' },
+  { id: 'kevin-run',  name: 'Cardio Kev', slug: 'gym-run',     style: 'maniac' },
+].map((c) => ({
+  ...c,
+  art: `../assets/stickers/static/${c.slug}.webp`,
+  anim: `../assets/stickers/animated/${c.slug}.webm`,
+}));
 
 export const byId = (id) => ROSTER.find((c) => c.id === id) || ROSTER[0];
 
@@ -58,50 +64,23 @@ export async function ownedBy(_wallet) {
 }
 
 /**
- * Cut a character's art off its flat backdrop, once, and cache it.
+ * The seat portrait.
  *
- * The stills sit on flat brand yellow so the sticker pipeline can key them.
- * At the table they need to be transparent, and it has to be a fill from the
- * frame edge rather than a colour key — his eyes are white and the KEK coin
- * carries greens that a key loose enough to clear the yellow would eat.
+ * This used to download eight 1024px stills on their flat brand yellow and
+ * flood-fill the backdrop off each one in JavaScript at load — about eight
+ * million pixels of fill on the main thread before the table could be dealt,
+ * for 3.9MB of PNG. tools/build-static-stickers.mjs now does that same cut
+ * ahead of time and writes 512px WebP with real alpha, so the whole roster is
+ * 267KB and arrives ready to draw. The fill lives in one place instead of two.
  */
 const cache = new Map();
 export function portrait(character) {
   if (cache.has(character.id)) return cache.get(character.id);
   const p = new Promise((resolve) => {
     const img = new Image();
-    img.onload = () => {
-      const w = img.naturalWidth;
-      const h = img.naturalHeight;
-      const c = document.createElement('canvas');
-      c.width = w;
-      c.height = h;
-      const x = c.getContext('2d', { willReadFrequently: true });
-      x.drawImage(img, 0, 0);
-      const d = x.getImageData(0, 0, w, h);
-      const px = d.data;
-      const bg = [px[4 * (4 * w + 4)], px[4 * (4 * w + 4) + 1], px[4 * (4 * w + 4) + 2]];
-      const near = (k) =>
-        Math.abs(px[k * 4] - bg[0]) <= 30 && Math.abs(px[k * 4 + 1] - bg[1]) <= 30 &&
-        Math.abs(px[k * 4 + 2] - bg[2]) <= 30;
-      const gone = new Uint8Array(w * h);
-      const st = [];
-      const seed = (k) => { if (!gone[k] && near(k)) { gone[k] = 1; st.push(k); } };
-      for (let i = 0; i < w; i++) { seed(i); seed((h - 1) * w + i); }
-      for (let j = 0; j < h; j++) { seed(j * w); seed(j * w + w - 1); }
-      while (st.length) {
-        const k = st.pop();
-        const cx = k % w;
-        const cy = (k / w) | 0;
-        if (cx > 0) seed(k - 1);
-        if (cx < w - 1) seed(k + 1);
-        if (cy > 0) seed(k - w);
-        if (cy < h - 1) seed(k + w);
-      }
-      for (let k = 0; k < w * h; k++) if (gone[k]) px[k * 4 + 3] = 0;
-      x.putImageData(d, 0, 0);
-      resolve(c);
-    };
+    img.decoding = 'async';
+    img.alt = character.name;
+    img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
     img.src = character.art;
   });

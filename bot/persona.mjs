@@ -193,6 +193,7 @@ export function commandReply(name, config) {
         '/pools — what is in the pools',
         '/burn — the burn',
         '/gym — Kevin gym',
+        '/cards — Kevin card room',
         '/top — top of the gym',
         '/shifts — top of McKevin\u2019s',
         '/link — put your gym score on the board',
@@ -211,6 +212,7 @@ export function commandReply(name, config) {
       return [
         'Site: https://iamkevin.lol',
         'Gym: https://iamkevin.lol/gym',
+        'Cards: https://iamkevin.lol/poker',
         `Auction: ${config.links.launchpad}`,
         `Telegram: ${config.links.telegram}`,
         `X: ${config.links.x}`,
@@ -236,6 +238,14 @@ export function commandReply(name, config) {
         'It is free. It work on a phone.',
         'Five reps to a set. Miss a day and it come off.',
         'The $KEVIN in the gym is a score. It is not the token.',
+      ].join('\n');
+    case 'cards':
+    case 'poker':
+      return [
+        'Kevin have a card room. https://iamkevin.lol/poker',
+        'Texas hold em. Kevin and Kevin friend. Six seat.',
+        'It is free. It work on a phone.',
+        'The chip is a score, same as the gym. It is not the token.',
       ].join('\n');
     default:
       return null;
