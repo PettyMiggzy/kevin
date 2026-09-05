@@ -20,16 +20,26 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SHEET = join(ROOT, 'assets/refs/14-todd-walkcycles.jpg');
-const OUT = join(ROOT, 'assets/sprites');
-const ROWS = ['front', 'back', 'left', 'right', 'diagonal'];
+// One sheet was one build. Muscle needs three of them — lean, fit and swole,
+// the same nine frames in the same five directions at three body sizes — so the
+// sheet and the output directory are arguments now rather than constants.
+//
+//   node tools/slice-sprites.mjs
+//   node tools/slice-sprites.mjs --sheet assets/refs/17-walk-swole.png --out assets/sprites/swole
+const args = process.argv.slice(2);
+const flag = (n, d) => { const i = args.indexOf(`--${n}`); return i === -1 ? d : args[i + 1]; };
+const SHEET = join(ROOT, flag('sheet', 'assets/refs/14-todd-walkcycles.jpg'));
+const OUT = join(ROOT, flag('out', 'assets/sprites'));
+const ROWS = flag('rows', 'front,back,left,right,diagonal').split(',');
+// A PNG sheet is not a JPEG sheet, and the data URI has to say which.
+const MIME = SHEET.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
 
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
   args: ['--force-color-profile=srgb', '--no-sandbox'],
 });
 const page = await browser.newPage({ viewport: { width: 64, height: 64 } });
-const src = 'data:image/jpeg;base64,' + (await readFile(SHEET)).toString('base64');
+const src = `data:${MIME};base64,` + (await readFile(SHEET)).toString('base64');
 
 const result = await page.evaluate(async ([dataUri, rowNames]) => {
   const img = new Image();
