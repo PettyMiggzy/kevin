@@ -28,7 +28,7 @@ import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, 
 import { play, setMuted, isMuted } from './audio.js';
 import { buildCity, buildLeaderboard, paintLeaderboard, MARKET, FRY, QUEUE } from './city.js';
 import { buildCrib, CRIB } from './crib.js';
-import { buildMcKevins, LOT } from './mckevins.js';
+import { buildMcKevins, buildShop, LOT } from './mckevins.js';
 import { disposeWorld, captureInto } from './worlds.js';
 import { Shift, ITEMS, SHIFT_LENGTH } from './job.js';
 
@@ -1334,6 +1334,55 @@ function buildFittings(scene) {
   );
 }
 
+/**
+ * Fetch props by name into the shared cache.
+ *
+ * Four lanes, not twenty-two at once. A phone opening twenty-two connections is
+ * slower than one opening four, and decoding that many meshopt buffers
+ * concurrently is what pushes a mobile tab over its memory ceiling — which from
+ * the outside looks exactly like the button doing nothing.
+ *
+ * The cache outlives the world on purpose: a prop fetched for the gym is still
+ * decoded when you walk back into it. It is the CLONES that get disposed, which
+ * is why worlds.js leaves cloned geometry alone.
+ */
+async function loadProps(names) {
+  const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  const queue = names.filter((n) => !props.has(n));
+  const total = queue.length;
+  let done = 0;
+  const lane = async () => {
+    for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
+      try {
+        const g = INLINE?.props?.[name]
+          ? await loader.parseAsync(INLINE.props[name], '')
+          : await withTimeout(loader.loadAsync(`./assets/props/${name}.glb`), PROP_TIMEOUT, name);
+        props.set(name, g.scene);
+      } catch {
+        /* missing, slow or broken — the room opens without it rather than not at all */
+      }
+      booting(`Opening… ${++done}/${total}`);
+    }
+  };
+  await Promise.all(Array.from({ length: PROP_LANES }, lane));
+}
+
+/** Put one in the world. Shared by every world that has props. */
+function spawnProp(name, opts, tag) {
+  const src = props.get(name);
+  if (!src) return null;
+  const obj = normalise(src.clone(true));
+  place(obj, opts);
+  if (opts.y) obj.position.y += opts.y;
+  scene.add(obj);
+  if (opts.solid !== false) solids.push({ x: opts.x, z: opts.z, r: opts.width * 0.42 });
+  if (tag) obj.userData.station = tag;
+  // The pose has to sit on the actual model, not on a guess about it.
+  opts.top = new THREE.Box3().setFromObject(obj).max.y;
+  return obj;
+}
+
 // --- worlds -----------------------------------------------------------------
 // Each world owns its scenery and nothing else's. Entering builds it; leaving
 // disposes it, so detail added to one room does not cost anything in another.
@@ -1375,48 +1424,10 @@ async function buildGymWorld() {
       npcs.push(npc);
     }
   }
-  const loader = new GLTFLoader();
-  loader.setMeshoptDecoder(MeshoptDecoder);
+  await loadProps([...new Set([...STATIONS.map((s) => s.prop), ...SCENERY.map((s) => s[0])])]);
 
-  const need = [...new Set([...STATIONS.map((s) => s.prop), ...SCENERY.map((s) => s[0])])];
-
-  // Four lanes, not twenty-two at once. A phone opening twenty-two connections
-  // is slower than one opening four, and decoding that many meshopt buffers
-  // concurrently is what pushes a mobile tab over its memory ceiling — which
-  // from the outside looks exactly like the button doing nothing.
-  const queue = need.slice();
-  let done = 0;
-  const lane = async () => {
-    for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
-      try {
-        const g = INLINE?.props?.[name]
-          ? await loader.parseAsync(INLINE.props[name], '')
-          : await withTimeout(loader.loadAsync(`./assets/props/${name}.glb`), PROP_TIMEOUT, name);
-        props.set(name, g.scene);
-      } catch {
-        /* missing, slow or broken — the room opens without it rather than not at all */
-      }
-      booting(`Opening… ${++done}/${need.length}`);
-    }
-  };
-  await Promise.all(Array.from({ length: PROP_LANES }, lane));
-
-  const spawn = (name, opts, tag) => {
-    const src = props.get(name);
-    if (!src) return null;
-    const obj = normalise(src.clone(true));
-    place(obj, opts);
-    if (opts.y) obj.position.y += opts.y;
-    scene.add(obj);
-    if (opts.solid !== false) solids.push({ x: opts.x, z: opts.z, r: opts.width * 0.42 });
-    if (tag) obj.userData.station = tag;
-    // The pose has to sit on the actual model, not on a guess about it.
-    opts.top = new THREE.Box3().setFromObject(obj).max.y;
-    return obj;
-  };
-
-  for (const st of STATIONS) st.object = spawn(st.prop, st, st.id);
-  for (const [name, opts] of SCENERY) spawn(name, opts);
+  for (const st of STATIONS) st.object = spawnProp(st.prop, st, st.id);
+  for (const [name, opts] of SCENERY) spawnProp(name, opts);
   clearSpots();
   // Now the spots are real, put the crowd on them. Walking in from the door
   // means the first half minute of every visit is an empty gym.
@@ -1453,17 +1464,19 @@ async function buildGymWorld() {
  * McKevin's. Its own world, so the fry house does not have to be a box at the
  * end of the gym's forecourt any more — and so the gym does not pay for it.
  */
-function buildWorkWorld() {
+async function buildWorkWorld() {
   // Sky and skyline only from the shared builders — the gym's forecourt, kerb
   // and grass belong to the gym, and McKevin's lays its own tarmac.
   buildExterior(scene, { unit: false, ground: false });
-  buildCity(scene, { flat: flatMat, solids, blockers }, { skyline: true, market: false, fry: true });
+  // The old box shop is retired; buildShop is the real one.
+  buildCity(scene, { flat: flatMat, solids, blockers }, { skyline: true, market: false, fry: false });
+  buildShop(scene, { flat: flatMat, solids, blockers });
   buildMcKevins(scene, { flat: flatMat, solids, blockers });
   places.push({ kind: 'work', label: "McKevin's", note: 'clock in',
-    act: 'Work', x: FRY.x, z: FRY.counterZ + 1.6 });
+    act: 'Work', x: -2.5, z: FRY.counterZ - 1.5 });
   places.push({ kind: 'door', to: 'gym', label: 'Back to the gym', note: 'up the road',
-    act: 'Go', x: FRY.x - 9.5, z: FRY.counterZ + 8.0 });
-  return { fp: false, spawn: { x: FRY.x, z: FRY.counterZ + 5.0 } };
+    act: 'Go', x: 5.8, z: 12.0 });
+  return { fp: false, spawn: { x: 5.8, z: 10.5 } };
 }
 
 function buildCribWorld() {
@@ -2116,7 +2129,7 @@ function clockIn() {
 
   parked = kevin.group.position.clone();
   // Behind the counter, facing the queue.
-  kevin.group.position.set(FRY.x, 0, FRY.counterZ + 1.0);
+  kevin.group.position.set(-2.5, 0, FRY.counterZ - 1.5);
   kevin.group.rotation.y = Math.PI;
 
   // Three-quarters from the front left: the queue leads away to the window, so
@@ -2129,8 +2142,9 @@ function clockIn() {
   shiftCam = {
     // On the customer's side of the counter, which moved when the building
     // was turned round to face the camera.
-    pos: new THREE.Vector3(FRY.x - 4.6, 3.5, FRY.counterZ + 7.4),
-    at: new THREE.Vector3(FRY.x - 0.3, 0.9, FRY.counterZ + 1.6),
+    // Over the player's shoulder from behind the counter, looking at the queue.
+    pos: new THREE.Vector3(-2.5, 3.4, FRY.counterZ - 6.2),
+    at: new THREE.Vector3(-2.2, 1.1, FRY.counterZ + 1.4),
   };
 
   shift = new Shift(performance.now());

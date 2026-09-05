@@ -32,13 +32,20 @@ export const MARKET = [
 // McKevin's was its own world: the chase camera sits behind the player, so it
 // was looking at the back of a beige box. The building is at low z now with its
 // front at high z, exactly like the gym, so you walk up to it and see a shop.
-export const FRY = { x: 0, z: -4.0, w: 9.6, d: 5.6, h: 3.8, counterZ: 0.6 };
+// A restaurant, not a serving hatch.
+//
+// It was a 9.6 x 5.6 box with a window in it, which was the right size for a
+// prop on the gym's street and far too small for what it is now: somewhere
+// people work a shift, behind a counter, serving a queue, with a dining room
+// they walk through to get there. 24 x 16 is a real one.
+export const FRY = { x: 0, z: -1.0, w: 24, d: 16, h: 4.2, counterZ: -0.5 };
 
 /** Where customers stand while they wait. First in the list is being served. */
 export const QUEUE = [
-  // A line receding from the window rather than a huddle, so the camera can see
-  // past whoever is being served to whoever is next.
-  { x: 0.1, z: 2.2 }, { x: -1.1, z: 3.3 }, { x: 0.4, z: 4.3 }, { x: -0.8, z: 5.4 },
+  // Inside now, on the customer's side of the counter. A line receding from it
+  // rather than a huddle, so the camera can see past whoever is being served to
+  // whoever is next.
+  { x: -2.0, z: 1.4 }, { x: -3.2, z: 2.6 }, { x: -1.4, z: 3.6 }, { x: -3.0, z: 4.8 },
 ];
 
 /**
