@@ -133,20 +133,6 @@ window.KEVIN = {
   //   assets/stickers/animated/<slug>.webm transparent VP9, Telegram-ready
   //   assets/stickers/animated/<slug>.gif  same loop on the yellow
   animated: [
-    // Todd's poses, head animating against the body.
-    { slug: 'pose-idle', name: 'Idle' },
-    { slug: 'pose-cheer', name: 'Cheer' },
-    { slug: 'pose-shades-point', name: 'Shades' },
-    { slug: 'pose-thinking', name: 'Thinking' },
-    { slug: 'pose-kick', name: 'Kick' },
-    { slug: 'pose-lying-think', name: 'Chilling' },
-    { slug: 'pose-phone', name: 'On The Phone' },
-    { slug: 'pose-laughing', name: 'Laughing' },
-    { slug: 'pose-finger', name: 'The Finger' },
-    { slug: 'pose-smoking', name: 'Smoking' },
-    { slug: 'pose-lying-front', name: 'Face Down' },
-    { slug: 'pose-running', name: 'Running' },
-    { slug: 'pose-money', name: 'Money' },
     // Real frame animation, cut from Todd's hand-drawn walk cycles.
     { slug: 'walk-front', name: 'Walk Front' },
     { slug: 'walk-back', name: 'Walk Back' },
