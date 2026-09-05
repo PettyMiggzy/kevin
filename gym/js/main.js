@@ -21,6 +21,7 @@ import { load, save, settle, workout, projectedLoss, payShift, leaderboard,
   DECAY_PER_DAY, DAILY_GOAL } from './save.js';
 import { buildCrewBody, applyCrewMuscle } from './voxel.js';
 import { buildKitKevin } from './kevin.js';
+import { buildSpriteKevin } from './sprite.js';
 import { Set as RepSet, REPS_PER_SET, rankOf } from './reps.js';
 import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, mirrorPanel, stripLight,
   skyTexture, concreteTexture, facadeTexture, bannerTexture, billboardTexture, boardTexture } from './gear.js';
@@ -581,6 +582,15 @@ function buildKevin() {
 
 /** One number, 0..1, and the whole body reads as bigger. */
 function applyMuscle(kev, m) {
+  if (kev.sprite) {
+    // A drawing has no bicep to inflate. Scale the whole of him a little
+    // instead — Todd would have to draw a bigger Kevin for anything better,
+    // and that is on the list rather than in the repo.
+    const t = clamp(m, 0, 1);
+    kev.mesh.scale.setScalar(1 + t * 0.16);
+    kev.mesh.position.y = (1.85 / 2) * (1 + t * 0.16);
+    return;
+  }
   if (kev.unit) return applyCrewMuscle(kev, m);      // voxel body
   const t = clamp(m, 0, 1);
   kev.torso.scale.set(1 + t * 0.55, 1 + t * 0.10, 1 + t * 0.45);
@@ -625,7 +635,13 @@ async function loadCrew() {
  * They deliberately do not match. Kevin is the character; the crew are the
  * collection.
  */
+/** Loaded once if the sprite look is on; shared by the player and the crowd. */
+let walkAtlas = null;
+
 function makePlayer(gridIndex = 0) {
+  // Todd's own drawings, billboarded. Kept behind a flag until it has been
+  // looked at next to the voxel body it replaces.
+  if (walkAtlas) return buildSpriteKevin(walkAtlas);
   if (!gridIndex) return buildKitKevin({ toon });
   if (!CREW?.crew?.length) return buildKevin();
   const mat = toon('#FFFFFF', { vertexColors: true });
@@ -1082,6 +1098,10 @@ async function init() {
   fill.position.set(-12, 6, -10);
   scene.add(fill);
 
+  if (location.search.includes('sprite')) {
+    walkAtlas = await new THREE.TextureLoader().loadAsync('../assets/sprites/walk-atlas.png')
+      .catch(() => null);
+  }
   await loadCrew();
   // The player is built once and moves between worlds; only the scenery is torn
   // down and rebuilt.
@@ -1771,6 +1791,7 @@ function move(dt, now) {
     }
 
     kevin.group.rotation.y = firstPerson ? look.yaw : Math.atan2(nx, nz);
+    if (kevin.sprite) kevin.facing = Math.atan2(nx, nz);
     const walk = Math.sin(now / 110) * 0.6;
     kevin.legs[0].rotation.x = walk;
     kevin.legs[1].rotation.x = -walk;
@@ -1806,6 +1827,14 @@ function move(dt, now) {
     } else {
       p.classList.remove('on');
     }
+  }
+
+  // The sheet runs off whether he moved this frame, and needs the camera's
+  // heading to know which way he is facing relative to the viewer.
+  if (kevin.sprite) {
+    kevin.step(dt, len > 0.02, Math.atan2(
+      camera.position.x - kevin.group.position.x,
+      camera.position.z - kevin.group.position.z));
   }
 
   if (input.act && nearest) enter(nearest);

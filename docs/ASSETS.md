@@ -8,6 +8,22 @@ material — twelve models from twelve prompts read as an asset flip without it.
 A kit fixes that at the source, because a kit is modelled as a set. This is what
 to buy and what to do with it.
 
+## Verdict so far
+
+**Sketchfab, "Game Ready Gym Environment Asset Pack" by Oxygen3D.** Free,
+CC-BY, 19.8k triangles for the whole pack, eighteen categories, and it
+downloads as **GLB** — no Unity, no `.unitypackage` to crack open, no Blender
+export step. It goes straight into `tools/ingest-props.mjs`. CC-BY means the
+credit has to appear somewhere in the product; a line in the gym's about text
+covers it.
+
+The two Unity Asset Store packs that were also considered: the Poly Ronin gym
+kit is free and only 413KB, which is a good sign, but it ships as a
+`.unitypackage` and needs Unity to extract and Blender to export. The Furnished
+Cabin is free and **192MB** — the entire prop set here is 800KB — and it is a
+realistic log cabin when the crib is a small city flat. Wrong on size and wrong
+on vibe.
+
 ## What to buy
 
 **A low-poly gym or fitness prop kit, in glTF/GLB, low-poly and untextured or
