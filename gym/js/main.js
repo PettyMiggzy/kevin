@@ -22,6 +22,7 @@ import { load, save, settle, workout, projectedLoss, payShift, leaderboard,
 import { buildCrewBody, applyCrewMuscle } from './voxel.js';
 import { buildKitKevin } from './kevin.js';
 import { buildSpriteKevin } from './sprite.js';
+import { skinTexture, SKINS, DEFAULT_SKIN } from './skins.js';
 import { Set as RepSet, REPS_PER_SET, rankOf } from './reps.js';
 import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, mirrorPanel, stripLight,
   skyTexture, concreteTexture, facadeTexture, bannerTexture, billboardTexture, boardTexture } from './gear.js';
@@ -690,11 +691,27 @@ async function loadCrew() {
  */
 /** Loaded once if the sprite look is on; shared by the player and the crowd. */
 let walkAtlas = null;
+/**
+ * The unrecoloured atlas and Todd's measured palette, kept so a skin change is
+ * a canvas redraw rather than another download. The <img> is the source every
+ * colourway is derived from; recolouring an already-recoloured atlas would
+ * compound, and Gold over Void is not a colour anybody chose.
+ */
+let atlasImage = null;
+let atlasPalette = null;
+
+/** The atlas in whatever colourway is worn now, or the plain one if unskinned. */
+function skinnedAtlas() {
+  if (!atlasImage || !atlasPalette) return walkAtlas;
+  const rgb = atlasPalette.colourways?.[state.skin] ?? atlasPalette.colourways?.[DEFAULT_SKIN];
+  if (!rgb) return walkAtlas;
+  return skinTexture(atlasImage, atlasPalette.palette, rgb);
+}
 
 function makePlayer(gridIndex = 0) {
   // Todd's own drawings, billboarded. Kept behind a flag until it has been
   // looked at next to the voxel body it replaces.
-  if (walkAtlas) return buildSpriteKevin(walkAtlas);
+  if (walkAtlas) return buildSpriteKevin(skinnedAtlas());
   if (!gridIndex) return buildKitKevin({ toon });
   if (!CREW?.crew?.length) return buildKevin();
   const mat = toon('#FFFFFF', { vertexColors: true });
@@ -1168,6 +1185,15 @@ async function init() {
   if (location.search.includes('sprite')) {
     walkAtlas = await new THREE.TextureLoader().loadAsync('../assets/sprites/walk-atlas.png')
       .catch(() => null);
+    // The same bytes again as an <img>, which is what a canvas can draw and a
+    // THREE.Texture's .image already is — no second request, it is cached.
+    atlasImage = walkAtlas?.image ?? null;
+    // parts.json rather than a copy of the palette here: sprite-parts.mjs
+    // measures it off the art, and a second hardcoded copy is a second thing to
+    // be wrong when Todd's red moves.
+    atlasPalette = await fetch('../assets/sprites/parts/parts.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
   }
   await loadCrew();
   // The player is built once and moves between worlds; only the scenery is torn
@@ -1206,6 +1232,7 @@ async function init() {
     window.__where = () => ({ x: kevin.group.position.x, z: kevin.group.position.z, near: nearest?.kind ?? null });
     window.__warp = (x, z) => kevin.group.position.set(x, 0, z);
     window.__scene = scene;
+    window.__state = state;          // ?peek only: lets a test buy something
     window.__customers = customers;
     window.__npcs = npcs;
   }
@@ -2384,12 +2411,65 @@ const SHOP = [
   },
 ];
 
+/**
+ * Put the skin on without rebuilding the world.
+ *
+ * The player is built once and survives every world change, so a skin swap has
+ * to reach into the body that is already standing there. Only the map changes —
+ * same geometry, same material, same frame — which is why this is a texture
+ * assignment rather than a respawn: respawning drops the barbell parented to
+ * his rig and leaves it floating where he stood.
+ */
+function wearSkin(name) {
+  state.skin = name;
+  save(state);
+  const tex = skinnedAtlas();
+  if (!tex || !kevin?.sprite || !kevin.mesh?.material) return;
+  const old = kevin.mesh.material.map;
+  // sprite.js clones and sets repeat/offset for the atlas cell it shows, so
+  // carry those over or he snaps back to frame 0 facing the wrong way.
+  tex.wrapS = old.wrapS; tex.wrapT = old.wrapT;
+  tex.magFilter = old.magFilter; tex.minFilter = old.minFilter;
+  tex.generateMipmaps = old.generateMipmaps;
+  tex.repeat.copy(old.repeat);
+  tex.offset.copy(old.offset);
+  tex.needsUpdate = true;
+  kevin.mesh.material.map = tex;
+  kevin.mesh.material.needsUpdate = true;
+  old.dispose();
+}
+
 function renderShop() {
-  $('#shopItems').innerHTML = SHOP.map((it) => {
+  const consumables = SHOP.map((it) => {
     const ok = state.coin >= it.cost && (!it.can || it.can(state));
     return `<div class="item"><div><h3>${it.name}</h3><small>${it.blurb}</small></div>
       <button class="buy" data-id="${it.id}"${ok ? '' : ' disabled'}>${it.cost} $KEVIN</button></div>`;
   }).join('');
+
+  // Skins only exist on the sprite body — the voxel one has no palette to swap
+  // — so the shelf is not shown at all rather than shown full of things that
+  // would silently do nothing.
+  if (!atlasPalette) { $('#shopItems').innerHTML = consumables; return; }
+
+  const owned = new Set(state.skins ?? [DEFAULT_SKIN]);
+  const rows = [{ name: DEFAULT_SKIN, cost: 0, blurb: 'What you already are.' }, ...SKINS]
+    .map((sk) => {
+      const have = owned.has(sk.name);
+      const worn = state.skin === sk.name;
+      const rgb = atlasPalette.colourways?.[sk.name] ?? [216, 28, 36];
+      const swatch = `<i class="swatch" style="background:rgb(${rgb.join(',')})"></i>`;
+      const btn = worn
+        ? '<button class="buy" disabled>Worn</button>'
+        : have
+          ? `<button class="buy wear" data-skin="${sk.name}">Wear</button>`
+          : `<button class="buy skin" data-skin="${sk.name}"${state.coin >= sk.cost ? '' : ' disabled'}>${sk.cost} $KEVIN</button>`;
+      return `<div class="item"><div><h3>${swatch}${sk.name}</h3><small>${sk.blurb}</small></div>${btn}</div>`;
+    }).join('');
+
+  $('#shopItems').innerHTML =
+    `${consumables}<h3 class="shelf">Skins</h3>
+     <p class="note">Yours for good once bought. Changes how Kevin looks to you — no wallet, no chain.</p>
+     ${rows}`;
 }
 
 $('#muteBtn').onclick = () => {
@@ -2438,7 +2518,26 @@ $('#tray').onclick = (e) => {
 };
 $('#clockOff').onclick = () => { play('ui'); finishShift(); };
 $('#shopItems').onclick = (e) => {
-  const id = e.target.closest('.buy')?.dataset.id;
+  const btn = e.target.closest('.buy');
+  const skin = btn?.dataset.skin;
+  if (skin) {
+    const owned = state.skins ?? (state.skins = [DEFAULT_SKIN]);
+    if (!owned.includes(skin)) {
+      const sk = SKINS.find((s) => s.name === skin);
+      if (!sk || state.coin < sk.cost) { play('deny'); return; }
+      state.coin -= sk.cost;
+      owned.push(skin);
+      play('buy');
+      toast(`${skin}.<br><small>Yours. Wearing it now.</small>`, 2000);
+    } else {
+      play('ui');
+    }
+    wearSkin(skin);
+    refreshHud();
+    renderShop();
+    return;
+  }
+  const id = btn?.dataset.id;
   if (!id) return;
   const it = SHOP.find((s) => s.id === id);
   if (!it || state.coin < it.cost || (it.can && !it.can(state))) { play('deny'); return; }

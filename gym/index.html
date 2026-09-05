@@ -85,6 +85,12 @@
   .item { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 3px solid var(--ink); }
   .item h3 { font-size: 13px; text-transform: uppercase; }
   .item small { display: block; font-size: 11px; opacity: .75; line-height: 1.4; margin-top: 2px; }
+  /* The swatch is the whole point of a skin shelf: you buy the colour, so the
+     colour has to be on the shelf and not just its name. */
+  .swatch { display: inline-block; width: 13px; height: 13px; margin-right: 7px;
+            vertical-align: -1px; border: 2px solid var(--ink); border-radius: 3px; }
+  h3.shelf { margin: 16px 0 2px; font-size: 13px; text-transform: uppercase;
+             border-top: 3px solid var(--ink); padding-top: 10px; }
   .buy { font: 700 12px/1 var(--mono); padding: 9px 12px; border: 3px solid var(--ink); border-radius: 8px;
     background: var(--red); color: var(--void); cursor: pointer; text-transform: uppercase; white-space: nowrap; }
   .buy[disabled] { background: #0002; color: #0008; cursor: not-allowed; }

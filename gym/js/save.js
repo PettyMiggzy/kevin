@@ -52,6 +52,11 @@ const FRESH = {
   served: 0,
   bestShift: 0,          // best single-shift pay
   jobCoin: 0,            // lifetime earned at the window, for the board
+  // --- what you look like --------------------------------------------------
+  // Spread over a saved object, so a save from before skins existed picks these
+  // up on next load rather than needing a migration.
+  skin: 'Classic Red',   // worn now
+  skins: ['Classic Red'], // owned. Classic Red is what you already are.
 };
 
 /** Three sets a day. Low on purpose — the streak has to be easy to keep. */
