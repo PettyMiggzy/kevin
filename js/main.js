@@ -23,6 +23,24 @@
     if (url) el.setAttribute('href', url);
   });
 
+  // --- hero state ----------------------------------------------------------
+  // The eyebrow used to read "the auction is open" as hardcoded text, with
+  // nothing anywhere updating it. It said that while the contract was null and
+  // the launch was still days away — a false claim about a financial event, on
+  // the one line under the masthead. It is driven off config now, so it cannot
+  // drift from reality again.
+  var heroState = $('#heroState');
+  if (heroState) {
+    var live = !K.contractLiveAt || Date.now() >= Date.parse(K.contractLiveAt);
+    var when = K.contractLiveAt
+      ? new Date(K.contractLiveAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
+      : null;
+    var state = live
+      ? (K.contract ? 'live on ' + K.chain : 'launching soon')
+      : (when ? 'launches ' + when + ' \u00b7 not trading yet' : 'not trading yet');
+    heroState.textContent = 'Fry cook \u00b7 ' + K.chain + ' \u00b7 ' + state;
+  }
+
   // --- contract address ---------------------------------------------------
   var caValue = $('#ca-value');
   var caCopy = $('#ca-copy');
