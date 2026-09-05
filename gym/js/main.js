@@ -732,15 +732,78 @@ let walkAtlas = null;
 let atlasImage = null;
 let atlasPalette = null;
 
+/**
+ * The RGB of the skin being worn, from either source, or null if it is the
+ * default.
+ *
+ * Two sources because a contract skin computes its colour from the address and
+ * so is never in parts.json, while Todd's named colourways are only there. One
+ * function so nothing has to know which kind it got.
+ */
+function skinRGB() {
+  const ca = CONTRACT_SKINS.find((s) => s.name === state.skin);
+  if (ca) return ca.rgb;
+  return atlasPalette?.colourways?.[state.skin] ?? null;
+}
+
+/**
+ * Wear the skin on the BUILT body — the voxel Kevin, not the sprite.
+ *
+ * Without this the whole skins feature was invisible to everybody. The sprite
+ * look is behind a ?sprite flag, so the default player is the built body, and
+ * a shop shelf that only repaints a body almost nobody is playing is a shop
+ * shelf that sells nothing. The built body wears its red as ONE material
+ * (PALETTE.skin), so repainting it is a traversal and a colour set.
+ *
+ * Matched by colour rather than by a name or a flag on the mesh: the body is
+ * assembled from several helpers that each call toon(PALETTE.skin) separately,
+ * so there is no single material instance to hold on to, but there is exactly
+ * one colour value they all share.
+ */
+function paintBody(kev, rgb) {
+  if (!kev?.group || kev.sprite) return;
+  // The kit body is not painted in one red. buildKitKevin uses #E02128 for the
+  // kit and #B0141B for its shadow, buildKevin uses PALETTE.skin, and matching
+  // any single hex catches at most one of them — which is why an exact match
+  // repainted nothing at all. Classify by HUE instead: anything red and
+  // saturated is Kevin, and his tan muscle, cream belly, white eyes and black
+  // ink are not.
+  const ref = new THREE.Color('#E02128');
+  const r = { h: 0, s: 0, l: 0 };
+  ref.getHSL(r);
+  const target = rgb ? new THREE.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255) : null;
+  const t = { h: 0, s: 0, l: 0 };
+  (target ?? ref).getHSL(t);
+
+  kev.group.traverse((o) => {
+    if (!o.isMesh || !o.material?.color) return;
+    // Remember each material's own colour the first time it is seen, so changing
+    // skin twice does not compound and Classic Red can come back exactly.
+    if (o.material.userData.baseColour === undefined) {
+      o.material.userData.baseColour = o.material.color.getHex();
+    }
+    const base = new THREE.Color(o.material.userData.baseColour);
+    if (!target) { o.material.color.copy(base); o.material.needsUpdate = true; return; }
+    const b = { h: 0, s: 0, l: 0 };
+    base.getHSL(b);
+    const hue = Math.min(Math.abs(b.h - r.h), 1 - Math.abs(b.h - r.h));
+    if (b.s < 0.35 || hue > 0.06) return;              // not one of his reds
+    // Carry this material's own offset from the kit red across to the new
+    // colour, so the shadow red stays darker than the body red in Cold Blue
+    // exactly as it did in Classic Red. Flattening them loses the whole form.
+    o.material.color.setHSL(
+      t.h,
+      clamp(t.s * (b.s / r.s), 0, 1),
+      clamp(t.l * (b.l / r.l), 0.04, 0.96),
+    );
+    o.material.needsUpdate = true;
+  });
+}
+
 /** The atlas in whatever colourway is worn now, or the plain one if unskinned. */
 function skinnedAtlas() {
   if (!atlasImage || !atlasPalette) return walkAtlas;
-  // Two sources of colour: Todd's named colourways, and the six derived from
-  // the contract address. A contract skin carries its own rgb because it is
-  // computed from the CA rather than chosen, so it is never in parts.json.
-  const rgb = CONTRACT_SKINS.find((s) => s.name === state.skin)?.rgb
-    ?? atlasPalette.colourways?.[state.skin]
-    ?? atlasPalette.colourways?.[DEFAULT_SKIN];
+  const rgb = skinRGB() ?? atlasPalette.colourways?.[DEFAULT_SKIN];
   if (!rgb) return walkAtlas;
   return skinTexture(atlasImage, atlasPalette.palette, rgb);
 }
@@ -765,6 +828,9 @@ function makePlayer(gridIndex = 0) {
  */
 function spawnPlayer(gridIndex, at) {
   const body = makePlayer(gridIndex);
+  // A new body is born in Classic Red. Dress it before anybody sees it, or a
+  // world change or a crew swap silently undoes what the player bought.
+  paintBody(body, skinRGB());
   // Facing (Y) has to compose with lying back (X), not fight it.
   body.group.rotation.order = 'YXZ';
   body.group.position.copy(at);
@@ -1225,13 +1291,17 @@ async function init() {
     // The same bytes again as an <img>, which is what a canvas can draw and a
     // THREE.Texture's .image already is — no second request, it is cached.
     atlasImage = walkAtlas?.image ?? null;
-    // parts.json rather than a copy of the palette here: sprite-parts.mjs
-    // measures it off the art, and a second hardcoded copy is a second thing to
-    // be wrong when Todd's red moves.
-    atlasPalette = await fetch('../assets/sprites/parts/parts.json')
-      .then((r) => (r.ok ? r.json() : null))
-      .catch(() => null);
   }
+  // ALWAYS, not only under ?sprite. The colourways live here, and they now dress
+  // the built body too — gating this on the sprite flag is what made the entire
+  // skins shelf invisible to every default player. A few KB of JSON.
+  //
+  // parts.json rather than a copy of the palette in code: sprite-parts.mjs
+  // measures it off the art, and a second hardcoded copy is a second thing to be
+  // wrong when Todd's red moves.
+  atlasPalette = await fetch('../assets/sprites/parts/parts.json')
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null);
   await loadCrew();
   // The player is built once and moves between worlds; only the scenery is torn
   // down and rebuilt.
@@ -1270,6 +1340,7 @@ async function init() {
     window.__warp = (x, z) => kevin.group.position.set(x, 0, z);
     window.__scene = scene;
     window.__state = state;          // ?peek only: lets a test buy something
+    window.__kev = () => kevin;      // ?peek only: the real player, not a guess
     window.__customers = customers;
     window.__npcs = npcs;
   }
@@ -2474,6 +2545,8 @@ const SHOP = [
 function wearSkin(name) {
   state.skin = name;
   save(state);
+  // The built body is the common case: repaint it and we are done.
+  if (kevin && !kevin.sprite) { paintBody(kevin, skinRGB()); return; }
   const tex = skinnedAtlas();
   if (!tex || !kevin?.sprite || !kevin.mesh?.material) return;
   const old = kevin.mesh.material.map;
@@ -2497,9 +2570,8 @@ function renderShop() {
       <button class="buy" data-id="${it.id}"${ok ? '' : ' disabled'}>${it.cost} $KEVIN</button></div>`;
   }).join('');
 
-  // Skins only exist on the sprite body — the voxel one has no palette to swap
-  // — so the shelf is not shown at all rather than shown full of things that
-  // would silently do nothing.
+  // The shelf needs the colourways, and nothing else. It used to be gated on the
+  // sprite look, which meant nobody in the default build ever saw it.
   if (!atlasPalette) { $('#shopItems').innerHTML = consumables; return; }
 
   const owned = new Set(state.skins ?? [DEFAULT_SKIN]);

@@ -38,7 +38,10 @@ export const SHOP_PROPS = [
   // over the line
   'extractor-hood',
   // out on the lot
-  'picnic-table', 'lamp-post', 'wheelie-bin', 'car',
+  'picnic-table', 'lamp-post', 'wheelie-bin',
+  // 'car' is deliberately absent. Neither kit has one, so asking for it cost a
+  // 404 on every visit and bought nothing: the boxes-and-a-roof fallback below
+  // is what a parked car at that distance was always going to be.
 ];
 
 /**
