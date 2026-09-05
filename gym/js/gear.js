@@ -117,6 +117,81 @@ export function signTexture(lines, { bg = '#E8232B', fg = '#FFE500', size = 96 }
   });
 }
 
+/**
+ * A green candle chart, for the monitors on Kevin's desk.
+ *
+ * Drawn rather than screenshotted because it has to be legible at 30cm on a
+ * 0.5m quad and a real chart at that size is a grey smear. Deterministic from
+ * `seed`, so three monitors show three different markets instead of the same
+ * one three times — which is the tell that makes a set dressing look fake.
+ */
+export const chartTexture = (seed = 1, { up = true } = {}) =>
+  canvasTexture(512, 320, (x, w, h) => {
+    x.fillStyle = '#0B0E14';
+    x.fillRect(0, 0, w, h);
+    x.strokeStyle = '#1B2230';
+    x.lineWidth = 2;
+    for (let i = 1; i < 6; i++) {
+      x.beginPath(); x.moveTo(0, (h / 6) * i); x.lineTo(w, (h / 6) * i); x.stroke();
+    }
+    // A tiny LCG, so the same seed always draws the same market.
+    let s = seed * 9301 + 49297;
+    const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+    const n = 26, cw = w / n;
+    let price = h * (up ? 0.72 : 0.3);
+    for (let i = 0; i < n; i++) {
+      const drift = (up ? -1 : 1) * (h * 0.016);
+      const move = drift + (rnd() - 0.5) * h * 0.11;
+      const open = price;
+      price = Math.max(h * 0.08, Math.min(h * 0.92, price + move));
+      const green = price < open;                       // canvas y grows downward
+      const hi = Math.min(open, price) - rnd() * h * 0.04;
+      const lo = Math.max(open, price) + rnd() * h * 0.04;
+      const cx = i * cw + cw / 2;
+      x.strokeStyle = x.fillStyle = green ? '#3FD07A' : '#E8434F';
+      x.lineWidth = 2;
+      x.beginPath(); x.moveTo(cx, hi); x.lineTo(cx, lo); x.stroke();
+      x.fillRect(cx - cw * 0.3, Math.min(open, price), cw * 0.6, Math.max(2, Math.abs(price - open)));
+    }
+    x.fillStyle = '#FFE500';
+    x.font = '700 26px ui-monospace, Menlo, monospace';
+    x.fillText('$KEVIN', 14, 34);
+    x.fillStyle = up ? '#3FD07A' : '#E8434F';
+    x.font = '700 22px ui-monospace, Menlo, monospace';
+    x.fillText(up ? '+412%' : '-38%', 14, 62);
+  });
+
+/**
+ * A neon sign: bright tube on a dark plate, with a soft bloom around it.
+ *
+ * There is no bloom pass in this renderer, so the glow is painted into the
+ * texture — a few strokes of falling alpha under the letters. Cheaper than a
+ * post-processing chain and, at the size a sign is actually seen, identical.
+ */
+export const neonTexture = (text, { fg = '#FF3B4E', bg = '#120A0E' } = {}) =>
+  canvasTexture(1024, 320, (x, w, h) => {
+    x.fillStyle = bg;
+    x.fillRect(0, 0, w, h);
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    x.font = '700 150px ui-monospace, Menlo, monospace';
+    for (const [blur, alpha] of [[26, 0.16], [16, 0.24], [8, 0.4]]) {
+      x.strokeStyle = fg;
+      x.globalAlpha = alpha;
+      x.lineWidth = blur;
+      x.strokeText(text, w / 2, h / 2);
+    }
+    x.globalAlpha = 1;
+    x.lineWidth = 5;
+    x.strokeStyle = fg;
+    x.strokeText(text, w / 2, h / 2);
+    x.fillStyle = '#FFFFFF';
+    x.globalAlpha = 0.85;
+    x.font = '700 148px ui-monospace, Menlo, monospace';
+    x.fillText(text, w / 2, h / 2);
+    x.globalAlpha = 1;
+  });
+
 /** Wall-mounted mirror: a cool dark panel with a bright frame. Not reflective —
  *  a real reflection costs a second render pass and reads no better at this
  *  size than a tinted panel does. */

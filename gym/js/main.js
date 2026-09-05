@@ -23,6 +23,7 @@ import { buildCrewBody, applyCrewMuscle } from './voxel.js';
 import { buildKitKevin } from './kevin.js';
 import { buildSpriteKevin } from './sprite.js';
 import { skinTexture, SKINS, DEFAULT_SKIN, CONTRACT, CONTRACT_SKINS } from './skins.js';
+import { rebrand } from './brand.js';
 import { Set as RepSet, REPS_PER_SET, rankOf } from './reps.js';
 import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, mirrorPanel, stripLight,
   skyTexture, concreteTexture, facadeTexture, bannerTexture, billboardTexture, boardTexture } from './gear.js';
@@ -83,7 +84,7 @@ const flatMat = (color, map = null) => {
  * Keep each material's base colour, throw away everything else that says
  * "renderer": metalness, roughness, normal and env maps, and the map itself.
  */
-function normalise(root, { outline = true } = {}) {
+function normalise(root, { outline = true, palette = null } = {}) {
   root.traverse((o) => {
     if (!o.isMesh) return;
     const src = Array.isArray(o.material) ? o.material[0] : o.material;
@@ -103,8 +104,12 @@ function normalise(root, { outline = true } = {}) {
     // all did until this line existed.
     if (o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
     const painted = !!o.geometry?.attributes?.color;
-    const base = painted ? new THREE.Color('#FFFFFF')
+    let base = painted ? new THREE.Color('#FFFFFF')
       : src?.color ? src.color.clone() : new THREE.Color('#B9B2A6');
+    // A world can ask for a bought kit in its own colours. Only the crib does,
+    // because the gym and the fry house were furnished from a pack whose look
+    // already suits them — see brand.js for why eleven colours is the whole job.
+    if (palette && !painted) base = palette(base) ?? base;
     // Tripo's albedo often bakes in lighting, which fights a flat ramp. Push
     // the colour up and desaturate slightly so the bands stay readable.
     const hsl = { h: 0, s: 0, l: 0 };
@@ -143,10 +148,20 @@ function place(obj, { x = 0, z = 0, width = 1, rotY = 0, natural = false }) {
     const size = box.getSize(new THREE.Vector3());
     obj.scale.setScalar(width / Math.max(size.x, size.z));
   }
+  // ROTATE BEFORE MEASURING. rotation.y turns the object about its own origin,
+  // and a model whose origin is not its bounding-box centre swings a long way
+  // when it does — so centring first and rotating after leaves the prop
+  // somewhere else entirely. That is how the crib's kitchen units landed at
+  // z 21.06 and 22.70 instead of 21.75, one of them inside the back wall, under
+  // a worktop left hanging over nothing.
+  //
+  // Measuring after the turn also makes `width` the footprint of the prop AS
+  // PLACED, which is the only reading of it that survives a ninety-degree turn.
+  obj.rotation.y = rotY;
+  obj.updateMatrixWorld(true);
   const box2 = new THREE.Box3().setFromObject(obj);
   const c = box2.getCenter(new THREE.Vector3());
   obj.position.set(x - c.x, -box2.min.y, z - c.z);
-  obj.rotation.y = rotY;
   return obj;
 }
 
@@ -1447,11 +1462,20 @@ async function loadProps(names) {
   await Promise.all(Array.from({ length: PROP_LANES }, lane));
 }
 
+/**
+ * Recolour bought props while this is set. Cleared when the world is torn down.
+ *
+ * A property of the world, not of each call site: threading it through forty
+ * fixture() calls would be forty chances to forget one and leave a pastel
+ * armchair in an otherwise repainted room.
+ */
+let worldPalette = null;
+
 /** Put one in the world. Shared by every world that has props. */
 function spawnProp(name, opts, tag) {
   const src = props.get(name);
   if (!src) return null;
-  const obj = normalise(src.clone(true));
+  const obj = normalise(src.clone(true), { palette: worldPalette });
   place(obj, opts);
   if (opts.y) obj.position.y += opts.y;
   scene.add(obj);
@@ -1568,6 +1592,9 @@ async function buildWorkWorld() {
 
 async function buildCribWorld() {
   await loadProps(CRIB_PROPS);
+  // The only world that repaints its props. brand.js says why: the furniture
+  // kit is somebody else's palette, and eleven lookups make it Kevin's.
+  worldPalette = rebrand;
   buildCrib(scene, { flat: flatMat, solids, blockers, spawn: spawnProp });
   places.push({ kind: 'cards', label: 'Card table', note: "Kevin's card room",
     act: 'Play', x: CRIB.table.x + 1.5, z: CRIB.table.z - 0.9 });
@@ -1611,6 +1638,7 @@ async function setWorld(id, at = null) {
   nearest = null;
   $('#prompt').classList.remove('on');
 
+  worldPalette = null;          // each world opts in; none inherits the last one's
   worldGroup = new THREE.Group();
   scene.add(worldGroup);
   let meta;
