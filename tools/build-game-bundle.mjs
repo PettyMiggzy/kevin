@@ -12,6 +12,7 @@
 // time two files declare the same name; blob URLs keep every module in its own
 // scope, exactly as the browser would.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,6 +34,14 @@ const MODULES = {
   'kevin/audio.js': 'gym/js/audio.js',
   'kevin/job.js': 'gym/js/job.js',
   'kevin/city.js': 'gym/js/city.js',
+  // Order is load-bearing (see below): each of these imports only three and,
+  // for crib/mckevins, gear and city — all listed above.
+  'kevin/brand.js': 'gym/js/brand.js',
+  'kevin/skins.js': 'gym/js/skins.js',
+  'kevin/sprite.js': 'gym/js/sprite.js',
+  'kevin/worlds.js': 'gym/js/worlds.js',
+  'kevin/crib.js': 'gym/js/crib.js',
+  'kevin/mckevins.js': 'gym/js/mckevins.js',
   'kevin/main.js': 'gym/js/main.js',
 };
 
@@ -99,12 +108,38 @@ function wrap(src, spec) {
   return `__m[${JSON.stringify(spec)}] = (function () {\n${out}\nreturn {${[...exports].join(', ')}};\n})();`;
 }
 
-const PROPS = [
-  'bench', 'bucket', 'dumbbell-rack', 'dumbbell', 'gym-mirror', 'locker',
-  'plate-tree', 'protein-tub', 'speaker', 'squat-rack', 'treadmill', 'water-cooler',
-  'lat-pulldown', 'leg-press', 'cable-machine', 'rowing-machine', 'pullup-rig',
-  'kettlebell', 'medicine-ball', 'punching-bag', 'gym-clock', 'towel-bin',
-];
+/**
+ * Every prop the three worlds ask for, READ OUT OF THE SOURCE.
+ *
+ * This was a hardcoded list of twenty-two gym props, written before the crib
+ * and McKevin's existed. A single-file build is supposed to run from file://
+ * with no network at all, and anything not inlined falls through to a fetch
+ * that CORS blocks there — so the list going stale does not degrade the bundle,
+ * it breaks it silently. Deriving it from the manifests is the only version
+ * that cannot drift.
+ */
+async function collectPropNames() {
+  const names = new Set();
+  const grab = (src, re, group = 1) => {
+    for (const m of src.matchAll(re)) names.add(m[group]);
+  };
+  for (const f of ['gym/js/crib.js', 'gym/js/mckevins.js']) {
+    const src = await readFile(join(ROOT, f), 'utf8');
+    const m = src.match(/export const \w+_PROPS = \[([\s\S]*?)\n\];/);
+    if (!m) continue;
+    // Strip comments first: a name mentioned in prose is not a manifest entry.
+    grab(m[1].replace(/\/\/[^\n]*/g, ''), /'([a-z0-9-]+)'/g);
+  }
+  const main = await readFile(join(ROOT, 'gym/js/main.js'), 'utf8');
+  grab(main, /\['([a-z0-9-]+)',\s*\{/g);          // SCENERY entries
+  grab(main, /prop:\s*'([a-z0-9-]+)'/g);           // STATIONS
+  const out = [];
+  for (const n of [...names].sort()) {
+    if (existsSync(join(ROOT, `gym/assets/props/${n}.glb`))) out.push(n);
+    else console.warn(`  ! ${n} is asked for but has no .glb — not inlined`);
+  }
+  return out;
+}
 
 /**
  * A </script> anywhere inside an inlined script ends it early, whatever the
@@ -135,6 +170,10 @@ async function main() {
 
   const grids = JSON.parse(await readFile(join(ROOT, 'assets/crew/grids.json'), 'utf8'));
 
+  const PROPS = await collectPropNames();
+  // The colourways the skins shelf reads. Fetching it works over http and is
+  // CORS-blocked under file://, which is the only place this build runs.
+  const partsJson = await readFile(join(ROOT, 'assets/sprites/parts/parts.json'), 'utf8');
   const props = {};
   let propBytes = 0;
   for (const name of PROPS) {
@@ -161,6 +200,7 @@ async function main() {
 ${body}
 <script type="application/json" id="kevin-grids">${safe(JSON.stringify(grids))}</script>
 <script type="application/json" id="kevin-props">${safe(JSON.stringify(props))}</script>
+<script type="application/json" id="kevin-parts">${safe(partsJson)}</script>
 <script>
 (function () {
   var raw = JSON.parse(document.getElementById('kevin-props').textContent);
@@ -171,6 +211,7 @@ ${body}
     props[k] = out.buffer;
   }
   window.__KEVIN_ASSETS = {
+    parts: JSON.parse(document.getElementById('kevin-parts').textContent),
     grids: JSON.parse(document.getElementById('kevin-grids').textContent),
     props: props,
   };

@@ -1299,9 +1299,11 @@ async function init() {
   // parts.json rather than a copy of the palette in code: sprite-parts.mjs
   // measures it off the art, and a second hardcoded copy is a second thing to be
   // wrong when Todd's red moves.
-  atlasPalette = await fetch('../assets/sprites/parts/parts.json')
-    .then((r) => (r.ok ? r.json() : null))
-    .catch(() => null);
+  // The single-file build inlines this; fetching it there is CORS-blocked.
+  atlasPalette = INLINE?.parts
+    ?? await fetch('../assets/sprites/parts/parts.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
   await loadCrew();
   // The player is built once and moves between worlds; only the scenery is torn
   // down and rebuilt.
@@ -1547,6 +1549,13 @@ function spawnProp(name, opts, tag) {
   const src = props.get(name);
   if (!src) return null;
   const obj = normalise(src.clone(true), { palette: worldPalette });
+  // clone(true) SHARES geometry with the cached source — Mesh.copy() assigns the
+  // reference rather than duplicating buffers. disposeWorld() guards on this
+  // flag before freeing anything, and until now nothing ever set it, so every
+  // world teardown disposed the prop cache's own buffers and the next visit
+  // re-uploaded all of them. Not fatal (three re-uploads on next use) but it
+  // defeats the whole point of caching decoded props across worlds.
+  obj.traverse((o) => { if (o.isMesh) o.userData.sharedGeometry = true; });
   place(obj, opts);
   if (opts.y) obj.position.y += opts.y;
   scene.add(obj);
