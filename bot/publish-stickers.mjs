@@ -6,6 +6,7 @@
 //   node bot/publish-stickers.mjs --user 123456789 --emoji
 //   node bot/publish-stickers.mjs --user 123456789 --static
 //   node bot/publish-stickers.mjs --user 123456789 --replace fried,wagmi
+//   node bot/publish-stickers.mjs --user 123456789 --static --animate
 //
 // --user is the numeric id of the person who will OWN the set. Telegram requires
 // a real user; the bot only gets to edit it afterwards. Get yours by messaging
@@ -39,6 +40,10 @@ const has = (n) => args.includes(`--${n}`);
 const DRY = has('dry');
 const EMOJI_SET = has('emoji');
 const STATIC_SET = has('static');
+// Swap the Todd-drawn stills for their rigged versions, in place, so the pack
+// keeps its link and everyone who installed it gets the animation. A set may
+// hold both formats at once — verified against the live API, not assumed.
+const ANIMATE = has('animate');
 const USER = flag('user');
 const REPLACE = (flag('replace') || '').split(',').map((s) => s.trim()).filter(Boolean);
 const TITLE = flag('title', EMOJI_SET ? 'Kevin Emoji' : STATIC_SET ? 'Kevin Classic' : 'Kevin');
@@ -57,7 +62,11 @@ const KIND = EMOJI_SET
       limit: 64, base: 'kevinemoji', type: 'custom_emoji' }
   : STATIC_SET
   ? { dir: 'assets/stickers/static', ext: 'webp', mime: 'image/webp', format: 'static',
-      limit: 512, base: 'kevinclassic', type: 'regular', fromDir: true }
+      limit: 512, base: 'kevinclassic', type: 'regular', fromDir: true,
+      // The roster still comes from the static directory, because that is what
+      // fixes each sticker's POSITION in the live set. Only the bytes change.
+      ...(ANIMATE ? { swapDir: 'assets/stickers/animated', swapExt: 'webm',
+                      swapMime: 'video/webm', swapFormat: 'video', swapLimit: 256 } : {}) }
   : { dir: 'assets/stickers/animated', ext: 'webm', mime: 'video/webm', format: 'video',
       limit: 256, base: 'kevin', type: 'regular' };
 
@@ -95,8 +104,8 @@ async function tg(token, method, params) {
 async function upload(token, userId, path) {
   const form = new FormData();
   form.append('user_id', String(userId));
-  form.append('sticker_format', KIND.format);
-  form.append('sticker', new Blob([await readFile(path)], { type: KIND.mime }),
+  form.append('sticker_format', ANIMATE ? KIND.swapFormat : KIND.format);
+  form.append('sticker', new Blob([await readFile(path)], { type: ANIMATE ? KIND.swapMime : KIND.mime }),
     path.split('/').pop());
   const r = await fetch(`https://api.telegram.org/bot${token}/uploadStickerFile`, {
     method: 'POST', body: form,
@@ -170,6 +179,37 @@ async function main() {
   // and the bot is the only thing that edits it, so position i is slug i — but
   // check that before trusting it, because replacing the wrong sticker is not
   // something the API will undo.
+  // --animate swaps every sticker that has a rigged version. One that has none
+  // — no limb separates from the body on it — is left as the still it is.
+  if (ANIMATE) {
+    if (!live) throw new Error(`${name} does not exist yet`);
+    if (live.stickers.length !== files.length) {
+      throw new Error(`set has ${live.stickers.length} but the manifest has ${files.length}; ` +
+        `positions cannot be trusted, so nothing was replaced`);
+    }
+    let done = 0, skipped = [];
+    for (let i = 0; i < files.length; i++) {
+      const slug = files[i].slug;
+      const anim = join(ROOT, KIND.swapDir, `${slug}.${KIND.swapExt}`);
+      if (!existsSync(anim)) { skipped.push(slug); continue; }
+      const kb = statSync(anim).size / 1024;
+      if (kb > KIND.swapLimit) { skipped.push(`${slug} (${kb.toFixed(0)}KB)`); continue; }
+      process.stdout.write(`  animating ${slug}…`);
+      const fileId = await upload(token, USER, anim);
+      await tg(token, 'replaceStickerInSet', {
+        user_id: Number(USER), name,
+        old_sticker: live.stickers[i].file_id,
+        sticker: { sticker: fileId, format: KIND.swapFormat, emoji_list: EMOJI[slug] },
+      });
+      console.log(`\r  animated  ${slug}       `);
+      done++;
+    }
+    console.log(`\nanimated ${done} in ${name}` +
+      (skipped.length ? `; left as stills: ${skipped.join(', ')}` : ''));
+    console.log(`\nhttps://t.me/addstickers/${name}`);
+    return;
+  }
+
   if (REPLACE.length) {
     if (!live) throw new Error(`${name} does not exist yet — publish it before replacing`);
     if (live.stickers.length !== files.length) {

@@ -47,8 +47,14 @@ const LIMIT = 256 * 1024;
 const args = process.argv.slice(2);
 const PREVIEW = args.includes('--preview');
 const FIT = args.includes('--fit');
+const AUTO = args.includes('--auto');
+const flagVal = (n) => { const i = args.indexOf(`--${n}`); return i === -1 ? null : args[i + 1]; };
 const ALL = args.includes('--all');
-const names = args.filter((a) => !a.startsWith('--'));
+// Drop the values that belong to --k/--min/--reach, or they get taken for
+// sticker names and the tool goes looking for a file called "9.webp".
+const VALUED = new Set(['k', 'min', 'reach']);
+const names = args.filter((a, i) => !a.startsWith('--') &&
+  !(i > 0 && args[i - 1].startsWith('--') && VALUED.has(args[i - 1].slice(2))));
 
 const idx = (x, y) => (y * S + x) * 4;
 
@@ -65,8 +71,12 @@ async function decode(path) {
  * and takes the whole character with it — which is what the coverage guard
  * below catches.
  */
-function cutPart(px, { joint: [jx, jy], r, seed: [sx, sy], cuts = [], region = null }) {
+function cutPart(px, { joint: [jx, jy], r, seed, seeds, cuts = [], region = null }) {
   const out = new Uint8Array(S * S);
+  // A part can be several components. A barbell passing behind his head is two
+  // separate pieces of image that have to lift as one object, and a rig that
+  // could only take one seed would tear it in half.
+  const points = seeds || [seed];
   const inAny = (rects, x, y) =>
     rects.some(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1);
   const open = (c) => {
@@ -88,10 +98,14 @@ function cutPart(px, { joint: [jx, jy], r, seed: [sx, sy], cuts = [], region = n
     }
     return true;
   };
-  const start = sy * S + sx;
-  if (!open(start)) throw new Error(`seed ${sx},${sy} is transparent or inside the joint circle`);
-  const st = [start]; out[start] = 1;
-  let n = 1;
+  const st = [];
+  let n = 0;
+  for (const [sx, sy] of points) {
+    const start = sy * S + sx;
+    if (!open(start)) throw new Error(`seed ${sx},${sy} is transparent or inside the joint circle`);
+    if (out[start]) continue;
+    out[start] = 1; st.push(start); n++;
+  }
   while (st.length) {
     const c = st.pop();
     const x = c % S, y = (c / S) | 0;
@@ -164,12 +178,14 @@ function inpaint(px, hole) {
  * forwards leaves unwritten pixels scattered through the result wherever
  * rotation stretches the grid.
  */
-function stamp(dst, srcPx, mask, [jx, jy], deg) {
+function stamp(dst, srcPx, mask, [jx, jy], deg, tx = 0, ty = 0) {
   const a = (deg * Math.PI) / 180;
   const cos = Math.cos(-a), sin = Math.sin(-a);
   for (let y = 0; y < S; y++) {
     for (let x = 0; x < S; x++) {
-      const dx = x - jx, dy = y - jy;
+      // Undo the translation first, then the rotation, since drawing applies
+      // them the other way round.
+      const dx = x - tx - jx, dy = y - ty - jy;
       const sx = jx + dx * cos - dy * sin;
       const sy = jy + dx * sin + dy * cos;
       const x0 = Math.round(sx), y0 = Math.round(sy);
@@ -270,11 +286,16 @@ async function build(slug) {
     const t = f / N;
     const frame = Buffer.from(body);
     for (const p of parts) {
-      const [lo, hi] = p.swing;
+      const [lo, hi] = p.swing || [0, 0];
       // One full there-and-back per loop, cosine-eased.
       const phase = t + (p.phase || 0);
       const k = (1 - Math.cos(2 * Math.PI * phase)) / 2;
-      stamp(frame, base, p.mask, p.joint, lo + (hi - lo) * k);
+      // `shift` is for the things rotation cannot say: a barbell goes straight
+      // up, and a falling coin goes straight down. `drift` runs the shift one
+      // way and wraps, for anything that should fall rather than bob.
+      const [sx, sy] = p.shift || [0, 0];
+      const d = p.drift ? (phase % 1) : k;
+      stamp(frame, base, p.mask, p.joint, lo + (hi - lo) * k, sx * d, sy * d);
     }
     frame.copy(reel, f * S * S * 4);
   }
@@ -300,7 +321,8 @@ async function build(slug) {
   const ok = size <= LIMIT && tag.trim() === '1';
   console.log(`  ${ok ? 'ok  ' : 'BAD '} ${slug.padEnd(14)} ${N}f @ ${FPS}fps  ` +
     `${(size / 1024).toFixed(0).padStart(4)}KB crf ${crf}  ` +
-    parts.map((p) => `${p.name} ${p.swing[0]}..${p.swing[1]}°`).join(', '));
+    parts.map((p) => `${p.name} ${(p.swing || [0, 0]).join('..')}°` +
+      (p.shift ? ` ${p.shift.join(',')}px` : '')).join(', '));
   return ok;
 }
 
@@ -322,6 +344,128 @@ if (FIT) {
       }
       console.log(`${slug} ${p.name}\n  ${row.join('  ')}`);
     }
+  }
+  process.exit(0);
+}
+
+
+/**
+ * Propose a rig by finding the limbs, so 21 stickers do not have to be measured
+ * by hand.
+ *
+ * Erode the silhouette until only the bulk survives — on this character that is
+ * the head and torso, because the head is most of the drawing — then inflate
+ * that back. Whatever the inflated trunk does not cover is a limb: an arm, a
+ * leg, a hair spike, or a prop held away from the body. Each limb's joint is
+ * the middle of where it meets the trunk, and its seed is its farthest point
+ * from that joint, which is the hand or the foot.
+ *
+ * The radius still has to be solved rather than assumed. The outline touches
+ * everything it borders, so the circle that actually severs a limb is always
+ * wider than the limb looks, and it differs per limb.
+ */
+function propose(px) {
+  const mask = new Uint8Array(S * S);
+  for (let c = 0; c < S * S; c++) if (px[c * 4 + 3] >= 128) mask[c] = 1;
+
+  const K = Number(flagVal('k')) || 14;
+  let core = new Uint8Array(mask);
+  for (let k = 0; k < K; k++) {
+    const next = new Uint8Array(core);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const c = y * S + x;
+      if (!core[c]) continue;
+      if (x === 0 || y === 0 || x === S - 1 || y === S - 1 ||
+          !core[c - 1] || !core[c + 1] || !core[c - S] || !core[c + S]) next[c] = 0;
+    }
+    core = next;
+  }
+  // Only the bulk. A hair spike that survived erosion is not the trunk.
+  const comps = components(core);
+  comps.sort((a, b) => b.px.length - a.px.length);
+  if (!comps.length) return [];
+  const trunk = new Uint8Array(S * S);
+  for (const c of comps[0].px) trunk[c] = 1;
+  for (let k = 0; k < K + 2; k++) {
+    const next = new Uint8Array(trunk);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const c = y * S + x;
+      if (trunk[c]) continue;
+      if ((x > 0 && trunk[c - 1]) || (x < S - 1 && trunk[c + 1]) ||
+          (y > 0 && trunk[c - S]) || (y < S - 1 && trunk[c + S])) next[c] = 1;
+    }
+    trunk.set(next);
+  }
+
+  const outer = new Uint8Array(S * S);
+  for (let c = 0; c < S * S; c++) if (mask[c] && !trunk[c]) outer[c] = 1;
+
+  const out = [];
+  for (const lim of components(outer)) {
+    if (lim.px.length < (Number(flagVal('min')) || 500)) continue;
+    // Where it meets the trunk.
+    let jx = 0, jy = 0, n = 0;
+    for (const c of lim.px) {
+      const x = c % S, y = (c / S) | 0;
+      if ((x > 0 && trunk[c - 1]) || (x < S - 1 && trunk[c + 1]) ||
+          (y > 0 && trunk[c - S]) || (y < S - 1 && trunk[c + S])) { jx += x; jy += y; n++; }
+    }
+    if (n < 8) continue;                       // floating prop, nothing to pivot on
+    jx = Math.round(jx / n); jy = Math.round(jy / n);
+    let seed = lim.px[0], best = -1;
+    for (const c of lim.px) {
+      const d = (c % S - jx) ** 2 + (((c / S) | 0) - jy) ** 2;
+      if (d > best) { best = d; seed = c; }
+    }
+    const reach = Math.sqrt(best);
+    if (reach < (Number(flagVal('reach')) || 24)) continue;                  // a bump, not a limb
+    out.push({ joint: [jx, jy], seed: [seed % S, (seed / S) | 0], want: lim.px.length, reach });
+  }
+  return out;
+}
+
+function components(m) {
+  const seen = new Uint8Array(S * S);
+  const out = [];
+  for (let s = 0; s < S * S; s++) {
+    if (!m[s] || seen[s]) continue;
+    const st = [s]; seen[s] = 1; const px = [];
+    while (st.length) {
+      const c = st.pop(); px.push(c);
+      const x = c % S, y = (c / S) | 0;
+      const go = (q) => { if (m[q] && !seen[q]) { seen[q] = 1; st.push(q); } };
+      if (x > 0) go(c - 1); if (x < S - 1) go(c + 1);
+      if (y > 0) go(c - S); if (y < S - 1) go(c + S);
+    }
+    out.push({ px });
+  }
+  return out;
+}
+
+if (AUTO) {
+  for (const slug of (names.length ? names : (await readdir(SRC))
+      .filter((f) => f.endsWith('.webp')).map((f) => basename(f, '.webp')).sort())) {
+    const base = await decode(join(SRC, `${slug}.webp`));
+    const found = propose(base);
+    const parts = [];
+    for (const f of found) {
+      // Solve the radius: the smallest circle that frees the limb without the
+      // flood walking back into the body.
+      let picked = null;
+      for (let r = 8; r <= 60; r += 2) {
+        try {
+          const { n } = cutPart(base, { joint: f.joint, r, seed: f.seed });
+          if (n < S * S * 0.12 && n > 300) { picked = { r, n }; break; }
+        } catch { /* seed swallowed by the circle */ }
+      }
+      if (!picked) continue;
+      parts.push({ name: `p${parts.length}`, joint: f.joint, r: picked.r,
+        seed: f.seed, n: picked.n, swing: [0, 8], phase: 0 });
+    }
+    const path = join(RIGS, `${slug}.auto.json`);
+    await writeFile(path, JSON.stringify({ fps: 24, frames: 36, parts }, null, 2));
+    console.log(`  ${slug.padEnd(14)} ${parts.length} part(s)  ` +
+      parts.map((p) => `${p.n}px @${p.joint.join(',')} r${p.r}`).join('  '));
   }
   process.exit(0);
 }

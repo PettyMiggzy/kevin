@@ -1,0 +1,97 @@
+{
+  "fps": 24,
+  "frames": 36,
+  "parts": [
+    {
+      "name": "sign",
+      "joint": [
+        350,
+        296
+      ],
+      "r": 12,
+      "seed": [
+        360,
+        60
+      ],
+      "region": [
+        [
+          296,
+          18,
+          452,
+          180
+        ],
+        [
+          334,
+          180,
+          452,
+          302
+        ]
+      ],
+      "swing": [
+        0,
+        -8
+      ],
+      "phase": 0,
+      "cuts": [
+        [
+          294,
+          138,
+          332,
+          208
+        ]
+      ]
+    },
+    {
+      "name": "arm-l",
+      "joint": [
+        192,
+        330
+      ],
+      "r": 14,
+      "seed": [
+        179,
+        408
+      ],
+      "swing": [
+        0,
+        -11
+      ],
+      "phase": 0.5
+    },
+    {
+      "name": "foot-r",
+      "joint": [
+        271,
+        406
+      ],
+      "r": 12,
+      "seed": [
+        309,
+        472
+      ],
+      "swing": [
+        0,
+        4
+      ],
+      "phase": 0.5
+    },
+    {
+      "name": "foot-l",
+      "joint": [
+        228,
+        407
+      ],
+      "r": 12,
+      "seed": [
+        192,
+        474
+      ],
+      "swing": [
+        0,
+        -4
+      ],
+      "phase": 0
+    }
+  ],
+  "note": "The sign waves. Bounded by region because the board overlaps his hair and the pole runs past his eye; the joint is the shoulder, so the whole arm-pole-board assembly swings as one."
+}
