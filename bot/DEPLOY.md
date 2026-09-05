@@ -275,3 +275,29 @@ second event for the same message), and no outbound message to a bot at all.
 `edited_message` is handled — a campaign bot that edits its board in place
 rather than reposting produces no new message, and a listener that only watches
 `message` would silently see nothing all day.
+
+## Publishing the sticker pack
+
+On the droplet, where the token is:
+
+```bash
+cd /opt/kevin
+node bot/publish-stickers.mjs --dry          # check without uploading
+node bot/publish-stickers.mjs --user <your numeric id>
+```
+
+**`--user` is the numeric id of whoever will OWN the set.** Telegram requires a
+real user for that; the bot only gets to edit it afterwards. Get yours by
+messaging the bot and reading `journalctl -u kevin-bot`, or from
+[@userinfobot](https://t.me/userinfobot).
+
+It publishes exactly what `js/config.js` lists, so the pack and the site cannot
+disagree about what exists. Everything is checked before anything is uploaded —
+file present, under 256KB, an emoji assigned, and the set name legal — because
+a rejection partway through leaves half a pack that has to be deleted by hand.
+
+Re-running is safe. If the set already exists it adds to it, and a sticker
+byte-identical to one already there is a no-op at Telegram's end.
+
+The set lands at `t.me/addstickers/kevin_by_<botusername>`. Telegram requires
+that `_by_<bot_username>` suffix; it is not a choice.
