@@ -28,7 +28,7 @@ import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, 
 import { play, setMuted, isMuted } from './audio.js';
 import { buildCity, buildLeaderboard, paintLeaderboard, MARKET, FRY, QUEUE } from './city.js';
 import { buildCrib, CRIB } from './crib.js';
-import { buildMcKevins, buildShop, LOT } from './mckevins.js';
+import { buildMcKevins, buildShop, LOT, SHOP_PROPS } from './mckevins.js';
 import { disposeWorld, captureInto } from './worlds.js';
 import { Shift, ITEMS, SHIFT_LENGTH } from './job.js';
 
@@ -105,11 +105,26 @@ function normalise(root, { outline = true } = {}) {
 }
 
 /** Drop a loaded model onto the floor at a given footprint width, facing a way. */
-function place(obj, { x = 0, z = 0, width = 1, rotY = 0 }) {
-  const box = new THREE.Box3().setFromObject(obj);
-  const size = box.getSize(new THREE.Vector3());
-  const s = width / Math.max(size.x, size.z);
-  obj.scale.setScalar(s);
+/**
+ * Stand a prop on the floor at x,z.
+ *
+ * `width` rescales it so its footprint is that many metres, which is right for
+ * generated props: Tripo hands back a bench and a kettlebell at the same size
+ * and something has to decide which is which.
+ *
+ * `natural` skips that. A modelled kit is authored in metres and internally
+ * consistent — this pack's fridge is 1.95m, its counter 0.80m, its lamp post
+ * 3.61m — and rescaling each prop to a footprint throws that away: a cooker
+ * hob and a fridge both become 1.7m wide, so the hob turns into furniture and
+ * the kitchen ends up knee-high. When the kit already knows how big its things
+ * are, believe it.
+ */
+function place(obj, { x = 0, z = 0, width = 1, rotY = 0, natural = false }) {
+  if (!natural) {
+    const box = new THREE.Box3().setFromObject(obj);
+    const size = box.getSize(new THREE.Vector3());
+    obj.scale.setScalar(width / Math.max(size.x, size.z));
+  }
   const box2 = new THREE.Box3().setFromObject(obj);
   const c = box2.getCenter(new THREE.Vector3());
   obj.position.set(x - c.x, -box2.min.y, z - c.z);
@@ -984,6 +999,16 @@ const canvas = $('#c');
 let renderer, effect, scene, camera, kevin, clock;
 let state = load();
 const props = new Map();
+/**
+ * Prop names the server does not have.
+ *
+ * SHOP_PROPS is a shopping list as much as a manifest — most of it is missing
+ * on purpose until a pack lands — and loadProps() only skips names already in
+ * the cache, which a failed fetch never enters. Without this, every walk back
+ * into McKevin's costs another round of 404s. A timeout is not a miss: that is
+ * a slow phone, and it deserves the retry.
+ */
+const missingProps = new Set();
 const solids = [];                    // {x,z,r} circles the player cannot walk into
 // Walls are rectangles. Approximating the front of a building with circles
 // leaves gaps you can squeeze through and a doorway you cannot.
@@ -1070,7 +1095,11 @@ function withTimeout(promise, ms, label) {
   return Promise.race([
     Promise.resolve(promise).finally(() => clearTimeout(timer)),
     new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms);
+      timer = setTimeout(() => {
+        const e = new Error(`${label} timed out after ${Math.round(ms / 1000)}s`);
+        e.timeout = true;                 // a slow phone, not a missing file
+        reject(e);
+      }, ms);
     }),
   ]);
 }
@@ -1349,7 +1378,7 @@ function buildFittings(scene) {
 async function loadProps(names) {
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
-  const queue = names.filter((n) => !props.has(n));
+  const queue = names.filter((n) => !props.has(n) && !missingProps.has(n));
   const total = queue.length;
   let done = 0;
   const lane = async () => {
@@ -1359,8 +1388,9 @@ async function loadProps(names) {
           ? await loader.parseAsync(INLINE.props[name], '')
           : await withTimeout(loader.loadAsync(`./assets/props/${name}.glb`), PROP_TIMEOUT, name);
         props.set(name, g.scene);
-      } catch {
+      } catch (e) {
         /* missing, slow or broken — the room opens without it rather than not at all */
+        if (!e?.timeout) missingProps.add(name);
       }
       booting(`Opening… ${++done}/${total}`);
     }
@@ -1376,7 +1406,13 @@ function spawnProp(name, opts, tag) {
   place(obj, opts);
   if (opts.y) obj.position.y += opts.y;
   scene.add(obj);
-  if (opts.solid !== false) solids.push({ x: opts.x, z: opts.z, r: opts.width * 0.42 });
+  if (opts.solid !== false) {
+    // A natural-scale prop has no declared width to take a radius from, so ask
+    // the model how wide it turned out.
+    const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
+    const r = (opts.width ?? Math.max(size.x, size.z)) * 0.42;
+    solids.push({ x: opts.x, z: opts.z, r });
+  }
   if (tag) obj.userData.station = tag;
   // The pose has to sit on the actual model, not on a guess about it.
   opts.top = new THREE.Box3().setFromObject(obj).max.y;
@@ -1470,8 +1506,10 @@ async function buildWorkWorld() {
   buildExterior(scene, { unit: false, ground: false });
   // The old box shop is retired; buildShop is the real one.
   buildCity(scene, { flat: flatMat, solids, blockers }, { skyline: true, market: false, fry: false });
-  buildShop(scene, { flat: flatMat, solids, blockers });
-  buildMcKevins(scene, { flat: flatMat, solids, blockers });
+  await loadProps(SHOP_PROPS);
+  const ctx = { flat: flatMat, solids, blockers, spawn: spawnProp };
+  buildShop(scene, ctx);
+  buildMcKevins(scene, ctx);
   places.push({ kind: 'work', label: "McKevin's", note: 'clock in',
     act: 'Work', x: -2.5, z: FRY.counterZ - 1.5 });
   places.push({ kind: 'door', to: 'gym', label: 'Back to the gym', note: 'up the road',

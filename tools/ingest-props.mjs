@@ -20,7 +20,8 @@ import { join, dirname, basename, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const RAW = join(ROOT, 'gym/assets/props/raw');
+const DIR = join(ROOT, 'gym/assets/props');
+const RAW = join(DIR, 'raw');
 const ALIASES = join(ROOT, 'gym/assets/props/aliases.json');
 
 const args = process.argv.slice(2);
@@ -41,6 +42,13 @@ const NEEDED = [
   'lat-pulldown', 'cable-machine', 'leg-press', 'rowing-machine', 'punching-bag',
   'locker', 'water-cooler', 'towel-bin', 'protein-tub', 'bucket', 'speaker',
   'gym-clock', 'gym-mirror',
+
+  // McKevin's. Every one of these is currently a hand-placed box with a model
+  // slot behind it (see SHOP_PROPS in gym/js/mckevins.js), so a restaurant pack
+  // furnishes the whole restaurant without a line of placement code.
+  'fryer', 'grill', 'prep-counter', 'shake-machine', 'kitchen-shelf', 'walk-in',
+  'till', 'tray-stack', 'diner-booth', 'trash-bin',
+  'picnic-table', 'lamp-post', 'wheelie-bin', 'car',
 ];
 
 /**
@@ -57,11 +65,22 @@ const BONUS = [
   'battle-rope', 'sled', 'foam-roller', 'gym-ball', 'chalk-bucket',
   'bench-press', 'preacher-curl', 'hack-squat', 'stair-climber', 'elliptical',
   'weight-bench', 'barbell-rack', 'wall-clock', 'poster', 'bin', 'stool',
+
+  // Restaurant dressing. Not placed yet, but a fast-food pack is bought for the
+  // burger on the tray as much as for the fryer, and a matcher that only knows
+  // the fourteen names above throws the dressing away.
+  'diner-table', 'diner-chair', 'drinks-machine', 'coffee-machine', 'microwave',
+  'extractor-hood', 'fry-basket', 'heat-lamp', 'menu-board', 'napkin-dispenser',
+  'ketchup-bottle', 'burger', 'fries', 'soda-cup', 'food-tray', 'pizza',
+  'plate', 'mug', 'bottle', 'crate', 'pallet', 'parasol', 'bollard', 'traffic-cone',
 ];
 
 /** Tokens that say nothing about what a thing is. */
 const NOISE = new Set(['sm', 'sk', 'prop', 'props', 'static', 'mesh', 'gym', 'fitness',
-  'polygon', 'synty', 'kenney', 'lod0', 'lod', 'a', 'b', 'c', '01', '02', '03', 'low', 'high']);
+  'polygon', 'synty', 'kenney', 'lod0', 'lod', 'a', 'b', 'c', '01', '02', '03', 'low', 'high',
+  // A pack named for its art style says that in every filename, and "psx" or
+  // "restaurant" matching the word "restaurant" in nothing is pure noise.
+  'psx', 'poly', 'lowpoly', 'style', 'pack', 'asset', 'kit', 'game', 'ready']);
 
 // CamelCase has to be split before lowercasing. Kits name things
 // SM_Prop_Gym_LatPulldown_01, which without this is one token "latpulldown"
@@ -141,9 +160,25 @@ async function main() {
   const taken = new Set();
   const claimed = new Set();
 
+  // A prop the game already ships is only ever replaced deliberately.
+  //
+  // The second pack ingested is where this bites: this one is a diner, and its
+  // toilet bin scored a perfect 1.00 against the gym's towel-bin, which would
+  // have swapped a towel bin the gym is using for a lavatory bin. A pack you
+  // bought for its fryers has no business redecorating the gym, so an existing
+  // prop needs a hand-written alias to be overwritten — a guess is not enough.
+  const shipped = new Set();
+  for (const f of existsSync(DIR) ? await readdir(DIR) : []) {
+    if (extname(f).toLowerCase() === '.glb') shipped.add(basename(f, extname(f)));
+  }
+
   // Aliases first and unconditionally: a name somebody wrote down beats
   // anything a scorer works out.
   for (const want of WANTED) {
+    // null vetoes the name for this pack: "we looked, it does not have one".
+    // Without it the scorer matched picnic-table to a paper napkin at 1.00,
+    // because "table" is in "SM_TableNapkin" and nothing outranked it.
+    if (aliases[want] === null) { claimed.add(want); continue; }
     if (!aliases[want]) continue;
     const a = String(aliases[want]).toLowerCase();
     const hit = found.find((f) => basename(f).toLowerCase() === a) ||
@@ -159,7 +194,7 @@ async function main() {
   // which is exactly what it did: both got handed the same rack.
   const pairs = [];
   for (const want of WANTED) {
-    if (claimed.has(want)) continue;
+    if (claimed.has(want) || shipped.has(want)) continue;
     for (const f of found) {
       const sc = score(want, basename(f));
       if (sc >= 0.6) pairs.push({ want, file: f, sc });
@@ -172,7 +207,7 @@ async function main() {
     picks.push({ want: pr.want, file: pr.file, how: `guess ${pr.sc.toFixed(2)}` });
     taken.add(pr.file); claimed.add(pr.want);
   }
-  for (const want of NEEDED) if (!claimed.has(want)) missing.push(want);
+  for (const want of NEEDED) if (!claimed.has(want) && !shipped.has(want)) missing.push(want);
   picks.sort((a, b) => WANTED.indexOf(a.want) - WANTED.indexOf(b.want));
 
   for (const p of picks) {
@@ -206,7 +241,14 @@ async function main() {
   }
   // Write the map back out with what was actually used, so the next run is
   // reproducible and anything mis-guessed can be corrected in one place.
-  const out = {};
+  //
+  // Merged, not replaced. This started as `const out = {}`, which assumed one
+  // kit would ever be ingested — the second pack silently erased the first
+  // pack's seventeen aliases, throwing away the record of which Sketchfab file
+  // became which prop. That record is the whole point: without it a re-ingest
+  // re-guesses, and re-guessing is what handed two different props the same
+  // rack. A name this run did not claim keeps whatever it was mapped to.
+  const out = { ...aliases };
   for (const p of picks) out[p.want] = basename(p.file);
   await writeFile(ALIASES, JSON.stringify(out, null, 2) + '\n');
 

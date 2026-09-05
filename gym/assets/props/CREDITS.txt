@@ -19,3 +19,27 @@ The machines (lat pulldown, cable, leg press, rowing) and the furniture
 (lockers, water cooler, bin, speaker, clock, mirror, tubs) are not in this pack
 and remain generated. normalise() in gym/js/main.js flattens both sources to
 one flat toon material on load, which is what lets them read as one hand.
+
+================================================================================
+
+Model Information:
+* title:	Low Poly PSX Style Restaurant Props - Asset Pack
+* source:	https://sketchfab.com/3d-models/low-poly-psx-style-restaurant-props-asset-pack-888fbeb6cc0a476faa9c2ba7bcfdd93e
+* author:	keywizzz (https://sketchfab.com/keywizzz)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Low Poly PSX Style Restaurant Props - Asset Pack" (https://sketchfab.com/3d-models/low-poly-psx-style-restaurant-props-asset-pack-888fbeb6cc0a476faa9c2ba7bcfdd93e) by keywizzz (https://sketchfab.com/keywizzz) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+--
+Used in McKevin's for: the kitchen line (counter runs, oven-fronted units, hobs,
+blenders, extraction), back-of-house (wall shelving, walk-in fridges), the
+dining room (booths, trays, ketchup, kitchen bin) and the lot (lamp posts,
+dumpsters).
+
+This is a diner pack, not a fast-food one: it has no fryer, no till and no cars,
+so those three stay hand-built boxes. aliases.json records "null" against them
+rather than leaving them absent, so the next pack's ingest does not guess a
+paper napkin into a picnic table again.
