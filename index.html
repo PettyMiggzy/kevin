@@ -70,7 +70,11 @@
 
       <p class="hero__chain">
         <span class="hero__chain-dot"></span>
-        Live on <strong>Robinhood Chain</strong> with a 15% <strong>GME</strong> pool.
+        <!-- The verb is set by js/main.js from config.contractLiveAt. It said
+             "Live on" in hardcoded HTML directly above a contract address that
+             is published but not trading yet, which reads as "buy this now". -->
+        <span id="heroChainVerb">Launching on</span>
+        <strong>Robinhood Chain</strong> with a 15% <strong>GME</strong> pool.
         <a href="#burn">I keep none of it. →</a>
       </p>
 

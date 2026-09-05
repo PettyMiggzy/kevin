@@ -55,6 +55,15 @@ const ASIDES = [
     safety: true,
     needs: (c) => !c.contract,
   },
+  // The line above used to be the ONLY scam warning, and it switched itself off
+  // the moment the address was set — which is exactly when fakes start arriving.
+  // Once there IS an address the warning gets more useful, not less: the group
+  // can check a DM against the real thing.
+  {
+    text: 'Kevin have the address now. It on the website. Check any address a person send you against that one. It will not match. They lying to you.',
+    safety: true,
+    needs: (c) => Boolean(c.contract),
+  },
   {
     text: 'Kevin crew is not minted. There is no sale. Anybody who say there is, is lying.',
     safety: true,

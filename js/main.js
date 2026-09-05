@@ -33,12 +33,23 @@
   if (heroState) {
     var live = !K.contractLiveAt || Date.now() >= Date.parse(K.contractLiveAt);
     var when = K.contractLiveAt
-      ? new Date(K.contractLiveAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
+      // timeZone UTC: a midnight-Z instant renders as the previous day for
+      // every visitor west of Greenwich without it.
+      ? new Date(K.contractLiveAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })
       : null;
     var state = live
       ? (K.contract ? 'live on ' + K.chain : 'launching soon')
       : (when ? 'launches ' + when + ' \u00b7 not trading yet' : 'not trading yet');
     heroState.textContent = 'Fry cook \u00b7 ' + K.chain + ' \u00b7 ' + state;
+  }
+
+  // The hero's chain line carries the same truth. Hardcoding "Live on" in the
+  // markup is how the site claimed the token was tradeable while config said it
+  // was not — the one place a visitor is most likely to read.
+  var chainVerb = $('#heroChainVerb');
+  if (chainVerb) {
+    var chainLive = !K.contractLiveAt || Date.now() >= Date.parse(K.contractLiveAt);
+    chainVerb.textContent = chainLive && K.contract ? 'Live on' : 'Launching on';
   }
 
   // --- contract address ---------------------------------------------------
@@ -55,7 +66,7 @@
       var note = document.createElement('span');
       note.className = 'ca__pending';
       note.textContent = 'Not live until ' + new Date(K.contractLiveAt)
-        .toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) +
+        .toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' }) +
         '. Verify it here now; do not try to buy yet.';
       caValue.parentNode.appendChild(note);
     }

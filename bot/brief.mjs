@@ -62,7 +62,7 @@ function factSheet(c) {
   Buyers vest linearly over ${m.vestDays} days from settle.
 - Explorer: ${m.explorer}
 - CONTRACT ADDRESS: ${fmt(c.contract)}${contractNote(c)}
-- Auction opens: ${fmt(c.auction.startsAt, 'already open — it is live now')}
+- Auction opens: ${fmt(c.auction.startsAt, 'not announced yet')}
 - Auction closes: ${fmt(c.auction.endsAt, 'not announced')}
 
 THE POOLS (open when the auction settles)

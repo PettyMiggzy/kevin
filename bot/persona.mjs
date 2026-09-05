@@ -180,7 +180,9 @@ export function commandReply(name, config) {
   const ca = config.contract;
   const live = !config.contractLiveAt || Date.now() >= Date.parse(config.contractLiveAt);
   const liveDay = config.contractLiveAt
-    ? new Date(config.contractLiveAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
+    // timeZone UTC, or a Z instant at midnight prints as the day BEFORE for
+    // every reader west of Greenwich — telling half the group the wrong date.
+    ? new Date(config.contractLiveAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })
     : null;
   switch (name) {
     case 'start':

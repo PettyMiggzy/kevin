@@ -42,7 +42,59 @@ dumpsters).
 Also used in Kevin's crib, which is a card room in a flat and takes the same
 kit sideways: jukebox, sink, armchair, cooking pot, frying pan and wall sign.
 
-This is a diner pack, not a fast-food one: it has no fryer, no till and no cars,
-so those three stay hand-built boxes. aliases.json records "null" against them
-rather than leaving them absent, so the next pack's ingest does not guess a
-paper napkin into a picnic table again.
+This is a diner pack, not a fast-food one: it has no fryer and no cars. The till
+came from the arcade kit's cash register instead, and the picnic table from this
+pack's own diner table; only the parked cars stay hand-built boxes, and
+mckevins.js says why where somebody will read it. aliases.json records "null"
+against what genuinely has no match, rather than leaving it absent, so the next
+pack's ingest does not guess a paper napkin into a picnic table again.
+
+
+================================================================================
+
+Model Information:
+* title:	Furniture Kit (2.0) and Mini Arcade (1.2)
+* source:	https://kenney.nl/assets/furniture-kit  and  https://kenney.nl/assets/mini-arcade
+* author:	Kenney (https://kenney.nl)
+
+Model License:
+* license type:	CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/)
+* requirements:	None. Kenney asks for credit but states it is not mandatory.
+
+Credited anyway, because "not mandatory" is not a reason to take work silently:
+Furniture Kit and Mini Arcade by Kenney (https://kenney.nl), released CC0.
+--
+Used in Kevin's crib for the sofa, armchair, bed, pillow, bedside, coffee table,
+side table, corner desk and chair, monitors, keyboard, mouse, laptop, hi-fi
+speaker, television and stand, bookcase, books, radio, rug, doormat, floor and
+table lamps, plants, coat rack, bar stool, trashcan, cardboard boxes, the whole
+kitchen run (cabinets, uppers, sink, stove, fridge, mini fridge, microwave,
+coffee machine, extractor) and the four arcade machines — slot machine, prize
+wheel, claw machine and cabinet — plus McKevin's till.
+
+The kit ships GLB with the arcade atlas left EXTERNAL ("Textures/colormap.png"
+beside the file), which gltf-transform cannot even inspect. Those five were
+re-read so the loader resolved the image, had their texture URI cleared so it
+embeds in the binary chunk, and were rewritten self-contained. Worth knowing
+before ingesting more of that kit.
+
+Kenney's palette is not Kevin's, and the crib looked like a furniture catalogue
+until it was. The whole kit runs on eleven flat colours, so gym/js/brand.js maps
+those eleven to the brand palette at load — the models are unmodified on disk.
+
+================================================================================
+
+AUTHORED, NOT DOWNLOADED
+
+Six pieces no furniture or arcade kit ships: the card table, the chandelier, the
+roulette wheel, the poker chips, the playing cards and the picture frame. Built
+as geometry rather than sourced, because for shapes this simple authoring beat
+downloading — licence-free, exactly on-grid, and a number in the script resizes
+them.
+
+They arrive with POSITION and COLOR_0 and NO material and NO normals. Both
+matter: without normals the toon ramp has no surface direction to sample and
+OutlineEffect cannot offset its hull, so they render as flat black silhouettes;
+without vertexColors enabled their entire palette is discarded. normalise() in
+gym/js/main.js handles both cases now. Anything authored the same way will need
+the same treatment.

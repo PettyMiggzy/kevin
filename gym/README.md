@@ -58,21 +58,59 @@ scene, the walk back and the save.
 
 ## What is actually here
 
-- A 32x24 gym floor, toon-shaded, with black inverted-hull outlines
-- Painted zones — a wooden lifting platform, a turf lane with metre marks, a
-  cardio deck, a changing end — which do more for "this is a gym" than any
-  number of extra props
-- An exposed steel truss, fifteen strip lights, and banners hung off it
-- Twelve people using the place, seated at the equipment from the first frame,
+**Three worlds you walk between**, each built and torn down on entry so detail
+in one costs nothing in the others:
+
+- **Kevin's Crib** (16 x 11, first person, 229 meshes) — a card room with a
+  green felt table under a chandelier, a slot machine, prize wheel and claw
+  machine down one wall, a six-monitor trading desk running $KEVIN candles, a
+  kitchen, a bed, and his own face framed on the walls with the contract
+  address over the bed
+- **Kevin's Gym** (32 x 24, 907 meshes) — painted zones (a wooden lifting
+  platform, a turf lane with metre marks, a cardio deck, a changing end), an
+  exposed steel truss with fifteen strip lights and banners, a boxing ring, a
+  reception with a stocked supplement counter, and a water station by the door
+- **McKevin's** (24 x 16, 293 meshes) — a restaurant you work a shift inside:
+  kitchen line, counter with three tills, dining room, drive-thru window, and a
+  car park with a pylon sign
+
+**And in them:**
+
+- Twelve people using the gym, seated at the equipment from the first frame,
   with actual weights in their hands at the spots that call for one
-- Twelve props generated with Tripo and normalised to one art direction
-- Kevin, built from primitives, whose body scales with a single muscle number
+- 111 props at 5.4MB total, from four sources — a Sketchfab CC-BY gym pack, two
+  CC0 Kenney kits, a diner kit, and six pieces authored to fit — all flattened
+  to one flat toon material by `normalise()` on load, which is what lets four
+  hands read as one
+- Kevin, whose body scales with a single muscle number, and who can be a
+  billboard of Todd's hand-drawn walk cycles instead (`?sprite`)
 - Three stations: bench and dumbbells feed strength, treadmill feeds stamina
-- Reception with a stocked supplement counter, and a water station by the door
-- A free-weights end, a machine wall, a cardio row and a changing end
 - Exponential decay with a cap, a streak, and earnable freezes
-- A three-item supplement shop paid for in earned $KEVIN
-- Touch controls, a mobile layout, and saved progress
+- **A shop with eighteen things in it**: three consumables, eight colourways,
+  and seven skins cut out of the contract address itself
+- Touch controls, a mobile layout, sound, and saved progress
+
+## Skins, and why six of them are the contract address
+
+An Ethereum address is 40 hex characters and a hex colour is six, so the CA is
+six colours with four left over. Chop `0x63D7fa...9e284A` into sixes and you get
+`#63D7FA #990227 #94F594 #F724E7 #C38FF0 #BE3F9E` — anyone can check that, which
+is the point. They are the only skins in the game whose colour nobody has to
+take on trust. The four left over wrap onto the first two to make a seventh that
+is not for sale at any price: it unlocks when the other six are owned.
+
+That is not decoration. `js/config.js` publishes the address before trading
+opens so the group memorises the real one while things are calm and recognises
+the fakes on launch day. Collecting these makes somebody read the real address,
+in order, for an hour. A cosmetic that teaches the CA does more anti-scam work
+than a warning nobody reads.
+
+Skins are a **palette swap, never a hue rotation** (`skins.js`) — Todd's art is
+four flat colours and hue-rotating flat colour that has been through JPEG turns
+his red to mud. They apply to whichever body is standing there: the sprite gets
+a recoloured atlas, the built body gets its materials classified by hue and
+repainted, each keeping its own offset from the kit red so the shadow red stays
+darker than the body red in every colourway.
 
 ## The two decisions worth knowing about
 
@@ -123,13 +161,17 @@ than anything else in the build.
 
 ## What is deliberately NOT in here
 
-Multiplayer, leaderboards, wallet connect, NFTs, a second room, a minigame,
-achievements, quests, NPCs, sound. v1 tests return rate; a minigame would
-confound that with whether the minigame is fun.
+Multiplayer, leaderboards, wallet connect, achievements, quests.
 
 **No crypto either, and that is on purpose.** $KEVIN in the shop is a score. It
-touches no wallet and no chain. Adding a token to v1 turns a game problem into
-a compliance and security problem before anyone knows whether the game works.
+touches no wallet and no chain — the contract address appears in the game only
+as six colours and a framed picture, never as something to transact with.
+Adding a token to v1 turns a game problem into a compliance and security
+problem before anyone knows whether the game works.
+
+**No golden arches.** McKevin's is a fry house with a red-and-yellow fascia and
+a pylon sign, and it will stay one. The name is fine; the mark is the line, and
+`tools/scrub-logo.mjs` exists because an early sticker set crossed it.
 
 ## Known limits, stated plainly
 
@@ -139,26 +181,39 @@ a compliance and security problem before anyone knows whether the game works.
   plus value, derived lazily on read, with the client sending intents ("I used
   the bench") rather than results ("my muscle is 90"). `save.js` says the same
   thing where somebody changing it will read it.
-- **The props and the character are two art directions.** Props come from
-  Tripo and are smooth; the character is blocky. It reads acceptably as toys in
-  a room, but it is a real decision and not yet made: voxelise the props, or
-  keep the contrast deliberately.
-- Only the head extrudes from the grid. The body is procedural boxes coloured
-  by the shirt trait, because the avatar is a portrait and stops at the
-  shoulders.
-- `plate-tree` is over the 6,000-triangle budget at 7,302. The optimiser flags
-  it rather than raising the budget to hide it.
-- No sound at all.
+- **Sprite Kevin is still behind `?sprite`.** Todd's drawings are the only
+  thing that is exactly on model, but the walk atlas is one build — there is no
+  lean/fit/swole set yet — so `applyMuscle` can only scale the whole drawing
+  16%, which is a poor substitute for a torso that actually inflates. The built
+  body stays the default until those sheets exist.
+- **Only the head extrudes from the NFT grid.** The body is procedural boxes
+  coloured by the shirt trait, because the avatar is a portrait and stops at
+  the shoulders.
+- **Fourteen props ship without being placed** (~977KB of the repo, not of any
+  player's download — props are fetched by name on demand). They are ingested
+  spares waiting for a home, not dead code, but they are not free either.
+- `raw/` is 294MB and gitignored. `state.json` beside it is the paid-work cache
+  and IS committed — a cached task id is the difference between re-downloading
+  a model and buying it a second time. Never delete `raw/` without checking it.
 
 ## Regenerating the assets
 
 ```
-node tools/gen-props.mjs --dry      # what it would cost, spends nothing
-node tools/gen-props.mjs            # generate anything not cached
-node tools/optimize-props.mjs       # 154MB -> 772KB
+node tools/gen-props.mjs --dry                     # what it would cost, spends nothing
+node tools/gen-props.mjs                           # generate anything not cached
+node tools/ingest-props.mjs --from ~/some-kit --dry # match a bought kit to our names
+node tools/optimize-props.mjs                      # 294MB -> 5.4MB, 57x
+node tools/slice-sprites.mjs --sheet <png> --out <dir>   # cut a walk sheet
 ```
+
+`optimize-props.mjs` flags anything over a 20,000-triangle budget rather than
+raising the budget to hide it. Nothing is over it today.
 
 `gym/assets/props/state.json` is the paid-work cache and is **committed on
 purpose** — a cached task id is the difference between re-downloading a model
 and buying it a second time. `raw/` holds the unoptimised originals and is
 gitignored; never delete it without checking `state.json` first.
+
+Licences live in `gym/assets/props/licences/` and the attribution every CC-BY
+source requires is in `gym/assets/props/CREDITS.txt`. Read it before shipping
+anywhere new: CC-BY is free, not unattributed.
