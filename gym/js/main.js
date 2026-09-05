@@ -26,6 +26,7 @@ import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, 
   skyTexture, concreteTexture, facadeTexture, bannerTexture, billboardTexture, boardTexture } from './gear.js';
 import { play, setMuted, isMuted } from './audio.js';
 import { buildCity, buildLeaderboard, paintLeaderboard, MARKET, FRY, QUEUE } from './city.js';
+import { buildCrib, CRIB, inCrib } from './crib.js';
 import { Shift, ITEMS, SHIFT_LENGTH } from './job.js';
 
 const $ = (s) => document.querySelector(s);
@@ -908,12 +909,13 @@ async function init() {
   buildRoom(scene);
   buildExterior(scene);
   buildCity(scene, { flat: flatMat, solids, blockers });
+  buildCrib(scene, { flat: flatMat, solids, blockers });
   board = buildLeaderboard(scene, { flat: flatMat });
 
   await loadCrew();
-  // On the forecourt facing the door, and clear of the market — 15.5 put the
-  // player standing in the middle of the stalls, which now live at z 15.4.
-  kevin = spawnPlayer(state.crewId ?? 0, new THREE.Vector3(0, 0, 11.5));
+  // You start at home. The gym and the fry house are a walk down the street,
+  // or a tap on the map on the telly.
+  kevin = spawnPlayer(state.crewId ?? 0, new THREE.Vector3(CRIB.spawn.x, 0, CRIB.spawn.z));
 
   // Everyone shares one material, so the whole crew costs one shader. They do
   // NOT get collision: they move, so a static solid would leave an invisible
@@ -996,6 +998,10 @@ async function init() {
   }
   places.push({ kind: 'work', label: "McKevin's", note: 'clock in',
     act: 'Work', x: FRY.x, z: FRY.counterZ - 1.4 });
+  places.push({ kind: 'cards', label: 'Card table', note: "Kevin's card room",
+    act: 'Play', x: CRIB.table.x + 1.5, z: CRIB.table.z - 0.9 });
+  places.push({ kind: 'map', label: 'The telly', note: 'pick a world',
+    act: 'Worlds', x: CRIB.tv.x - 1.3, z: CRIB.tv.z });
 
   // Settle the absence before the first frame, so the number in the toast is
   // the number on the bars.
@@ -1079,6 +1085,10 @@ function frame() {
     lookY = c.at;
     camera.position.lerp(tmp, 1 - Math.pow(0.004, dt));
     aim.set(set.station.x, lookY, set.station.z);
+  } else if (inCrib(kevin.group.position.x, kevin.group.position.z)) {
+    tmp.set(CRIB.cam.x, CRIB.cam.y, CRIB.cam.z);
+    camera.position.lerp(tmp, 1 - Math.pow(0.002, dt));
+    aim.set(CRIB.x, CRIB.cam.atY, CRIB.z);
   } else {
     // Outside, pull back and up: there is a building to read, and the same
     // shot that frames a room nicely puts your nose against its front wall.
@@ -1318,18 +1328,29 @@ function move(dt, now) {
     const nx = (input.s / len) * SPEED * dt;
     const nz = (-input.f / len) * SPEED * dt;
     const p = kevin.group.position;
-    // Inside, you are held by the room. Outside, by the yard.
-    const outside = p.z > ROOM.d / 2;
-    const half = outside
-      ? { x: YARD.x, z: YARD.z }
-      : { x: ROOM.w / 2 - 0.7, z: YARD.z };
+    // Inside, you are held by the room. Outside, by the street, which is not
+    // symmetric any more: the crib is off the left end, past the market.
+    const inRoom = p.z <= ROOM.d / 2;
+    // And you cannot walk up the SIDE of the gym. Without this the x limit
+    // changes the instant you cross z=7, so stepping north at the left edge of
+    // the street teleports you fifteen metres sideways into the doorway — which
+    // was already true on the right before the crib existed, just harder to
+    // reach. Holding z back wherever x is outside the room's width means the
+    // limit only ever changes where the two agree.
+    const throughDoor = Math.abs(p.x) <= ROOM.w / 2 - 0.7;
+    const lim = {
+      x0: inRoom ? -(ROOM.w / 2 - 0.7) : CRIB.x - CRIB.w / 2 - 0.7,
+      x1: inRoom ? ROOM.w / 2 - 0.7 : YARD.x,
+      z0: throughDoor ? -YARD.z : ROOM.d / 2 + 0.5,
+      z1: YARD.z,
+    };
 
     // Resolve each axis separately so sliding along a prop feels right rather
     // than sticking to it.
-    for (const [axis, d, limit] of [['x', nx, half.x], ['z', nz, half.z]]) {
+    for (const [axis, d, lo, hi] of [['x', nx, lim.x0, lim.x1], ['z', nz, lim.z0, lim.z1]]) {
       const was = p[axis];
       const before = depthAt(p.x, p.z);
-      p[axis] = clamp(p[axis] + d, -limit, limit);
+      p[axis] = clamp(p[axis] + d, lo, hi);
       // Allow the move if it lands clear, or if it is digging you out.
       if (depthAt(p.x, p.z) > 0 && depthAt(p.x, p.z) >= before) p[axis] = was;
     }
@@ -1382,6 +1403,55 @@ function enter(pl) {
   if (pl.kind === 'shop') return openShop();
   if (pl.kind === 'nft') return openCrew();
   if (pl.kind === 'work') return clockIn();
+  if (pl.kind === 'cards') return openCards();
+  if (pl.kind === 'map') return openMap();
+}
+
+/**
+ * The card room, in a frame rather than a link.
+ *
+ * /poker is a whole page of its own and works standing alone, so this does not
+ * reimplement it — it borrows it. Navigating away instead would drop the 3D
+ * scene, the walk back and the save, and coming back would cost a full reload
+ * of three hundred megabytes of gym. The frame is loaded on first open and kept
+ * afterwards, so sitting down a second time is instant.
+ */
+let cardsFrame = null;
+function openCards() {
+  if (set) abortSet();
+  play('ui');
+  if (!cardsFrame) {
+    cardsFrame = document.createElement('iframe');
+    cardsFrame.title = "Kevin's card room";
+    cardsFrame.src = '../poker/';
+    $('#cardsBody').append(cardsFrame);
+  }
+  $('#cards').classList.add('on');
+}
+
+function openMap() {
+  if (set) abortSet();
+  play('ui');
+  $('#map').classList.add('on');
+}
+
+/**
+ * Fast travel. The street is long now — crib at one end, fry house at the
+ * other — and walking it is a nice thing to be able to do rather than a thing
+ * you must do every time.
+ */
+const WORLDS = {
+  crib: { label: "Kevin's Crib", x: CRIB.spawn.x, z: CRIB.spawn.z },
+  gym: { label: "Kevin's Gym", x: 0, z: 3.0 },
+  work: { label: "McKevin's", x: FRY.x, z: FRY.counterZ - 2.2 },
+};
+function goWorld(id) {
+  const w = WORLDS[id];
+  if (!w) return;
+  kevin.group.position.set(w.x, 0, w.z);
+  nearest = null;
+  $('#map').classList.remove('on');
+  play('ui');
 }
 
 // --- floating numbers -------------------------------------------------------
@@ -1806,6 +1876,11 @@ $('#shopBtn').onclick = () => {
 };
 $('#closeShop').onclick = () => { play('ui'); $('#shop').classList.remove('on'); };
 $('#closeNft').onclick = () => { play('ui'); $('#nft').classList.remove('on'); };
+$('#closeCards').onclick = () => { play('ui'); $('#cards').classList.remove('on'); };
+$('#closeMap').onclick = () => { play('ui'); $('#map').classList.remove('on'); };
+for (const b of document.querySelectorAll('#map .worlds button')) {
+  b.onclick = () => goWorld(b.dataset.world);
+}
 $('#nftGrid').onclick = (e) => {
   const fig = e.target.closest('figure');
   if (!fig) return;

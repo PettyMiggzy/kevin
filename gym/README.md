@@ -11,6 +11,27 @@ python3 -m http.server 8899   # then http://127.0.0.1:8899/gym/
 
 WASD or the on-screen stick to move, **E** or the button to work a station.
 
+## Three worlds, one street
+
+You start at home. **Kevin's Crib** is the hub: the card table is in it, and the
+telly is a map that will drop you at either of the other two. **Kevin's Gym** is
+down the street, and **McKevin's** is at the far end. It is one continuous
+street, so all of it can be walked — the map is a shortcut, not a loading screen.
+
+The crib gets its own camera instead of the chase cam. The chase cam sits behind
+and above the player and pulls further back the further up the street you are,
+which is right for a forecourt and wrong for a room six metres deep: from inside
+the crib it ends up outside the back wall, filling the screen with it. The room
+is small enough to frame whole, so it is framed whole. Its front wall is cut to
+waist height for the same reason — the dollhouse trick, because at full height
+the near wall stands between the shot and the player and you vanish behind your
+own house.
+
+The card room is `/poker` in a frame rather than a link. It is a whole page that
+works standing alone, so the crib borrows it instead of reimplementing it;
+navigating away would drop the scene, the walk back and the save, and returning
+would cost a full reload of the gym.
+
 ## What is actually here
 
 - One room, toon-shaded, with black inverted-hull outlines

@@ -78,7 +78,7 @@ THE BURN
 WHERE TO GO
 - Site: https://iamkevin.lol
 - Game: https://iamkevin.lol/gym  (also /game and /play)
-- Card room: https://iamkevin.lol/poker
+- Card room: https://iamkevin.lol/poker  (also inside the game, at Kevin's Crib)
 - Telegram: ${c.links.telegram}
 - X: ${c.links.x}
 - Chart: ${fmt(c.links.chart, 'no chart yet — nothing is trading')}
@@ -91,8 +91,11 @@ THE CARD ROOM (a free browser game, built by the team)
 - The chips are a score in the player's own browser. They are NOT the token and
   they touch no wallet and no chain.
 
-THE GYM (a free browser game, built by the team)
-- Walk into Kevin's Gym at https://iamkevin.lol/gym. Works on a phone. Free.
+THE GAME (free, in a browser, built by the team) — three places on one street
+- It starts at KEVIN'S CRIB, his home. The card table is there, and the telly is
+  a map that takes you to the other two.
+- KEVIN'S GYM is down the street. McKEVIN'S is at the far end.
+- Walk into it at https://iamkevin.lol/gym. Works on a phone. Free.
 - Bench, dumbbells and treadmill. Five reps to a set; each rep is a timing hit —
   land the marker in the green band.
 - Miss a day and muscle comes off. That is the whole point of it.

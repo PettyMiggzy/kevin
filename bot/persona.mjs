@@ -236,6 +236,7 @@ export function commandReply(name, config) {
       return [
         'Kevin build a gym. https://iamkevin.lol/gym',
         'It is free. It work on a phone.',
+        'You start at Kevin crib. The gym is down the street.',
         'Five reps to a set. Miss a day and it come off.',
         'The $KEVIN in the gym is a score. It is not the token.',
       ].join('\n');
@@ -243,6 +244,7 @@ export function commandReply(name, config) {
     case 'poker':
       return [
         'Kevin have a card room. https://iamkevin.lol/poker',
+        'It is in Kevin crib as well. Walk to the table.',
         'Texas hold em. Kevin and Kevin friend. Six seat.',
         'It is free. It work on a phone.',
         'The chip is a score, same as the gym. It is not the token.',
