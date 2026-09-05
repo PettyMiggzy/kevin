@@ -28,7 +28,7 @@ import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, 
   skyTexture, concreteTexture, facadeTexture, bannerTexture, billboardTexture, boardTexture } from './gear.js';
 import { play, setMuted, isMuted } from './audio.js';
 import { buildCity, buildLeaderboard, paintLeaderboard, MARKET, FRY, QUEUE } from './city.js';
-import { buildCrib, CRIB } from './crib.js';
+import { buildCrib, CRIB, CRIB_PROPS } from './crib.js';
 import { buildMcKevins, buildShop, LOT, SHOP_PROPS } from './mckevins.js';
 import { disposeWorld, captureInto } from './worlds.js';
 import { Shift, ITEMS, SHIFT_LENGTH } from './job.js';
@@ -87,13 +87,30 @@ function normalise(root, { outline = true } = {}) {
   root.traverse((o) => {
     if (!o.isMesh) return;
     const src = Array.isArray(o.material) ? o.material[0] : o.material;
-    const base = src?.color ? src.color.clone() : new THREE.Color('#B9B2A6');
+    // A prop authored rather than downloaded may carry its whole palette in
+    // COLOR_0 with no material at all — which is how the card table, the
+    // chandelier and the roulette wheel are built. Flattening those to one base
+    // colour throws the entire model away: they came out uniformly black,
+    // because with no material there is no colour to read and the ramp floors
+    // at its darkest band. Painted geometry keeps a white base and lets the
+    // vertex colours through, exactly as the crew bodies already do.
+    // Geometry authored by hand can arrive with POSITION and COLOR_0 and
+    // nothing else. Missing normals are not a cosmetic problem here: the toon
+    // ramp has no surface direction to sample so it floors at its darkest
+    // band, and OutlineEffect cannot push its hull outward so the hull lands
+    // exactly on the surface. Between them the prop renders as a black
+    // silhouette — which is what the card table, chandelier and roulette wheel
+    // all did until this line existed.
+    if (o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+    const painted = !!o.geometry?.attributes?.color;
+    const base = painted ? new THREE.Color('#FFFFFF')
+      : src?.color ? src.color.clone() : new THREE.Color('#B9B2A6');
     // Tripo's albedo often bakes in lighting, which fights a flat ramp. Push
     // the colour up and desaturate slightly so the bands stay readable.
     const hsl = { h: 0, s: 0, l: 0 };
     base.getHSL(hsl);
     base.setHSL(hsl.h, Math.min(0.85, hsl.s * 0.9), clamp(hsl.l * 1.15 + 0.06, 0.16, 0.92));
-    const m = toon(base);
+    const m = toon(base, painted ? { vertexColors: true } : undefined);
     m.map = src?.map ?? null;                       // keep the texture, drop the shading
     m.userData.outlineParameters = outline
       ? { thickness: 0.008, color: [0, 0, 0], alpha: 1 }
@@ -1549,8 +1566,9 @@ async function buildWorkWorld() {
   return { fp: false, spawn: { x: 5.8, z: 10.5 } };
 }
 
-function buildCribWorld() {
-  buildCrib(scene, { flat: flatMat, solids, blockers });
+async function buildCribWorld() {
+  await loadProps(CRIB_PROPS);
+  buildCrib(scene, { flat: flatMat, solids, blockers, spawn: spawnProp });
   places.push({ kind: 'cards', label: 'Card table', note: "Kevin's card room",
     act: 'Play', x: CRIB.table.x + 1.5, z: CRIB.table.z - 0.9 });
   places.push({ kind: 'map', label: 'The telly', note: 'pick a world',
