@@ -436,6 +436,31 @@ async function main() {
       // Canned answers first: they are the questions that get asked most, they
       // must never vary, and the contract one must never go near a model.
       const cmd = parseCommand(msg.text, me);
+
+      // /welcometest — render a welcome to yourself, without waiting for a join.
+      //
+      // Welcomes are the one feature that cannot be checked by using the bot:
+      // they only fire when somebody new arrives, and by then it is in front of
+      // the group. Admins only, and it deliberately reuses greet() rather than
+      // reimplementing it, so what you see is exactly what a real arrival gets
+      // — same wording pool, same image, same buffering.
+      if (cmd === 'welcometest') {
+        // In a DM there are no administrators and the call just errors, so
+        // check the chat type first rather than asking and swallowing it.
+        let isAdmin = msg.chat.type === 'private';
+        if (!isAdmin) {
+          const admins = await tg(token, 'getChatAdministrators', { chat_id: msg.chat.id })
+            .catch(() => []);
+          isAdmin = admins.some((a) => a.user?.id === msg.from?.id);
+        }
+        if (!isAdmin) { await reply('Kevin only does that for the people who run the place.'); continue; }
+        // Skip the ten-minute dedupe, or a second test in the same window is
+        // silently swallowed and looks like the feature is broken.
+        greeted.delete(`${msg.chat.id}:${msg.from.id}`);
+        greet(msg.chat.id, [msg.from]);
+        continue;
+      }
+
       if (cmd === 'link') { await reply(await linkCode(token, msg)); continue; }
       if (cmd === 'top' || cmd === 'lifts') { await reply(render('gym', await top('gym'))); continue; }
       if (cmd === 'shifts' || cmd === 'topjob') { await reply(render('job', await top('job'))); continue; }

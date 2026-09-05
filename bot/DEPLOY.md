@@ -79,6 +79,12 @@ gym - Kevin gym
 help - what Kevin can do
 ```
 
+`/welcometest` is deliberately NOT in that list. It is admin-only and exists to
+check the greeting without waiting for somebody to join — it runs the real
+`greet()`, so the wording pool, the image and the buffering are exactly what a
+genuine arrival gets. Putting it in the menu would just invite the group to
+press it.
+
 ## Updating what it knows
 
 The bot reads `js/config.js` at startup — the same file the website renders
