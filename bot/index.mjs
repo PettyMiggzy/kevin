@@ -161,7 +161,12 @@ function addressed(msg, me) {
   const text = msg.text || '';
   if (chatType === 'private') return true;
   if (msg.reply_to_message?.from?.id === me.id) return true;
-  if (text.includes('@' + me.username)) return true;
+  // Case-insensitively. Telegram resolves @iamkevinzbot and @Iamkevinzbot to
+  // the same bot, and people type whichever their keyboard offers — but
+  // me.username is whatever case it was registered in, so a plain includes()
+  // silently ignored every mention that did not match it exactly. That is a
+  // bot that looks broken to the one person who tried to talk to it.
+  if (text.toLowerCase().includes('@' + me.username.toLowerCase())) return true;
   if (/^\/\w+/.test(text)) return true;
   // Called by name, at the start, the way you would in a room.
   if (/^\s*kevin\b/i.test(text)) return true;

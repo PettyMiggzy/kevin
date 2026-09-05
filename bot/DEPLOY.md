@@ -65,9 +65,20 @@ systemctl restart kevin-bot         # after changing config.js
 
 1. [@BotFather](https://t.me/BotFather) → `/newbot`, take the token.
 2. Add the bot to the group.
-3. `/setprivacy` → select the bot → **Disable**. Without this Telegram only
-   shows it messages that start with `/`, so mentions and "Kevin ..." never
-   reach it.
+3. **Make it an admin in the group**, or `/setprivacy` → **Disable**. Either
+   works and admin is the better one — it also unlocks join events.
+
+   This is not optional, and the reason is worth knowing. A bot with privacy
+   mode on receives only: commands aimed at it, general commands if it sent the
+   last message, inline messages, and replies to its own messages. **A plain
+   `@mention` is not on that list.** So "@Iamkevinzbot where do you work" never
+   reaches the bot at all, and neither does "Kevin ...". The docs are explicit
+   about the way out: "Privacy mode is enabled by default for all bots, except
+   bots that were added to a group as admins (bot admins always receive all
+   messages)."
+
+   Service messages — people joining and leaving — arrive either way. Those are
+   never affected by privacy mode.
 4. Optional but worth it: `/setcommands`, paste:
 
 ```
