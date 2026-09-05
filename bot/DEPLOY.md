@@ -100,6 +100,7 @@ of telling people nobody has it yet.
 | Silent in a group | Group privacy still on — do step 3 above |
 | Answers everything in a group | It should not; it only replies to mentions, replies, commands and messages starting with "Kevin" |
 | "Kevin is on the fryer" replies | Groq call failed — check `journalctl -u kevin-bot` |
+| Occasional `429 ... tokens per minute (TPM)` | Normal on the free tier. `openai/gpt-oss-120b` gets **8K TPM / 30 RPM / 1K RPD**, shared across the org, and a long thread in memory can push one request over. The bot now waits out the window Groq quotes and retries once, so most of these never reach the group. If they get frequent, `groq/compound` has **70K TPM** — nine times the budget — but only **250 requests a day** against 1,000, so it is a straight trade of thread length for message count |
 | Startup dies naming the model | Only if the key exposes no chat model at all |
 | Silent in a group that is not the official one | By design — see below |
 | Gives a contract address | Should be impossible while `contract` is null in config.js — `/ca` never touches the model. If it ever happens, stop the bot and tell me |

@@ -81,7 +81,18 @@ async function call(path, key, init = {}) {
   }
   if (!r.ok) {
     const msg = body?.error?.message || text.slice(0, 200);
-    throw new Error(`Groq HTTP ${r.status}: ${msg}`);
+    const err = new Error(`Groq HTTP ${r.status}: ${msg}`);
+    err.status = r.status;
+    // Groq documents a retry-after header in seconds, plus
+    // x-ratelimit-reset-tokens for the TPM window specifically. Both are
+    // authoritative; the wait quoted in the error prose is not always there.
+    const after = r.headers.get('retry-after');
+    const resetT = r.headers.get('x-ratelimit-reset-tokens');
+    const secs = after ? Number(after)
+      : resetT ? Number(String(resetT).replace(/[^\d.]/g, ''))
+      : NaN;
+    if (Number.isFinite(secs)) err.retryAfterMs = Math.ceil(secs * 1000) + 250;
+    throw err;
   }
   return body;
 }
@@ -124,7 +135,7 @@ export async function checkModel(key, configured) {
  * a high temperature makes him witty, and witty is the one thing he is not.
  */
 export async function chat(key, { model, messages, temperature = 0.7, maxTokens = 320 }) {
-  const body = await call('/chat/completions', key, {
+  const send = () => call('/chat/completions', key, {
     method: 'POST',
     body: JSON.stringify({
       model,
@@ -134,6 +145,26 @@ export async function chat(key, { model, messages, temperature = 0.7, maxTokens 
       top_p: 0.9,
     }),
   });
+
+  let body;
+  try {
+    body = await send();
+  } catch (e) {
+    // gpt-oss-120b is 8,000 tokens per minute on the free tier, shared across
+    // the org, and a long thread in memory can push one request over it. It is
+    // occasional rather than constant — one hit in four hours of a busy group —
+    // but when it happens Groq tells us exactly how long the window has left,
+    // so waiting beats handing the group a "Kevin is on the fryer" that was
+    // really a rate limit.
+    //
+    // Once only, and only for a wait short enough that the answer still belongs
+    // to the message that asked it. Longer than that and the fallback is the
+    // honest reply.
+    const wait = e.retryAfterMs;
+    if (e.status !== 429 || !wait || wait > 30000) throw e;
+    await new Promise((r) => setTimeout(r, wait));
+    body = await send();
+  }
   const choice = body.choices?.[0];
   const text = choice?.message?.content?.trim();
   if (!text) throw new Error('Groq returned an empty completion');
