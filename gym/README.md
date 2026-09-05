@@ -17,6 +17,13 @@ WASD or the on-screen stick to move, **E** or the button to work a station.
 and a telly that takes you anywhere. **Kevin's Gym** is the gym, inside and out.
 **McKevin's** is the fry house.
 
+They are joined by doors, not a menu: the crib's front door puts you on the
+gym's forecourt, the far end of that forecourt goes to McKevin's, and both have
+a way back. Each swap happens behind a fade — the worlds really are torn down
+and rebuilt between those two frames, and a hitch you can see reads as a bug
+while a hitch behind a fade reads as a door. The Worlds button is still there as
+a shortcut.
+
 They are separate in the way that matters: **one is loaded at a time.** Entering
 a world builds it, leaving it *disposes* it — geometry, materials and textures
 freed, not merely hidden. Hiding a mesh saves you a draw call and nothing else;
@@ -51,6 +58,12 @@ scene, the walk back and the save.
 ## What is actually here
 
 - A 32x24 gym floor, toon-shaded, with black inverted-hull outlines
+- Painted zones — a wooden lifting platform, a turf lane with metre marks, a
+  cardio deck, a changing end — which do more for "this is a gym" than any
+  number of extra props
+- An exposed steel truss, fifteen strip lights, and banners hung off it
+- Twelve people using the place, seated at the equipment from the first frame,
+  with actual weights in their hands at the spots that call for one
 - Twelve props generated with Tripo and normalised to one art direction
 - Kevin, built from primitives, whose body scales with a single muscle number
 - Three stations: bench and dumbbells feed strength, treadmill feeds stamina

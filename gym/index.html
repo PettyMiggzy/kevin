@@ -246,6 +246,10 @@
     cursor: pointer; }
   body.touch #worldBtn { bottom: 246px; }
   body.working #worldBtn { display: none; }
+  /* The veil a world change happens behind. */
+  #veil { position: absolute; inset: 0; background: var(--void); opacity: 0; pointer-events: none;
+    transition: opacity .26s ease; z-index: 40; }
+  #veil.on { opacity: 1; }
   #muteBtn { position: absolute; right: 12px; bottom: 62px; padding: 8px 12px; font: 700 11px/1 var(--mono);
     letter-spacing: .06em; cursor: pointer; background: var(--void); }
   body.touch #muteBtn { bottom: 200px; }
@@ -305,6 +309,7 @@
   <button id="muteBtn" class="panel" aria-label="Sound">SOUND ON</button>
   <button id="shopBtn" class="panel">Supplements</button>
   <button id="worldBtn" class="panel">Worlds</button>
+  <div id="veil"></div>
 
   <div id="shop" class="panel">
     <h2>Supplements</h2>

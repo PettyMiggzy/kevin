@@ -134,6 +134,21 @@ function buildRoom(scene) {
     m.userData.outlineParameters = { visible: false };
     return m;
   };
+  const box = (w, h, d, colour, x, y, z, ry = 0) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), plain(colour));
+    m.position.set(x, y, z);
+    m.rotation.y = ry;
+    scene.add(m);
+    return m;
+  };
+  /** A flat panel lying on the floor. Zones are painted, not modelled. */
+  const zone = (w, d, colour, x, z, y = 0.02, map = null) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), flat(colour, map));
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(x, y, z);
+    scene.add(m);
+    return m;
+  };
 
   // Rubber tile rather than a flat fill. A painted floor does more for "this is
   // a gym" than another rack would, for one texture instead of a draw call.
@@ -142,76 +157,147 @@ function buildRoom(scene) {
     flat('#FFFFFF', floorTexture())
   );
   floor.rotation.x = -Math.PI / 2;
-  // Lifted off zero. The forecourt out front is a 60x60 plane centred at z=20,
-  // which reaches back to z=-10 and so passes underneath this entire room — two
-  // surfaces at exactly y=0 fight for the depth buffer and the floor shimmers
-  // and tears as the camera moves. A few millimetres is invisible and settles it.
+  // Lifted off zero. The forecourt out front is a big plane that passes
+  // underneath this entire room, and two surfaces at exactly y=0 fight for the
+  // depth buffer and tear as the camera moves. A few millimetres settles it.
   floor.position.y = 0.008;
   scene.add(floor);
 
-  const mat = new THREE.Mesh(new THREE.PlaneGeometry(7.4, 5.0), flat('#FFFFFF', platformTexture()));
-  mat.rotation.x = -Math.PI / 2;
-  mat.position.set(-4.2, 0.024, 1.2);      // and clear of the floor above it
-  scene.add(mat);
+  // --- zones ----------------------------------------------------------------
+  // The single biggest thing that makes a gym read as a gym rather than a shed
+  // with equipment in it: the floor tells you what happens where. All of it is
+  // painted quads a few millimetres apart, which costs a handful of draw calls
+  // and does more than any number of extra props.
+  // A lifting platform is wood between rubber bumpers, which is also the only
+  // warm surface in the room and the reason the weights end reads as the
+  // weights end from across the floor.
+  zone(11.4, 7.4, '#241C16', -8.0, -8.0, 0.018);                      // rubber surround
+  zone(9.4, 5.6, '#9A6A38', -8.0, -8.0, 0.022);                       // the wood
+  for (let i = 0; i < 9; i++) {                                        // planks
+    zone(9.4, 0.05, '#7A5028', -8.0, -10.6 + i * 0.62, 0.026);
+  }
+  zone(7.0, 12.0, PALETTE.mat, 3.4, 1.0, 0.022);                      // turf lane
+  for (let i = 0; i < 11; i++) {                                       // its metre marks
+    zone(0.5, 0.09, '#DCEFD8', 3.4, -4.6 + i * 1.1, 0.026);
+  }
+  zone(8.0, 6.0, '#2A2A32', 12.0, -4.0, 0.02);                        // cardio deck
+  zone(7.2, 5.2, '#3A3A46', -12.4, 4.8, 0.02);                        // changing end
+  // Lane edging in brand yellow, so the zones have an outline like everything
+  // else in this world does.
+  for (const [w, d, x, z] of [[11.4, 0.14, -8.0, -11.75], [11.4, 0.14, -8.0, -4.25],
+                              [0.14, 12.0, -0.1, 1.0], [0.14, 12.0, 6.9, 1.0]]) {
+    zone(w, d, PALETTE.trim, x, z, 0.028);
+  }
 
+  // --- walls ----------------------------------------------------------------
+  // Two-tone, not one flat colour. A dado rail's worth of dark below the brand
+  // band gives every wall a horizon, which is what stops a big room reading as
+  // a big empty room.
+  const DADO = 1.9;
   const wall = (w, h, x, y, z, ry) => {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), plain(PALETTE.wall));
     m.position.set(x, y, z);
     m.rotation.y = ry;
     scene.add(m);
+    const lower = new THREE.Mesh(new THREE.PlaneGeometry(w, DADO), plain('#4A4550'));
+    lower.position.set(x, DADO / 2, z);
+    lower.rotation.y = ry;
+    lower.translateZ(0.015);
+    scene.add(lower);
     const band = new THREE.Mesh(new THREE.PlaneGeometry(w, 0.34), plain(PALETTE.trim));
-    band.position.set(x, 2.5, z);
+    band.position.set(x, DADO + 0.17, z);
     band.rotation.y = ry;
-    band.translateZ(0.02);
+    band.translateZ(0.03);
     scene.add(band);
     // Skirting, so the wall meets the floor instead of just ending.
-    const skirt = new THREE.Mesh(new THREE.PlaneGeometry(w, 0.22), plain('#3A3A40'));
+    const skirt = new THREE.Mesh(new THREE.PlaneGeometry(w, 0.22), plain('#26262C'));
     skirt.position.set(x, 0.11, z);
     skirt.rotation.y = ry;
-    skirt.translateZ(0.02);
+    skirt.translateZ(0.04);
     scene.add(skirt);
   };
   wall(ROOM.w, ROOM.h, 0, ROOM.h / 2, -ROOM.d / 2, 0);
   wall(ROOM.d, ROOM.h, -ROOM.w / 2, ROOM.h / 2, 0, Math.PI / 2);
   wall(ROOM.d, ROOM.h, ROOM.w / 2, ROOM.h / 2, 0, -Math.PI / 2);
 
-  // Ceiling and strip lights. The room had no lid, so it read as a stage set.
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(ROOM.w, ROOM.d), plain('#D9CFBC'));
+  // --- ceiling and the truss ------------------------------------------------
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(ROOM.w, ROOM.d), plain('#2B2B33'));
   ceil.rotation.x = Math.PI / 2;
   ceil.position.y = ROOM.h;
   scene.add(ceil);
 
+  // Exposed steel. A dark ceiling with structure in it reads as an industrial
+  // unit; a flat pale lid reads as an office, which is what this was.
+  for (let i = 0; i < 5; i++) {
+    const z = -9.6 + i * 4.8;
+    box(ROOM.w - 0.4, 0.26, 0.26, '#5A5A66', 0, ROOM.h - 0.42, z);
+    box(0.2, 0.5, 0.2, '#5A5A66', -ROOM.w / 2 + 1.4, ROOM.h - 0.72, z);
+    box(0.2, 0.5, 0.2, '#5A5A66', ROOM.w / 2 - 1.4, ROOM.h - 0.72, z);
+  }
+  box(0.24, 0.24, ROOM.d - 0.4, '#4A4A55', -6.0, ROOM.h - 0.62, 0);
+  box(0.24, 0.24, ROOM.d - 0.4, '#4A4A55', 6.0, ROOM.h - 0.62, 0);
+
   const lightMat = toon('#FFFFFF', { vertexColors: true });
   lightMat.userData.outlineParameters = { visible: false };
-  for (const z of [-4.2, 0, 4.2]) {
-    const strip = stripLight(lightMat, 9);
-    strip.position.set(0, ROOM.h - 0.16, z);
-    scene.add(strip);
+  // Enough lights for the floor they have to cover. Three strips in a room this
+  // size left two thirds of it in the dark.
+  for (const z of [-9.6, -4.8, 0, 4.8, 9.6]) {
+    for (const x of [-9.5, 0, 9.5]) {
+      const strip = stripLight(lightMat, 8);
+      strip.position.set(x, ROOM.h - 0.7, z);
+      scene.add(strip);
+    }
   }
 
-  // A mirror wall, because every gym has one and it is where the muscle bar
-  // stops being a number and starts being a thing you look at.
+  // --- the mirror wall ------------------------------------------------------
+  // Runs the whole left side now instead of three panels in the middle of it.
   const mirrors = new THREE.Group();
-  for (let i = 0; i < 3; i++) {
-    const p = mirrorPanel(lightMat, 3.6, 2.2);
-    p.position.set(-ROOM.w / 2 + 0.09, 1.55, -3.9 + i * 3.9);
+  for (let i = 0; i < 6; i++) {
+    const p = mirrorPanel(lightMat, 3.6, 2.6);
+    p.position.set(-ROOM.w / 2 + 0.09, 1.85, -9.3 + i * 3.8);
     p.rotation.y = Math.PI / 2;
     mirrors.add(p);
+    box(0.1, 2.8, 0.14, '#1A1A20', -ROOM.w / 2 + 0.12, 1.85, -11.2 + i * 3.8);
   }
   scene.add(mirrors);
 
-  // Painted signage. Carries the brand for the cost of two quads.
+  // --- clutter that reads as use -------------------------------------------
+  // Wall-mounted plate storage down the back, a chalk bowl, and a bin. A gym
+  // looks used because of the things round the edges, not the machines.
+  for (let i = 0; i < 6; i++) {
+    const x = -13.0 + i * 1.5;
+    box(0.14, 0.14, 0.9, '#6A6A76', x, 1.5, -ROOM.d / 2 + 0.5);
+    for (let j = 0; j < 3; j++) {
+      box(0.5, 0.5, 0.12, ['#1A1A1A', '#C7382F', '#2A2A2A'][j], x, 1.5, -ROOM.d / 2 + 0.28 + j * 0.16);
+    }
+  }
+  box(0.6, 0.5, 0.6, '#D8D2C4', -14.6, 0.25, -11.0);      // chalk bowl
+  box(0.5, 0.06, 0.5, '#F2F2F2', -14.6, 0.53, -11.0);
+
+  // --- signage --------------------------------------------------------------
   const sign = (lines, w, h, x, y, z, ry, opts) => {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), flat('#FFFFFF', signTexture(lines, opts)));
     m.position.set(x, y, z);
     m.rotation.y = ry;
     scene.add(m);
   };
-  sign(["KEVIN'S GYM", 'NO PAIN, ONLY KEVIN'], 7.2, 1.8, 0, 3.25, -ROOM.d / 2 + 0.06, 0);
-  sign(['TRAIN LIKE KEVIN', 'OR CRY LATER'], 4.4, 1.1, ROOM.w / 2 - 0.07, 3.1, -2.0, -Math.PI / 2,
+  sign(["KEVIN'S GYM", 'NO PAIN, ONLY KEVIN'], 10.0, 2.5, 0, 3.7, -ROOM.d / 2 + 0.06, 0);
+  sign(['TRAIN LIKE KEVIN', 'OR CRY LATER'], 5.2, 1.3, ROOM.w / 2 - 0.07, 3.6, -6.0, -Math.PI / 2,
     { bg: '#0B0B0B', fg: '#FFE500', size: 74 });
-  sign(['NO EXCUSES', 'ONLY SHIFTS'], 4.4, 1.1, ROOM.w / 2 - 0.07, 3.1, 3.0, -Math.PI / 2,
+  sign(['NO EXCUSES', 'ONLY SHIFTS'], 5.2, 1.3, ROOM.w / 2 - 0.07, 3.6, 2.0, -Math.PI / 2,
     { bg: '#FFE500', fg: '#0B0B0B', size: 74 });
+  sign(['FREE WEIGHTS'], 4.0, 0.7, -8.0, 3.9, -ROOM.d / 2 + 0.06, 0,
+    { bg: '#1C2E3F', fg: '#FFE500', size: 64 });
+  sign(['CARDIO'], 3.0, 0.7, 12.0, 3.9, -ROOM.d / 2 + 0.06, 0,
+    { bg: '#1C2E3F', fg: '#7BE08A', size: 64 });
+  // Banners hung off the truss, which is what the truss is for.
+  for (const [x, lines, bg, fg] of [
+    [-8.0, ['LIFT'], '#E8232B', '#FFE500'],
+    [3.4, ['RUN'], '#2F8F45', '#FFF6C8'],
+    [12.0, ['REPEAT'], '#1C2E3F', '#FFE500'],
+  ]) {
+    sign(lines, 3.0, 1.6, x, ROOM.h - 1.5, -4.8, 0, { bg, fg, size: 92 });
+  }
 
   return { floor };
 }
@@ -599,15 +685,27 @@ function swapPlayer(gridIndex) {
 // equipment on purpose — a figure doing curls in the middle of the floor reads
 // as a mannequin, the same figure doing them at the rack reads as a person.
 const SPOTS = [
-  { x: 5.0, z: -3.4, ry: -Math.PI / 2, mode: 'run', label: 'treadmill' },
-  { x: -6.9, z: -3.0, ry: 0, mode: 'curl', label: 'rack' },
-  { x: -1.0, z: -4.2, ry: 0, mode: 'press', label: 'squat rack' },
-  { x: 6.9, z: 2.6, ry: -Math.PI / 2, mode: 'drink', label: 'cooler' },
-  { x: -3.0, z: 2.4, ry: Math.PI, mode: 'curl', label: 'mat' },
-  { x: -5.6, z: 3.4, ry: Math.PI * 0.8, mode: 'stretch', label: 'mat' },
-  { x: 2.2, z: 3.2, ry: Math.PI, mode: 'idle', label: 'floor' },
-  { x: 7.2, z: -1.2, ry: -Math.PI / 2, mode: 'stretch', label: 'mirror' },
-  { x: -7.0, z: 4.6, ry: Math.PI / 2, mode: 'idle', label: 'lockers' },
+  // Placed against what they are meant to be using, in the 32x24 room. A spot
+  // in open floor is somebody miming, which is worse than nobody being there.
+  // `gear` puts an actual weight in their hands: an empty curl is a shrug.
+  { x: -8.0, z: -8.6, ry: 0, mode: 'press', label: 'platform', gear: 'bar' },
+  { x: -4.6, z: -8.6, ry: 0, mode: 'press', label: 'squat rack', gear: 'bar' },
+  { x: -11.2, z: -6.6, ry: 0.4, mode: 'curl', label: 'rack', gear: 'bells' },
+  { x: -12.6, z: -8.4, ry: 0.2, mode: 'curl', label: 'rack', gear: 'bells' },
+  { x: -9.6, z: -4.6, ry: Math.PI, mode: 'curl', label: 'bench', gear: 'bells' },
+  { x: -13.6, z: -1.4, ry: -Math.PI / 2, mode: 'stretch', label: 'mirror' },
+  { x: -13.2, z: 2.0, ry: -Math.PI / 2, mode: 'stretch', label: 'mirror' },
+  { x: 12.4, z: -3.2, ry: -Math.PI / 2, mode: 'run', label: 'treadmill' },
+  { x: 12.4, z: 0.2, ry: -Math.PI / 2, mode: 'run', label: 'treadmill' },
+  { x: 8.6, z: -1.2, ry: -Math.PI / 2, mode: 'run', label: 'rower' },
+  { x: 0.4, z: -8.8, ry: 0, mode: 'press', label: 'lat pulldown' },
+  { x: 3.6, z: -8.8, ry: 0, mode: 'press', label: 'cable' },
+  { x: 3.4, z: 2.0, ry: Math.PI, mode: 'stretch', label: 'turf' },
+  { x: 4.4, z: -1.0, ry: Math.PI, mode: 'curl', label: 'turf', gear: 'bells' },
+  { x: -6.0, z: 8.0, ry: Math.PI, mode: 'drink', label: 'water' },
+  { x: -12.6, z: 6.0, ry: Math.PI / 2, mode: 'idle', label: 'lockers' },
+  { x: 8.6, z: 6.0, ry: 0, mode: 'idle', label: 'reception' },
+  { x: 14.0, z: 5.6, ry: -Math.PI / 2, mode: 'press', label: 'bag' },
 ];
 
 /**
@@ -668,10 +766,31 @@ function makeNpc(grid, mat, startSpot) {
     speed: 1.5 + Math.random() * 0.9,
   };
 
+  // A weight in the hands, shown only at spots that call for one. Built once
+  // and hidden between sets rather than made and thrown away every time
+  // somebody wanders off — the churn is what would cost, not the geometry.
+  const gearMat = toon('#2A2A2E');
+  gearMat.userData.outlineParameters = { thickness: 0.008, color: [0, 0, 0], alpha: 1 };
+  const held = {
+    bar: makeBarbell(gearMat, { length: 2.1, plates: 2 }),
+    bells: new THREE.Group(),
+  };
+  for (const side of [-1, 1]) {
+    const d = makeDumbbell(gearMat);
+    d.position.x = side * 0.42;
+    held.bells.add(d);
+  }
+  for (const k of Object.keys(held)) {
+    held[k].visible = false;
+    held[k].position.y = 1.05;
+    body.group.add(held[k]);
+  }
+
   const claim = (spot) => {
     if (st.spot) st.spot.taken = false;
     st.spot = spot;
     if (spot) spot.taken = true;
+    for (const k of Object.keys(held)) held[k].visible = spot?.gear === k;
   };
   claim(startSpot);
   if (startSpot) {
@@ -690,6 +809,21 @@ function makeNpc(grid, mat, startSpot) {
     for (const a of body.arms) a.rotation.set(0, 0, a.rotation.z);
     for (const l of body.legs) l.rotation.x = 0;
     body.group.position.y = 0;
+  };
+
+  /**
+   * Put this one straight to work at a spot.
+   *
+   * Only safe once clearSpots() has run: until the props are loaded and the
+   * spots nudged out of them, a spot is a guess, and seating somebody on a
+   * guess puts them inside a squat rack.
+   */
+  body.seat = (spot) => {
+    claim(spot);
+    body.group.position.set(spot.x, 0, spot.z);
+    body.group.rotation.y = spot.ry;
+    st.state = 'work';
+    st.timer = 4 + Math.random() * 9;
   };
 
   body.tick = (dt, now) => {
@@ -735,10 +869,14 @@ function makeNpc(grid, mat, startSpot) {
         const p = Math.sin(t * 2.3) * 0.5 + 0.5;
         for (const a of body.arms) a.rotation.x = -p * 1.55;
         body.group.position.y = p * 0.025;
+        // The bells travel the arc the hands travel, or they hang in mid-air
+        // while he curls nothing.
+        held.bells.position.set(0, 1.05 - Math.cos(p * 1.55) * 0.42, 0.16 + Math.sin(p * 1.55) * 0.42);
       } else if (mode === 'press') {
         const p = Math.sin(t * 1.8) * 0.5 + 0.5;
         for (const a of body.arms) a.rotation.x = -Math.PI + p * 0.7;
         body.torso.rotation.x = p * 0.07;
+        held.bar.position.set(0, 1.62 + p * 0.52, -0.05);
       } else if (mode === 'run') {
         const r = Math.sin(t * 7.5) * 1.0;
         body.legs[0].rotation.x = r;
@@ -932,10 +1070,17 @@ async function init() {
 
   // One key light and a flat fill. No shadow maps: a toon ramp already reads as
   // one light source, and shadows on mobile cost more than they add here.
-  scene.add(new THREE.HemisphereLight('#FFFFFF', '#8A7F6A', 2.1));
-  const key = new THREE.DirectionalLight('#FFFFFF', 1.5);
-  key.position.set(6, 10, 5);
+  // Key, sky and a warm bounce. One flat hemisphere lit every surface the same
+  // and a 32-metre room lit that way has no depth in it at all: a second light
+  // low and warm from the other side is what separates the far wall from the
+  // near one under a toon ramp, which has very few steps to play with.
+  scene.add(new THREE.HemisphereLight('#EAF2FF', '#6E6354', 1.55));
+  const key = new THREE.DirectionalLight('#FFF4DA', 1.65);
+  key.position.set(9, 14, 8);
   scene.add(key);
+  const fill = new THREE.DirectionalLight('#FFC98A', 0.55);
+  fill.position.set(-12, 6, -10);
+  scene.add(fill);
 
   await loadCrew();
   // The player is built once and moves between worlds; only the scenery is torn
@@ -975,6 +1120,7 @@ async function init() {
     window.__warp = (x, z) => kevin.group.position.set(x, 0, z);
     window.__scene = scene;
     window.__customers = customers;
+    window.__npcs = npcs;
   }
 
   addEventListener('resize', onResize);
@@ -1159,10 +1305,14 @@ async function buildGymWorld() {
     crewMat.userData.outlineParameters = { thickness: 0.010, color: [0, 0, 0], alpha: 1 };
     // Started with no spot: props are not loaded yet, so the spots have not
     // been resolved and seating them now would place them inside machines.
-    const many = Math.min(6, CREW.crew.length - 1);
+    // A big floor with six people on it reads as closing time.
+    const many = Math.min(12, CREW.crew.length - 1);
+    // Seated at the equipment from the first frame, not walking in from the
+    // door. Somebody arriving to an empty floor that fills up over the next
+    // half minute has already decided the gym is dead.
     for (let i = 0; i < many; i++) {
       const npc = makeNpc(CREW.crew[(i + 1) % CREW.crew.length], crewMat, null);
-      npc.group.position.set(-6 + i * 2.4, 0, 5.4);
+      npc.group.position.set(-11 + i * 2.0, 0, 9.0);
       scene.add(npc.group);
       npcs.push(npc);
     }
@@ -1210,6 +1360,10 @@ async function buildGymWorld() {
   for (const st of STATIONS) st.object = spawn(st.prop, st, st.id);
   for (const [name, opts] of SCENERY) spawn(name, opts);
   clearSpots();
+  // Now the spots are real, put the crowd on them. Walking in from the door
+  // means the first half minute of every visit is an empty gym.
+  const seats = SPOTS.filter((sp) => !sp.taken);
+  npcs.forEach((npc, i) => { if (seats[i]) npc.seat(seats[i]); });
 
   // Everything walk-up-able, in the order you meet it coming out of the door.
   for (const st of STATIONS) {
@@ -1229,6 +1383,11 @@ async function buildGymWorld() {
   }
   places.push({ kind: 'shop', label: 'Reception', note: 'supplements',
     act: 'Shop', x: 8.6, z: 6.4 });
+  // Both ways off the forecourt, so the street is walkable rather than a menu.
+  places.push({ kind: 'door', to: 'crib', label: 'Home', note: "Kevin's crib",
+    act: 'Home', x: -YARD.x + 3.0, z: YARD.z - 4.0 });
+  places.push({ kind: 'door', to: 'work', label: "McKevin's", note: 'down the road',
+    act: 'Go', x: YARD.x - 3.0, z: YARD.z - 4.0 });
   return { fp: false, spawn: { x: 0, z: 15.5 } };
 }
 
@@ -1241,6 +1400,8 @@ function buildWorkWorld() {
   buildCity(scene, { flat: flatMat, solids, blockers }, { skyline: true, market: false, fry: true });
   places.push({ kind: 'work', label: "McKevin's", note: 'clock in',
     act: 'Work', x: FRY.x, z: FRY.counterZ - 1.4 });
+  places.push({ kind: 'door', to: 'gym', label: 'Back to the gym', note: 'up the road',
+    act: 'Go', x: FRY.x - 7.0, z: FRY.counterZ - 3.0 });
   return { fp: false, spawn: { x: FRY.x, z: FRY.counterZ - 4.0 } };
 }
 
@@ -1250,8 +1411,8 @@ function buildCribWorld() {
     act: 'Play', x: CRIB.table.x + 1.5, z: CRIB.table.z - 0.9 });
   places.push({ kind: 'map', label: 'The telly', note: 'pick a world',
     act: 'Worlds', x: CRIB.tv.x - 1.3, z: CRIB.tv.z });
-  places.push({ kind: 'out', label: 'Front door', note: 'go out', act: 'Leave',
-    x: (CRIB.door.x0 + CRIB.door.x1) / 2, z: CRIB.front + 0.9 });
+  places.push({ kind: 'door', to: 'gym', label: 'Front door', note: "out to the gym",
+    act: 'Go out', x: (CRIB.door.x0 + CRIB.door.x1) / 2, z: CRIB.front + 0.9 });
   return { fp: true, spawn: CRIB.spawn, yaw: CRIB.yaw };
 }
 
@@ -1281,11 +1442,13 @@ async function setWorld(id, at = null) {
   places.length = 0;
   for (const n of npcs) n.group.removeFromParent();
   npcs.length = 0;
+  // SPOTS outlives the world. Leave the flags set and the next visit finds
+  // every seat claimed by somebody who no longer exists.
+  for (const sp of SPOTS) sp.taken = false;
   board = null;
   nearest = null;
   $('#prompt').classList.remove('on');
 
-  booting(`Opening ${w.label}…`);
   worldGroup = new THREE.Group();
   scene.add(worldGroup);
   let meta;
@@ -1307,6 +1470,30 @@ async function setWorld(id, at = null) {
   if (firstPerson) { look.yaw = meta.yaw ?? 0; look.pitch = -0.05; }
   if (board) refreshBoard();
   $('#boot').classList.add('gone');
+}
+
+/**
+ * Going through a door.
+ *
+ * Fade out, swap, fade in. The worlds are genuinely torn down and rebuilt
+ * between those two frames, which takes long enough to see — and a hitch you
+ * can see reads as a bug, while a hitch behind a fade reads as a door. The
+ * fade is also what makes three separate scenes feel like one place, which is
+ * the entire trick.
+ */
+let travelling = false;
+async function travel(id, at = null) {
+  if (travelling || id === worldId) return;
+  travelling = true;
+  const veil = $('#veil');
+  veil.classList.add('on');
+  await new Promise((r) => setTimeout(r, 260));
+  await setWorld(id, at);
+  // A frame with the new world already drawn, so the fade lifts on the room
+  // rather than on the last one.
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  veil.classList.remove('on');
+  travelling = false;
 }
 
 /**
@@ -1633,7 +1820,7 @@ function enter(pl) {
   if (pl.kind === 'work') return clockIn();
   if (pl.kind === 'cards') return openCards();
   if (pl.kind === 'map') return openMap();
-  if (pl.kind === 'out') return openMap();
+  if (pl.kind === 'door') return travel(pl.to);
 }
 
 /**
@@ -1672,7 +1859,7 @@ function goWorld(id) {
   if (!WORLDS[id]) return;
   $('#map').classList.remove('on');
   play('ui');
-  setWorld(id);
+  travel(id);
 }
 
 // --- floating numbers -------------------------------------------------------
