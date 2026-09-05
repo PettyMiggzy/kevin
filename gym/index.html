@@ -91,6 +91,11 @@
             vertical-align: -1px; border: 2px solid var(--ink); border-radius: 3px; }
   h3.shelf { margin: 16px 0 2px; font-size: 13px; text-transform: uppercase;
              border-top: 3px solid var(--ink); padding-top: 10px; }
+  /* The address is meant to be read character by character, so it gets a
+     monospace face and room to breathe rather than being buried in prose. */
+  code.ca { display: block; margin-top: 6px; font-size: 10px; letter-spacing: .5px;
+            word-break: break-all; opacity: .9; }
+  .item h3 code { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .5px; }
   .buy { font: 700 12px/1 var(--mono); padding: 9px 12px; border: 3px solid var(--ink); border-radius: 8px;
     background: var(--red); color: var(--void); cursor: pointer; text-transform: uppercase; white-space: nowrap; }
   .buy[disabled] { background: #0002; color: #0008; cursor: not-allowed; }

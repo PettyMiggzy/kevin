@@ -22,7 +22,7 @@ import { load, save, settle, workout, projectedLoss, payShift, leaderboard,
 import { buildCrewBody, applyCrewMuscle } from './voxel.js';
 import { buildKitKevin } from './kevin.js';
 import { buildSpriteKevin } from './sprite.js';
-import { skinTexture, SKINS, DEFAULT_SKIN } from './skins.js';
+import { skinTexture, SKINS, DEFAULT_SKIN, CONTRACT, CONTRACT_SKINS } from './skins.js';
 import { Set as RepSet, REPS_PER_SET, rankOf } from './reps.js';
 import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, mirrorPanel, stripLight,
   skyTexture, concreteTexture, facadeTexture, bannerTexture, billboardTexture, boardTexture } from './gear.js';
@@ -703,7 +703,12 @@ let atlasPalette = null;
 /** The atlas in whatever colourway is worn now, or the plain one if unskinned. */
 function skinnedAtlas() {
   if (!atlasImage || !atlasPalette) return walkAtlas;
-  const rgb = atlasPalette.colourways?.[state.skin] ?? atlasPalette.colourways?.[DEFAULT_SKIN];
+  // Two sources of colour: Todd's named colourways, and the six derived from
+  // the contract address. A contract skin carries its own rgb because it is
+  // computed from the CA rather than chosen, so it is never in parts.json.
+  const rgb = CONTRACT_SKINS.find((s) => s.name === state.skin)?.rgb
+    ?? atlasPalette.colourways?.[state.skin]
+    ?? atlasPalette.colourways?.[DEFAULT_SKIN];
   if (!rgb) return walkAtlas;
   return skinTexture(atlasImage, atlasPalette.palette, rgb);
 }
@@ -2466,10 +2471,35 @@ function renderShop() {
       return `<div class="item"><div><h3>${swatch}${sk.name}</h3><small>${sk.blurb}</small></div>${btn}</div>`;
     }).join('');
 
+  // The contract shelf. Six colours that ARE the address, in order, so reading
+  // the shelf top to bottom is reading the CA — which is the point of it.
+  const sixOwned = CONTRACT_SKINS.filter((s) => !s.tail).every((s) => owned.has(s.name));
+  const caRows = CONTRACT_SKINS.map((sk) => {
+    const have = owned.has(sk.name);
+    const worn = state.skin === sk.name;
+    const locked = sk.tail && !sixOwned;
+    const swatch = `<i class="swatch" style="background:rgb(${sk.rgb.join(',')})"></i>`;
+    const btn = worn
+      ? '<button class="buy" disabled>Worn</button>'
+      : locked
+        ? '<button class="buy" disabled>Locked</button>'
+        : have
+          ? `<button class="buy wear" data-skin="${sk.name}">Wear</button>`
+          : sk.tail
+            ? `<button class="buy skin" data-skin="${sk.name}">Claim</button>`
+            : `<button class="buy skin" data-skin="${sk.name}"${state.coin >= sk.cost ? '' : ' disabled'}>${sk.cost} $KEVIN</button>`;
+    return `<div class="item"><div><h3>${swatch}<code>${sk.name}</code></h3><small>${sk.blurb}</small></div>${btn}</div>`;
+  }).join('');
+
   $('#shopItems').innerHTML =
     `${consumables}<h3 class="shelf">Skins</h3>
      <p class="note">Yours for good once bought. Changes how Kevin looks to you — no wallet, no chain.</p>
-     ${rows}`;
+     ${rows}
+     <h3 class="shelf">The contract</h3>
+     <p class="note">Six colours cut straight out of the contract address, in order.
+       Chop it into sixes yourself and you get the same ones — that is the point.
+       <code class="ca">${CONTRACT}</code></p>
+     ${caRows}`;
 }
 
 $('#muteBtn').onclick = () => {
@@ -2523,12 +2553,24 @@ $('#shopItems').onclick = (e) => {
   if (skin) {
     const owned = state.skins ?? (state.skins = [DEFAULT_SKIN]);
     if (!owned.includes(skin)) {
-      const sk = SKINS.find((s) => s.name === skin);
-      if (!sk || state.coin < sk.cost) { play('deny'); return; }
+      const ca = CONTRACT_SKINS.find((s) => s.name === skin);
+      const sk = ca ?? SKINS.find((s) => s.name === skin);
+      if (!sk) { play('deny'); return; }
+      // The tail is not for sale at any price. It opens when the other six are
+      // yours, by which point you have read the address enough times to know it.
+      if (ca?.tail && !CONTRACT_SKINS.filter((s) => !s.tail).every((s) => owned.includes(s.name))) {
+        play('deny');
+        return;
+      }
+      if (state.coin < sk.cost) { play('deny'); return; }
       state.coin -= sk.cost;
       owned.push(skin);
       play('buy');
-      toast(`${skin}.<br><small>Yours. Wearing it now.</small>`, 2000);
+      const done = ca && !ca.tail &&
+        CONTRACT_SKINS.filter((s) => !s.tail).every((s) => owned.includes(s.name));
+      toast(done
+        ? `${skin}.<br><small>That is the whole address. The last four is yours to claim.</small>`
+        : `${skin}.<br><small>Yours. Wearing it now.</small>`, done ? 3600 : 2000);
     } else {
       play('ui');
     }

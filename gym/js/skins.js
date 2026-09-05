@@ -106,3 +106,58 @@ export const SKINS = [
 
 /** The one you start in, and the one a bad save falls back to. */
 export const DEFAULT_SKIN = 'Classic Red';
+
+/**
+ * The contract address, which is also a palette.
+ *
+ * An Ethereum address is 40 hex characters, and a hex colour is six. So the CA
+ * is six colours with four left over — not a metaphor, an identity. Anyone can
+ * check it by chopping the address into sixes, which is the point: these are
+ * the only skins in the game whose colour nobody has to take on trust.
+ *
+ * And they do a job beyond looking good. config.js explains why the address is
+ * published before trading opens — "the group gets to memorise the real one
+ * while it is calm, so on launch day, when the fakes appear, they already
+ * know". Collecting these makes somebody stare at the real address for an hour.
+ * A skin that teaches the CA is worth more than a skin that is merely a colour.
+ */
+export const CONTRACT = '0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A';
+
+/**
+ * Chop an address into colours.
+ *
+ * Six slices of six characters, then the four that do not fit. The tail wraps
+ * back onto the head to make a seventh — the address read as a ring rather than
+ * a line — so nothing in it goes unused and the seventh is still derived, not
+ * invented. Deterministic from the address alone, which is what makes it
+ * checkable.
+ */
+export function contractColours(addr = CONTRACT) {
+  const h = addr.replace(/^0x/i, '');
+  const hex = [];
+  for (let i = 0; i + 6 <= 36; i += 6) hex.push(h.slice(i, i + 6));
+  hex.push(h.slice(36) + h.slice(0, 2));            // 284A + 63 — the ring closes
+  return hex.map((c) => ({
+    hex: c.toUpperCase(),
+    rgb: [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)],
+  }));
+}
+
+/**
+ * The six, plus the tail you cannot buy.
+ *
+ * Named for their own hex, so the shelf spells the contract address out in
+ * order and reading it top to bottom IS reading the CA. The seventh — the last
+ * four, the digits people actually check a fake against — is not for sale at
+ * any price: it unlocks when you own the other six. By then you know the
+ * address by heart, which was always the real reward.
+ */
+export const CONTRACT_SKINS = contractColours().map((c, i) => ({
+  name: c.hex,
+  rgb: c.rgb,
+  cost: i < 6 ? 180 + i * 90 : 0,
+  tail: i === 6,
+  blurb: i < 6
+    ? `Bytes ${i * 3}–${i * 3 + 2} of the contract.`
+    : 'The last four. Earned by owning the other six, never sold.',
+}));
