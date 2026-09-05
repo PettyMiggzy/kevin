@@ -285,6 +285,7 @@ cd /opt/kevin
 node bot/publish-stickers.mjs --dry                        # check, upload nothing
 node bot/publish-stickers.mjs --user <numeric id>          # 512px sticker set
 node bot/publish-stickers.mjs --user <numeric id> --emoji  # 100px custom-emoji set
+node bot/publish-stickers.mjs --user <numeric id> --static # 512px Todd-drawn set
 ```
 
 Anywhere else, put the token in the environment for the one run instead of
@@ -299,8 +300,10 @@ real user for that; the bot only gets to edit it afterwards. Get yours by
 messaging the bot and reading `journalctl -u kevin-bot`, or from
 [@userinfobot](https://t.me/userinfobot).
 
-It publishes exactly what `js/config.js` lists, so the pack and the site cannot
-disagree about what exists. Everything is checked before anything is uploaded —
+The video and emoji sets publish exactly what `js/config.js` lists, so the pack
+and the site cannot disagree about what exists. The static set is not on the
+site, so its roster is the directory `tools/build-static-stickers.mjs` writes —
+the tool decides what counts as on-model, and the publisher ships exactly that. Everything is checked before anything is uploaded —
 file present, under 256KB, an emoji assigned, and the set name legal — because
 a rejection partway through leaves half a pack that has to be deleted by hand.
 
@@ -331,6 +334,7 @@ pick fallbacks that still make sense on their own.
 | --- | --- | --- | --- |
 | `kevin_by_Iamkevinzbot` | video stickers, 512px | 20 | <https://t.me/addstickers/kevin_by_Iamkevinzbot> |
 | `kevinemoji_by_Iamkevinzbot` | custom emoji, 100px | 20 | <https://t.me/addstickers/kevinemoji_by_Iamkevinzbot> |
+| `kevinclassic_by_Iamkevinzbot` | static stickers, 512px | 21 | <https://t.me/addstickers/kevinclassic_by_Iamkevinzbot> |
 
 Owner is user `6820752140` (@kingpetty317). A set's owner cannot be changed
 after the fact — moving it means deleting the set and publishing it again under

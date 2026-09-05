@@ -4,6 +4,7 @@
 //   node bot/publish-stickers.mjs --user 123456789 --dry
 //   node bot/publish-stickers.mjs --user 123456789
 //   node bot/publish-stickers.mjs --user 123456789 --emoji
+//   node bot/publish-stickers.mjs --user 123456789 --static
 //   node bot/publish-stickers.mjs --user 123456789 --replace fried,wagmi
 //
 // --user is the numeric id of the person who will OWN the set. Telegram requires
@@ -23,7 +24,7 @@
 // a re-encoded file is different bytes, so re-running the publisher after
 // editing art appends a second copy instead of updating the first.
 import { readFile } from 'node:fs/promises';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, statSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // Reuse the loader the bot already uses. Writing a second one is how this got a
@@ -37,16 +38,28 @@ const has = (n) => args.includes(`--${n}`);
 
 const DRY = has('dry');
 const EMOJI_SET = has('emoji');
+const STATIC_SET = has('static');
 const USER = flag('user');
 const REPLACE = (flag('replace') || '').split(',').map((s) => s.trim()).filter(Boolean);
-const TITLE = flag('title', EMOJI_SET ? 'Kevin Emoji' : 'Kevin');
+const TITLE = flag('title', EMOJI_SET ? 'Kevin Emoji' : STATIC_SET ? 'Kevin Classic' : 'Kevin');
 
 // Telegram's two budgets. A custom emoji is a twenty-sixth of a sticker's
 // pixels but gets a quarter of its bytes, so the ladder in tools/build-emoji.mjs
 // has to work much harder than the one in tools/render-sticker.mjs.
+//
+// The static set is the Todd-drawn art: on-model, and the only Kevin in the
+// project that never went near a video model. It is not on the site, so its
+// roster comes from the directory tools/build-static-stickers.mjs writes rather
+// than from the manifest — the tool decides what is on-model, and the publisher
+// ships exactly what the tool made.
 const KIND = EMOJI_SET
-  ? { dir: 'assets/emoji/animated', limit: 64, base: 'kevinemoji', type: 'custom_emoji' }
-  : { dir: 'assets/stickers/animated', limit: 256, base: 'kevin', type: 'regular' };
+  ? { dir: 'assets/emoji/animated', ext: 'webm', mime: 'video/webm', format: 'video',
+      limit: 64, base: 'kevinemoji', type: 'custom_emoji' }
+  : STATIC_SET
+  ? { dir: 'assets/stickers/static', ext: 'webp', mime: 'image/webp', format: 'static',
+      limit: 512, base: 'kevinclassic', type: 'regular', fromDir: true }
+  : { dir: 'assets/stickers/animated', ext: 'webm', mime: 'video/webm', format: 'video',
+      limit: 256, base: 'kevin', type: 'regular' };
 
 /** An emoji per sticker. Telegram wants 1-20; one apiece is plenty. */
 const EMOJI = {
@@ -56,6 +69,15 @@ const EMOJI = {
   hodl: ['💎'], ngmi: ['😂'], rekt: ['💀'], wen: ['⏰'], 'pump-it': ['📈'],
   'printer-go-brrr': ['💸'], 'ceo-of-chaos': ['👑'], 'time-to-cook': ['🍟'],
   'let-him-cook': ['🔥'], fried: ['😵'],
+
+  // The Todd-drawn static set.
+  'gym-bench': ['🏋'], 'gym-curl': ['💪'], 'gym-deadlift': ['🏋'],
+  'gym-flex': ['💪'], 'gym-pullup': ['🤸'], 'gym-run': ['🏃'],
+  'gym-shake': ['🥤'], 'gym-spot': ['🤝'], 'gym-squat': ['🦵'],
+  'gym-wrecked': ['😵'],
+  'kek-flex': ['🙌'], 'kek-gm': ['☕'], 'kek-hodl': ['💎'], 'kek-laugh': ['😂'],
+  'kek-moon': ['🚀'], 'kek-power': ['⚡'], 'kek-rain': ['🌧'], 'kek-snack': ['😋'],
+  'kek-spin': ['🪙'], 'kek-stack': ['🤑'], 'kevin-great': ['🇺🇸'],
 };
 
 async function tg(token, method, params) {
@@ -73,8 +95,8 @@ async function tg(token, method, params) {
 async function upload(token, userId, path) {
   const form = new FormData();
   form.append('user_id', String(userId));
-  form.append('sticker_format', 'video');
-  form.append('sticker', new Blob([await readFile(path)], { type: 'video/webm' }),
+  form.append('sticker_format', KIND.format);
+  form.append('sticker', new Blob([await readFile(path)], { type: KIND.mime }),
     path.split('/').pop());
   const r = await fetch(`https://api.telegram.org/bot${token}/uploadStickerFile`, {
     method: 'POST', body: form,
@@ -97,15 +119,17 @@ function setName(base, botUsername) {
 }
 
 async function main() {
-  const config = await loadConfig();
-  const slugs = config.animated.map((a) => a.slug);
+  const slugs = KIND.fromDir
+    ? readdirSync(join(ROOT, KIND.dir)).filter((f) => f.endsWith(`.${KIND.ext}`))
+        .map((f) => f.replace(`.${KIND.ext}`, '')).sort()
+    : (await loadConfig()).animated.map((a) => a.slug);
 
   // Check every file before touching Telegram: half a pack is worse than none,
   // and a rejection partway through leaves a set that has to be deleted by hand.
   const files = [];
   const problems = [];
   for (const slug of slugs) {
-    const p = join(ROOT, KIND.dir, `${slug}.webm`);
+    const p = join(ROOT, KIND.dir, `${slug}.${KIND.ext}`);
     if (!existsSync(p)) { problems.push(`${slug}: no webm`); continue; }
     const kb = statSync(p).size / 1024;
     if (kb > KIND.limit) problems.push(`${slug}: ${kb.toFixed(0)}KB, over Telegram's ${KIND.limit}KB`);
@@ -114,7 +138,8 @@ async function main() {
   }
   if (slugs.length > 50) problems.push(`${slugs.length} stickers; a set takes at most 50 initially`);
 
-  console.log(`${files.length} ${EMOJI_SET ? 'emoji' : 'sticker'}(s) from the manifest`);
+  console.log(`${files.length} ${EMOJI_SET ? 'emoji' : 'sticker'}(s) from ` +
+    `${KIND.fromDir ? KIND.dir : 'the manifest'}`);
   for (const f of files) console.log(`  ${f.slug.padEnd(18)} ${f.kb.toFixed(0).padStart(4)}KB  ${(EMOJI[f.slug] || ['?']).join('')}`);
   if (problems.length) {
     console.log('\nstopping — fix these first:');
@@ -159,7 +184,7 @@ async function main() {
       await tg(token, 'replaceStickerInSet', {
         user_id: Number(USER), name,
         old_sticker: live.stickers[i].file_id,
-        sticker: { sticker: fileId, format: 'video', emoji_list: EMOJI[slug] },
+        sticker: { sticker: fileId, format: KIND.format, emoji_list: EMOJI[slug] },
       });
       console.log(`\r  replaced  ${slug}       `);
     }
@@ -175,7 +200,7 @@ async function main() {
     console.log(`\r  uploaded  ${f.slug}       `);
   }
 
-  const asInput = (u) => ({ sticker: u.fileId, format: 'video', emoji_list: EMOJI[u.slug] });
+  const asInput = (u) => ({ sticker: u.fileId, format: KIND.format, emoji_list: EMOJI[u.slug] });
   if (!live) {
     await tg(token, 'createNewStickerSet', {
       user_id: Number(USER), name, title: TITLE,

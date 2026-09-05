@@ -59,7 +59,9 @@ keep it that way until each value is real.
 - [x] Custom emoji pack — the same 20 at 100×100
       ([kevinemoji_by_Iamkevinzbot](https://t.me/addstickers/kevinemoji_by_Iamkevinzbot));
       needs Telegram Premium to use, free accounts see the fallback emoji
-- [ ] Pin both packs in the group
+- [x] Static pack — 21 Todd-drawn, on-model, backgrounds cut
+      ([kevinclassic_by_Iamkevinzbot](https://t.me/addstickers/kevinclassic_by_Iamkevinzbot))
+- [ ] Pin all three packs in the group
 - [ ] Pin the spot (`assets/video/kevin-spot.mp4`) in the group
 
 ## 5. The burn commitment
