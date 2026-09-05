@@ -276,14 +276,22 @@ second event for the same message), and no outbound message to a bot at all.
 rather than reposting produces no new message, and a listener that only watches
 `message` would silently see nothing all day.
 
-## Publishing the sticker pack
+## Publishing the sticker and emoji packs
 
 On the droplet, where the token is:
 
 ```bash
 cd /opt/kevin
-node bot/publish-stickers.mjs --dry          # check without uploading
-node bot/publish-stickers.mjs --user <your numeric id>
+node bot/publish-stickers.mjs --dry                        # check, upload nothing
+node bot/publish-stickers.mjs --user <numeric id>          # 512px sticker set
+node bot/publish-stickers.mjs --user <numeric id> --emoji  # 100px custom-emoji set
+```
+
+Anywhere else, put the token in the environment for the one run instead of
+writing it to disk — this repo is public:
+
+```bash
+TELEGRAM_TOKEN='…' node bot/publish-stickers.mjs --user <numeric id>
 ```
 
 **`--user` is the numeric id of whoever will OWN the set.** Telegram requires a
@@ -296,8 +304,54 @@ disagree about what exists. Everything is checked before anything is uploaded �
 file present, under 256KB, an emoji assigned, and the set name legal — because
 a rejection partway through leaves half a pack that has to be deleted by hand.
 
-Re-running is safe. If the set already exists it adds to it, and a sticker
-byte-identical to one already there is a no-op at Telegram's end.
+Re-running is safe as long as the art has not changed. If the set already
+exists it adds to it, and a sticker byte-identical to one already there is a
+no-op at Telegram's end — but a **re-encoded** file is different bytes, so
+re-running after editing art appends a second copy rather than updating the
+first. To swap art that is already live:
 
-The set lands at `t.me/addstickers/kevin_by_<botusername>`. Telegram requires
-that `_by_<bot_username>` suffix; it is not a choice.
+```bash
+node bot/publish-stickers.mjs --user <numeric id> --replace fried,wagmi
+```
+
+That maps manifest position to set position and calls `replaceStickerInSet`,
+refusing to touch anything if the two lengths disagree.
+
+The sets land at `t.me/addstickers/kevin_by_<botusername>` and
+`t.me/addstickers/kevinemoji_by_<botusername>`. Telegram requires that
+`_by_<bot_username>` suffix; it is not a choice.
+
+**Custom emoji need Telegram Premium to use.** Anyone can install the set, but
+a free account sees the fallback emoji in `EMOJI` instead of the animation, so
+pick fallbacks that still make sense on their own.
+
+### Live sets
+
+| set | type | count | link |
+| --- | --- | --- | --- |
+| `kevin_by_Iamkevinzbot` | video stickers, 512px | 20 | <https://t.me/addstickers/kevin_by_Iamkevinzbot> |
+| `kevinemoji_by_Iamkevinzbot` | custom emoji, 100px | 20 | <https://t.me/addstickers/kevinemoji_by_Iamkevinzbot> |
+
+Owner is user `6820752140` (@kingpetty317). A set's owner cannot be changed
+after the fact — moving it means deleting the set and publishing it again under
+the other account, and everyone who installed it loses it.
+
+### The arches
+
+`fried` and `wagmi` came back from the image model with the McDonald's golden
+arches on Kevin's uniform. Not painted on — **punched through**: the logo was
+drawn in the same yellow as the backdrop, so the background cut took its strokes
+with it and left arches-shaped holes in the shirt, which show the chat through
+them in every theme. `tools/scrub-logo.mjs` finds them (a hole or light shape
+ringed on all sides by uniform, which nothing else on the character is) and
+inpaints from the surrounding shirt. Run `--check` over the whole pack after any
+new art lands:
+
+```bash
+node tools/scrub-logo.mjs --check $(ls assets/stickers/animated/*.webm \
+  | xargs -n1 basename | sed 's/.webm//')
+```
+
+A real badge shows up on nearly every frame and tracks the body. A hit on a
+handful of frames, anchored at x=0 or y=0, is the backdrop showing through a
+gap, not a logo.

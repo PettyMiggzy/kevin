@@ -54,10 +54,12 @@ keep it that way until each value is real.
 - [ ] X avatar → `assets/png/pfp-1000.png`
 - [ ] X header → `assets/png/banner-1500x500.png`
 - [ ] Telegram group photo → `assets/png/logo-512.png`
-- [ ] Static sticker pack → @Stickers → `/newpack`, upload
-      `assets/stickers/*.png` (18, transparent, 512×512)
-- [ ] Animated pack → @Stickers → `/newvideopack`, upload
-      `assets/stickers/animated/*.webm` (8, VP9 + alpha, all under 256KB)
+- [x] Animated sticker pack — 20 video stickers, published by the bot
+      ([kevin_by_Iamkevinzbot](https://t.me/addstickers/kevin_by_Iamkevinzbot))
+- [x] Custom emoji pack — the same 20 at 100×100
+      ([kevinemoji_by_Iamkevinzbot](https://t.me/addstickers/kevinemoji_by_Iamkevinzbot));
+      needs Telegram Premium to use, free accounts see the fallback emoji
+- [ ] Pin both packs in the group
 - [ ] Pin the spot (`assets/video/kevin-spot.mp4`) in the group
 
 ## 5. The burn commitment
