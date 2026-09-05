@@ -25,7 +25,7 @@
 
 const BOARDS = {
   gym: { label: 'the gym', unit: 'muscle' },
-  job: { label: 'the fry house', unit: '$KEVIN' },
+  job: { label: "McKevin's", unit: '$KEVIN' },
 };
 
 export const hasScores = () => Boolean(process.env.KEVIN_SCORES_URL);

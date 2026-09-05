@@ -994,7 +994,7 @@ async function init() {
     places.push({ kind: st.id === 'crew' ? 'nft' : 'shop', label, note, act,
       x: st.x, z: st.z - 1.2 });
   }
-  places.push({ kind: 'work', label: "Kevin's Fry House", note: 'clock in',
+  places.push({ kind: 'work', label: "McKevin's", note: 'clock in',
     act: 'Work', x: FRY.x, z: FRY.counterZ - 1.4 });
 
   // Settle the absence before the first frame, so the number in the toast is

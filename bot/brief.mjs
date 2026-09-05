@@ -88,7 +88,7 @@ THE GYM (a free browser game, built by the team)
   land the marker in the green band.
 - Miss a day and muscle comes off. That is the whole point of it.
 - Out the front: a market with a supplement stall and a crew stall, and
-  Kevin's Fry House, where you clock in and serve six customers a shift.
+  McKevin's, where you clock in and serve six customers a shift.
 - The $KEVIN you earn in the game is a SCORE. It is not the token, it is not
   supply, nothing in the game mints or moves anything on a chain.
 - Progress saves in your own browser only. There is no account and no server.

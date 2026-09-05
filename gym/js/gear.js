@@ -298,7 +298,7 @@ export const fryHouseTexture = () =>
     x.fillText("KEVIN'S", w / 2, h * 0.40);
     x.fillStyle = '#FFFFFF';
     x.font = '700 44px ui-monospace, Menlo, monospace';
-    x.fillText('FRY HOUSE  ·  OVER 3 SERVED', w / 2, h * 0.74);
+    x.fillText("MCKEVIN'S  ·  OVER 3 SERVED", w / 2, h * 0.74);
   });
 
 /** The menu above the counter. Prices in $KEVIN, which is a score. */
