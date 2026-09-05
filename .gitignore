@@ -36,3 +36,6 @@ server/data/
 # The 1,000 PFP renders. Regenerate with:
 #   node tools/gen-pfp.mjs --count 1000 --seed 20260907
 assets/pfp/*.png
+
+# Rig scratch frames from tools/rig.mjs
+.sticker-frames/rig/

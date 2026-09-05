@@ -1,0 +1,5 @@
+{ "fps": 24, "frames": 36,
+  "parts": [
+    { "name": "arm-l", "joint": [200, 280], "r": 15, "seed": [176, 330], "swing": [0, -62], "phase": 0 },
+    { "name": "arm-r", "joint": [280, 285], "r": 15, "seed": [340, 310], "swing": [0, 62], "phase": 0.5 }
+  ] }

@@ -1,0 +1,55 @@
+{
+  "note": "Double-biceps pump, both arms swinging about the shoulders. The left arm is drawn fused to the hair with no outline between them, so it is bounded by region boxes instead of a flood: the forearm column and the upper-arm band.",
+  "fps": 24,
+  "frames": 36,
+  "parts": [
+    {
+      "name": "arm-l",
+      "joint": [
+        216,
+        280
+      ],
+      "r": 16,
+      "seed": [
+        92,
+        230
+      ],
+      "region": [
+        [
+          70,
+          176,
+          116,
+          296
+        ],
+        [
+          70,
+          258,
+          218,
+          292
+        ]
+      ],
+      "swing": [
+        0,
+        9
+      ],
+      "phase": 0
+    },
+    {
+      "name": "arm-r",
+      "joint": [
+        288,
+        280
+      ],
+      "r": 34,
+      "seed": [
+        380,
+        276
+      ],
+      "swing": [
+        0,
+        -9
+      ],
+      "phase": 0
+    }
+  ]
+}
