@@ -91,10 +91,13 @@ THE CARD ROOM (a free browser game, built by the team)
 - The chips are a score in the player's own browser. They are NOT the token and
   they touch no wallet and no chain.
 
-THE GAME (free, in a browser, built by the team) — three places on one street
-- It starts at KEVIN'S CRIB, his home. The card table is there, and the telly is
-  a map that takes you to the other two.
-- KEVIN'S GYM is down the street. McKEVIN'S is at the far end.
+THE GAME (free, in a browser, built by the team) — three separate places
+- It starts at KEVIN'S CRIB, his home, which is FIRST PERSON. The card table is
+  there, and the telly is a map that takes you to the other two.
+- KEVIN'S GYM is a full gym, inside and out: reception, a supplement counter, a
+  water station, free weights, machines and cardio.
+- McKEVIN'S is the fry house, where the shift is.
+- Only the place you are in is loaded, so each can be as detailed as it likes.
 - Walk into it at https://iamkevin.lol/gym. Works on a phone. Free.
 - Bench, dumbbells and treadmill. Five reps to a set; each rep is a timing hit —
   land the marker in the green band.

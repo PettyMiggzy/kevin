@@ -236,7 +236,7 @@ export function commandReply(name, config) {
       return [
         'Kevin build a gym. https://iamkevin.lol/gym',
         'It is free. It work on a phone.',
-        'You start at Kevin crib. The gym is down the street.',
+        'You start in Kevin crib. That one is first person. Then you pick where to go.',
         'Five reps to a set. Miss a day and it come off.',
         'The $KEVIN in the gym is a score. It is not the token.',
       ].join('\n');

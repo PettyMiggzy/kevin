@@ -33,7 +33,15 @@ export const QUEUE = [
   { x: 7.7, z: 13.2 }, { x: 6.5, z: 12.1 }, { x: 8.0, z: 11.1 }, { x: 6.8, z: 10.0 },
 ];
 
-export function buildCity(scene, { flat, solids, blockers }) {
+/**
+ * @param parts  which of the three pieces to build. They live in one file
+ *               because they share a horizon, but they no longer share a world:
+ *               the gym takes the skyline and the market, the fry house takes
+ *               the skyline and itself. Building all of it everywhere is what
+ *               the world split exists to stop.
+ */
+export function buildCity(scene, { flat, solids, blockers },
+                          parts = { skyline: true, market: true, fry: true }) {
   const solid = (w, h, d, colour, x, y, z, map = null, rotY = 0) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), flat(colour, map));
     m.position.set(x, y, z);

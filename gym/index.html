@@ -241,6 +241,11 @@
   #resultBody { margin-top: 6px; font-size: 12px; line-height: 1.6; }
   #resultBody span { color: #A8F0B4; }
 
+  #worldBtn { position: absolute; right: 12px; bottom: 108px; padding: 8px 12px; font: 700 11px/1 var(--mono);
+    text-transform: uppercase; border: 3px solid var(--ink); border-radius: 8px; background: var(--brand);
+    cursor: pointer; }
+  body.touch #worldBtn { bottom: 246px; }
+  body.working #worldBtn { display: none; }
   #muteBtn { position: absolute; right: 12px; bottom: 62px; padding: 8px 12px; font: 700 11px/1 var(--mono);
     letter-spacing: .06em; cursor: pointer; background: var(--void); }
   body.touch #muteBtn { bottom: 200px; }
@@ -299,6 +304,7 @@
   <button id="act" class="panel">Lift</button>
   <button id="muteBtn" class="panel" aria-label="Sound">SOUND ON</button>
   <button id="shopBtn" class="panel">Supplements</button>
+  <button id="worldBtn" class="panel">Worlds</button>
 
   <div id="shop" class="panel">
     <h2>Supplements</h2>
@@ -324,10 +330,10 @@
 
   <div id="map" class="panel">
     <h2>Worlds</h2>
-    <p class="note">Walk it if you like — it is all one street. This is just quicker.</p>
+    <p class="note">Separate places. Only the one you are in is loaded, so each can be as detailed as it likes.</p>
     <div class="worlds">
-      <button data-world="crib">Kevin's Crib<small>Home. The card table is here.</small></button>
-      <button data-world="gym">Kevin's Gym<small>Bench, dumbbells, treadmill.</small></button>
+      <button data-world="crib">Kevin's Crib<small>Home. First person. The card table is here.</small></button>
+      <button data-world="gym">Kevin's Gym<small>Reps, reception, water station. Inside and out.</small></button>
       <button data-world="work">McKevin's<small>Clock in. This is where $KEVIN comes from.</small></button>
     </div>
     <button id="closeMap">Back</button>

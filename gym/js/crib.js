@@ -28,19 +28,16 @@ export const CRIB = {
   door: { x0: -19.4, x1: -16.6 },                    // the gap you walk through
   table: { x: -19.6, z: 17.4 },                      // the card table
   tv: { x: -14.8, z: 17.6 },                         // the set, and the world map
-  spawn: { x: -17.4, z: 16.4 },                      // in the room, not in the doorway
+  spawn: { x: -18.0, z: 14.6 },                      // inside the door, facing the room
   /**
-   * The crib gets its own shot instead of the chase camera.
+   * The crib is first person, which is why it can be a real room.
    *
-   * The chase camera sits behind and above the player and pulls further back
-   * the further up the street you are, which is right for a forecourt and
-   * wrong for a room six metres deep: from inside the crib it ends up outside
-   * the back wall, filling the screen with it. The room is small enough to
-   * frame whole, so it is framed whole — a diorama you move around in, which
-   * suits a house better than a chase cam anyway. High enough to clear the
-   * front wall's parapet on the way in.
+   * A chase camera has to see past a near wall and down through a roof, and
+   * neither is a thing a house has. Standing in it, both problems stop
+   * existing — so the walls go full height and the lid goes on.
    */
-  cam: { x: -14.6, y: 8.0, z: 7.6, atY: 1.3 },
+  /** Which way you are facing when you wake up: into the room, not at a wall. */
+  yaw: 0,
 };
 
 /** Is this position inside the crib's four walls? */
@@ -87,22 +84,26 @@ export function buildCrib(scene, { flat, solids, blockers }) {
   rug.position.set(x - 1.0, 0.026, z + 0.4);
   scene.add(rug);
 
-  // Shell: full-height back and sides, and a LOW front.
+  // Shell: four full-height walls and a ceiling.
   //
-  // The front is cut down to waist height on purpose. The camera looks into
-  // this room over that wall, and at full height it stands between the shot and
-  // the player — you walk in and vanish behind your own house. Cutting the
-  // near wall down is the dollhouse trick every isometric game uses, and it
-  // costs nothing: the building still reads from the street off its sides,
-  // its parapet and its sign.
-  const FRONT_H = 1.7;
+  // This room was briefly a dollhouse — near wall cut to waist height so an
+  // outside camera could see over it. In first person you are standing in it,
+  // so it gets to be a room: a real front wall with a real doorway, and a lid
+  // on top. Without the lid you are indoors looking at open sky, which reads
+  // as a film set rather than a house.
   solid(w, h, 0.3, WALL, x, h / 2, back);
   solid(0.3, h, d, WALL, left, h / 2, z);
   solid(0.3, h, d, WALL, right, h / 2, z);
   const leftW = CRIB.door.x0 - left;
   const rightW = right - CRIB.door.x1;
-  solid(leftW, FRONT_H, 0.3, WALL, left + leftW / 2, FRONT_H / 2, front);
-  solid(rightW, FRONT_H, 0.3, WALL, right - rightW / 2, FRONT_H / 2, front);
+  solid(leftW, h, 0.3, WALL, left + leftW / 2, h / 2, front);
+  solid(rightW, h, 0.3, WALL, right - rightW / 2, h / 2, front);
+  solid(CRIB.door.x1 - CRIB.door.x0, h - 2.2, 0.3, WALL,
+    (CRIB.door.x0 + CRIB.door.x1) / 2, h - (h - 2.2) / 2, front);      // over the door
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), flat('#E4DED2'));
+  ceil.rotation.x = Math.PI / 2;
+  ceil.position.set(x, h - 0.02, z);
+  scene.add(ceil);
 
   // A parapet, NOT a roof. The chase camera sits behind and above the player
   // and looks down over the back wall into the room — the same way it reads the
@@ -111,17 +112,10 @@ export function buildCrib(scene, { flat, solids, blockers }) {
   // thin edge beams give the building a top edge from the street and leave the
   // sight line in.
   const beam = 0.22;
-  solid(w + 0.4, beam, 0.34, TRIM, x, h + beam / 2, back);
-  solid(0.34, beam, d + 0.4, TRIM, left, h + beam / 2, z);
-  solid(0.34, beam, d + 0.4, TRIM, right, h + beam / 2, z);
-  // The front's cap sits on the low wall, not up at roof height, or it is the
-  // full-height wall again with a hole in it.
-  solid(leftW + 0.2, beam, 0.34, TRIM, left + leftW / 2, FRONT_H + beam / 2, front);
-  solid(rightW + 0.2, beam, 0.34, TRIM, right - rightW / 2, FRONT_H + beam / 2, front);
-  // The sign goes on the street face of the low wall, where it is a sign on a
-  // house rather than a hoarding across the room.
-  quad(3.6, 0.72, signTexture(["KEVIN'S CRIB", 'no shoes inside'],
-    { bg: '#1C2E3F', fg: '#FFE500' }), x + 2.4, 1.0, front - 0.17, Math.PI);
+  solid(w + 0.4, beam, d + 0.4, TRIM, x, h + beam / 2, z);
+  // Inside the door, where you read it on the way out.
+  quad(2.4, 0.5, signTexture(["KEVIN'S CRIB", 'no shoes inside'],
+    { bg: '#1C2E3F', fg: '#FFE500' }), x, h - 0.5, front + 0.17);
 
   // --- the card table ------------------------------------------------------
   // Round, green, and lit, because it is the reason the room exists. The felt

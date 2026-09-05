@@ -11,33 +11,51 @@ python3 -m http.server 8899   # then http://127.0.0.1:8899/gym/
 
 WASD or the on-screen stick to move, **E** or the button to work a station.
 
-## Three worlds, one street
+## Three worlds, and they are actually separate
 
-You start at home. **Kevin's Crib** is the hub: the card table is in it, and the
-telly is a map that will drop you at either of the other two. **Kevin's Gym** is
-down the street, and **McKevin's** is at the far end. It is one continuous
-street, so all of it can be walked — the map is a shortcut, not a loading screen.
+**Kevin's Crib** is home and the hub — first person, with the card table in it
+and a telly that takes you anywhere. **Kevin's Gym** is the gym, inside and out.
+**McKevin's** is the fry house.
 
-The crib gets its own camera instead of the chase cam. The chase cam sits behind
-and above the player and pulls further back the further up the street you are,
-which is right for a forecourt and wrong for a room six metres deep: from inside
-the crib it ends up outside the back wall, filling the screen with it. The room
-is small enough to frame whole, so it is framed whole. Its front wall is cut to
-waist height for the same reason — the dollhouse trick, because at full height
-the near wall stands between the shot and the player and you vanish behind your
-own house.
+They are separate in the way that matters: **one is loaded at a time.** Entering
+a world builds it, leaving it *disposes* it — geometry, materials and textures
+freed, not merely hidden. Hiding a mesh saves you a draw call and nothing else;
+its buffers stay on the GPU and its textures stay in memory, and the ceiling
+that matters here is a phone's. Building and tearing down means detail added to
+one room costs nothing in the other two, which is the whole reason to split
+them. Bouncing between all three repeatedly returns to the same mesh count each
+time, so nothing is being left behind.
+
+`worlds.js` has the two pieces. `disposeWorld` walks a world and frees it, with
+one trap worth knowing: props are loaded once, cached and `clone()`d per world,
+and a clone SHARES its source's geometry — dispose that and the next world to
+spawn the prop gets an empty box. Anything cloned off the cache is flagged and
+its geometry is left alone. `captureInto` lets the existing builders keep
+calling `scene.add` as they always did: note what was there, run the builder,
+adopt the difference.
+
+### Why the crib is first person
+
+Because a house is a room you stand in, and a chase camera cannot be in one. It
+has to see past a near wall and down through a roof, and a house has both — the
+first version of the crib had a roof you stared at from inside and a front wall
+you vanished behind on the way in. In first person neither problem exists, so
+the walls go full height and the lid goes on. Look is drag, not pointer lock:
+lock needs a click to arm, some embedded webviews refuse it, and it does nothing
+at all on a phone — and this has to work in a Telegram browser first.
 
 The card room is `/poker` in a frame rather than a link. It is a whole page that
-works standing alone, so the crib borrows it instead of reimplementing it;
-navigating away would drop the scene, the walk back and the save, and returning
-would cost a full reload of the gym.
+works standing alone, so the crib borrows it; navigating away would drop the
+scene, the walk back and the save.
 
 ## What is actually here
 
-- One room, toon-shaded, with black inverted-hull outlines
+- A 32x24 gym floor, toon-shaded, with black inverted-hull outlines
 - Twelve props generated with Tripo and normalised to one art direction
 - Kevin, built from primitives, whose body scales with a single muscle number
 - Three stations: bench and dumbbells feed strength, treadmill feeds stamina
+- Reception with a stocked supplement counter, and a water station by the door
+- A free-weights end, a machine wall, a cardio row and a changing end
 - Exponential decay with a cap, a streak, and earnable freezes
 - A three-item supplement shop paid for in earned $KEVIN
 - Touch controls, a mobile layout, and saved progress

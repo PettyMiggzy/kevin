@@ -26,7 +26,8 @@ import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, 
   skyTexture, concreteTexture, facadeTexture, bannerTexture, billboardTexture, boardTexture } from './gear.js';
 import { play, setMuted, isMuted } from './audio.js';
 import { buildCity, buildLeaderboard, paintLeaderboard, MARKET, FRY, QUEUE } from './city.js';
-import { buildCrib, CRIB, inCrib } from './crib.js';
+import { buildCrib, CRIB } from './crib.js';
+import { disposeWorld, captureInto } from './worlds.js';
 import { Shift, ITEMS, SHIFT_LENGTH } from './job.js';
 
 const $ = (s) => document.querySelector(s);
@@ -116,7 +117,11 @@ function place(obj, { x = 0, z = 0, width = 1, rotY = 0 }) {
 
 // --- the room ---------------------------------------------------------------
 
-const ROOM = { w: 18, d: 14, h: 4.4 };
+// A real gym, not a single room. Now that it is its own world and pays for
+// nothing else, it can afford the floor: roughly three times the area it had,
+// which is what makes room for a reception, a supplement counter, a water
+// station and a proper free-weights end instead of everything in one huddle.
+const ROOM = { w: 32, d: 24, h: 5.0 };
 
 function buildRoom(scene) {
   const flat = (color, map = null) => {
@@ -306,7 +311,7 @@ function buildExterior(scene) {
 const STATIONS = [
   {
     id: 'bench', prop: 'bench', label: 'Seated press',
-    x: -4.4, z: 1.4, width: 2.2, rotY: Math.PI / 2,
+    x: -7.6, z: -1.0, width: 2.2, rotY: Math.PI / 2,
     stat: 'muscle', gain: 3.0, coin: 10,
     sweep: 0.80, window: 0.115,          // slow sweep, tight band — heavy and precise
     // Seated on the end, not supine along it. A lying press clips into the pad
@@ -318,7 +323,7 @@ const STATIONS = [
   },
   {
     id: 'rack', prop: 'dumbbell-rack', label: 'Dumbbells',
-    x: -7.2, z: -4.4, width: 3.0, rotY: 0,
+    x: -13.0, z: -7.4, width: 3.0, rotY: 0,
     stat: 'muscle', gain: 2.0, coin: 7,
     sweep: 1.35, window: 0.175,          // quick and forgiving — the warm-up
     mount: { pose: 'curl', dx: 0, dz: 1.30, ry: Math.PI, seatY: 0 },
@@ -327,7 +332,7 @@ const STATIONS = [
   },
   {
     id: 'treadmill', prop: 'treadmill', label: 'Treadmill',
-    x: 5.4, z: -3.6, width: 2.6, rotY: -Math.PI / 2,
+    x: 12.4, z: -5.0, width: 2.6, rotY: -Math.PI / 2,
     stat: 'stamina', gain: 3.6, coin: 9,
     sweep: 1.75, window: 0.155,          // fastest sweep in the room
     mount: { pose: 'run', dx: 0.30, dz: 0, ry: -Math.PI / 2, seatY: 0.16 },
@@ -341,45 +346,69 @@ const STATIONS = [
 // walls. Scattering equipment evenly across a floor is what made it read as a
 // showroom rather than somewhere people train.
 const SCENERY = [
-  // --- free weights, on the platform ---------------------------------------
-  ['squat-rack', { x: -1.2, z: -5.4, width: 2.6, rotY: 0 }],
-  ['plate-tree', { x: 1.4, z: -5.4, width: 1.1, rotY: 0 }],
-  ['plate-tree', { x: -3.4, z: -5.4, width: 1.1, rotY: 0 }],
-  ['pullup-rig', { x: -6.6, z: 0.4, width: 2.6, rotY: Math.PI / 2 }],
-  ['kettlebell', { x: -2.6, z: 2.9, width: 0.45, rotY: 0.8, solid: false }],
-  ['kettlebell', { x: -2.1, z: 3.4, width: 0.4, rotY: -0.5, solid: false }],
-  ['dumbbell', { x: -3.2, z: 3.2, width: 0.55, rotY: 0.3, solid: false }],
-  ['medicine-ball', { x: -6.0, z: 4.4, width: 0.5, rotY: 0, solid: false }],
-  ['medicine-ball', { x: -5.5, z: 4.7, width: 0.42, rotY: 1.1, solid: false }],
+  // --- free weights, back left on the platform -----------------------------
+  ['squat-rack', { x: -9.0, z: -10.0, width: 2.6, rotY: 0 }],
+  ['squat-rack', { x: -4.4, z: -10.0, width: 2.6, rotY: 0 }],
+  ['plate-tree', { x: -6.7, z: -10.2, width: 1.1, rotY: 0 }],
+  ['plate-tree', { x: -11.4, z: -10.2, width: 1.1, rotY: 0 }],
+  ['pullup-rig', { x: -14.6, z: -2.4, width: 2.6, rotY: Math.PI / 2 }],
+  ['bench', { x: -11.0, z: -4.2, width: 1.8, rotY: 0.2, solid: true }],
+  ['kettlebell', { x: -8.2, z: -6.4, width: 0.45, rotY: 0.8, solid: false }],
+  ['kettlebell', { x: -7.6, z: -5.9, width: 0.4, rotY: -0.5, solid: false }],
+  ['kettlebell', { x: -9.1, z: -5.6, width: 0.42, rotY: 1.7, solid: false }],
+  ['dumbbell', { x: -10.0, z: -6.0, width: 0.55, rotY: 0.3, solid: false }],
+  ['dumbbell', { x: -5.6, z: -6.6, width: 0.5, rotY: 1.2, solid: false }],
+  ['medicine-ball', { x: -13.4, z: -0.6, width: 0.5, rotY: 0, solid: false }],
+  ['medicine-ball', { x: -12.8, z: -0.1, width: 0.42, rotY: 1.1, solid: false }],
 
   // --- machines, along the back wall ---------------------------------------
-  ['lat-pulldown', { x: 2.2, z: -5.2, width: 2.0, rotY: 0 }],
-  ['cable-machine', { x: 4.8, z: -5.3, width: 2.6, rotY: 0 }],
-  ['leg-press', { x: 7.4, z: -4.6, width: 2.8, rotY: -0.5 }],
+  ['lat-pulldown', { x: -0.6, z: -10.4, width: 2.0, rotY: 0 }],
+  ['cable-machine', { x: 2.6, z: -10.4, width: 2.6, rotY: 0 }],
+  ['leg-press', { x: 6.6, z: -10.0, width: 2.8, rotY: -0.3 }],
+  ['lat-pulldown', { x: 10.8, z: -10.4, width: 2.0, rotY: 0.1 }],
+  ['cable-machine', { x: 14.0, z: -7.4, width: 2.6, rotY: -Math.PI / 2 }],
 
   // --- cardio, right side --------------------------------------------------
-  ['rowing-machine', { x: 7.2, z: -1.4, width: 2.4, rotY: -Math.PI / 2 }],
-  ['punching-bag', { x: 6.8, z: 0.9, width: 1.2, rotY: 0 }],
+  ['treadmill', { x: 12.4, z: -1.6, width: 2.4, rotY: -Math.PI / 2 }],
+  ['treadmill', { x: 12.4, z: 1.6, width: 2.4, rotY: -Math.PI / 2 }],
+  ['rowing-machine', { x: 8.6, z: -2.6, width: 2.4, rotY: -Math.PI / 2 }],
+  ['rowing-machine', { x: 8.6, z: 0.4, width: 2.4, rotY: -Math.PI / 2 }],
+  ['punching-bag', { x: 14.2, z: 4.6, width: 1.2, rotY: 0 }],
+  ['punching-bag', { x: 14.2, z: 6.6, width: 1.2, rotY: 0 }],
 
-  // --- everything else, against the walls ----------------------------------
-  ['locker', { x: -8.2, z: 3.4, width: 1.0, rotY: Math.PI / 2 }],
-  ['locker', { x: -8.2, z: 4.5, width: 1.0, rotY: Math.PI / 2 }],
-  ['locker', { x: -8.2, z: 5.6, width: 1.0, rotY: Math.PI / 2 }],
-  ['water-cooler', { x: 7.6, z: 3.6, width: 0.8, rotY: -Math.PI / 2 }],
-  ['towel-bin', { x: 6.4, z: 4.8, width: 0.9, rotY: -0.3 }],
-  ['protein-tub', { x: 7.5, z: 2.4, width: 0.5, rotY: 0.4, solid: false }],
-  ['bucket', { x: -7.6, z: -6.0, width: 0.6, rotY: -0.3, solid: false }],
-  ['speaker', { x: -8.6, z: -6.2, width: 0.7, rotY: 0.7 }],
-  ['gym-clock', { x: -8.85, z: -4.0, width: 1.0, rotY: Math.PI / 2, y: 3.0, solid: false }],
+  // --- changing end, left wall ---------------------------------------------
+  ['locker', { x: -15.2, z: 2.0, width: 1.0, rotY: Math.PI / 2 }],
+  ['locker', { x: -15.2, z: 3.1, width: 1.0, rotY: Math.PI / 2 }],
+  ['locker', { x: -15.2, z: 4.2, width: 1.0, rotY: Math.PI / 2 }],
+  ['locker', { x: -15.2, z: 5.3, width: 1.0, rotY: Math.PI / 2 }],
+  ['locker', { x: -15.2, z: 6.4, width: 1.0, rotY: Math.PI / 2 }],
+  ['locker', { x: -15.2, z: 7.5, width: 1.0, rotY: Math.PI / 2 }],
+  ['bench', { x: -12.6, z: 4.8, width: 1.8, rotY: Math.PI / 2 }],
+  ['towel-bin', { x: -13.4, z: 8.6, width: 0.9, rotY: -0.3 }],
+  ['bucket', { x: -14.6, z: 9.6, width: 0.6, rotY: -0.3, solid: false }],
+
+  // --- the water station, by the door --------------------------------------
+  ['water-cooler', { x: -6.6, z: 8.8, width: 0.85, rotY: 0 }],
+  ['water-cooler', { x: -5.4, z: 8.8, width: 0.85, rotY: 0 }],
+  ['bucket', { x: -7.8, z: 9.2, width: 0.55, rotY: 0.4, solid: false }],
+
+  // --- reception and the supplement counter, right of the door -------------
+  ['protein-tub', { x: 7.4, z: 8.5, width: 0.55, rotY: 0.4, solid: false }],
+  ['protein-tub', { x: 8.1, z: 8.6, width: 0.5, rotY: -0.3, solid: false }],
+  ['protein-tub', { x: 8.8, z: 8.4, width: 0.52, rotY: 0.9, solid: false }],
+  ['speaker', { x: 15.0, z: 9.4, width: 0.7, rotY: 0.7 }],
+  ['speaker', { x: -15.2, z: -10.6, width: 0.7, rotY: -0.6 }],
+  ['gym-clock', { x: -15.85, z: -6.0, width: 1.2, rotY: Math.PI / 2, y: 3.4, solid: false }],
+  ['gym-mirror', { x: 15.85, z: -3.0, width: 3.0, rotY: -Math.PI / 2, solid: false }],
 
   // --- out on the forecourt ------------------------------------------------
-  ['plate-tree', { x: -7.4, z: 9.6, width: 1.1, rotY: 0.3 }],
-  ['dumbbell', { x: 4.6, z: 10.4, width: 0.6, rotY: 0.9, solid: false }],
-  ['kettlebell', { x: 5.4, z: 11.0, width: 0.5, rotY: -0.4, solid: false }],
-  ['protein-tub', { x: 3.4, z: 12.2, width: 0.62, rotY: 0.2, solid: false }],
-  ['medicine-ball', { x: -3.8, z: 11.4, width: 0.5, rotY: 0, solid: false }],
-  ['bucket', { x: 7.2, z: 8.2, width: 0.62, rotY: 0.6, solid: false }],
-  ['towel-bin', { x: -5.2, z: 8.4, width: 0.9, rotY: -0.4 }],
+  ['plate-tree', { x: -9.4, z: 15.6, width: 1.1, rotY: 0.3 }],
+  ['dumbbell', { x: 5.6, z: 16.4, width: 0.6, rotY: 0.9, solid: false }],
+  ['kettlebell', { x: 6.4, z: 17.0, width: 0.5, rotY: -0.4, solid: false }],
+  ['protein-tub', { x: 4.4, z: 18.2, width: 0.62, rotY: 0.2, solid: false }],
+  ['medicine-ball', { x: -4.8, z: 17.4, width: 0.5, rotY: 0, solid: false }],
+  ['bucket', { x: 9.2, z: 14.2, width: 0.62, rotY: 0.6, solid: false }],
+  ['towel-bin', { x: -7.2, z: 14.4, width: 0.9, rotY: -0.4 }],
 ];
 
 // --- Kevin ------------------------------------------------------------------
@@ -767,8 +796,10 @@ const solids = [];                    // {x,z,r} circles the player cannot walk 
 // Walls are rectangles. Approximating the front of a building with circles
 // leaves gaps you can squeeze through and a doorway you cannot.
 const blockers = [];                  // {x0,x1,z0,z1}
-const DOOR = { x0: -2.1, x1: 2.1 };   // the way in, in world x
-const YARD = { z: 21, x: 13 };        // how far the forecourt runs
+const DOOR = { x0: -3.0, x1: 3.0 };   // the way in, in world x
+// The forecourt has to start where the building now ends, and still be deep
+// enough to be a place rather than a kerb.
+const YARD = { z: 30, x: 21 };
 const BODY = 0.34;                    // how wide anybody is, for collision
 
 /**
@@ -796,7 +827,7 @@ function depthAt(x, z) {
   return worst;
 }
 
-const input = { f: 0, s: 0, act: false };
+const input = { f: 0, s: 0, turn: 0, act: false };
 let set = null;                       // the RepSet in progress, or null
 let nearest = null;
 let lastStep = 0;
@@ -906,102 +937,12 @@ async function init() {
   key.position.set(6, 10, 5);
   scene.add(key);
 
-  buildRoom(scene);
-  buildExterior(scene);
-  buildCity(scene, { flat: flatMat, solids, blockers });
-  buildCrib(scene, { flat: flatMat, solids, blockers });
-  board = buildLeaderboard(scene, { flat: flatMat });
-
   await loadCrew();
-  // You start at home. The gym and the fry house are a walk down the street,
-  // or a tap on the map on the telly.
+  // The player is built once and moves between worlds; only the scenery is torn
+  // down and rebuilt.
   kevin = spawnPlayer(state.crewId ?? 0, new THREE.Vector3(CRIB.spawn.x, 0, CRIB.spawn.z));
 
-  // Everyone shares one material, so the whole crew costs one shader. They do
-  // NOT get collision: they move, so a static solid would leave an invisible
-  // wall wherever one happened to start, and being nudged past somebody is
-  // better than being stopped by where they used to be.
-  if (CREW?.crew?.length > 1) {
-    const crewMat = toon('#FFFFFF', { vertexColors: true });
-    crewMat.userData.outlineParameters = { thickness: 0.010, color: [0, 0, 0], alpha: 1 };
-    // Started with no spot: props are not loaded yet, so the spots have not
-    // been resolved and seating them now would place them inside machines.
-    const many = Math.min(6, CREW.crew.length - 1);
-    for (let i = 0; i < many; i++) {
-      const npc = makeNpc(CREW.crew[(i + 1) % CREW.crew.length], crewMat, null);
-      npc.group.position.set(-6 + i * 2.4, 0, 5.4);
-      scene.add(npc.group);
-      npcs.push(npc);
-    }
-  }
-
-  const loader = new GLTFLoader();
-  loader.setMeshoptDecoder(MeshoptDecoder);
-
-  const need = [...new Set([...STATIONS.map((s) => s.prop), ...SCENERY.map((s) => s[0])])];
-
-  // Four lanes, not twenty-two at once. A phone opening twenty-two connections
-  // is slower than one opening four, and decoding that many meshopt buffers
-  // concurrently is what pushes a mobile tab over its memory ceiling — which
-  // from the outside looks exactly like the button doing nothing.
-  const queue = need.slice();
-  let done = 0;
-  const lane = async () => {
-    for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
-      try {
-        const g = INLINE?.props?.[name]
-          ? await loader.parseAsync(INLINE.props[name], '')
-          : await withTimeout(loader.loadAsync(`./assets/props/${name}.glb`), PROP_TIMEOUT, name);
-        props.set(name, g.scene);
-      } catch {
-        /* missing, slow or broken — the room opens without it rather than not at all */
-      }
-      booting(`Opening… ${++done}/${need.length}`);
-    }
-  };
-  await Promise.all(Array.from({ length: PROP_LANES }, lane));
-
-  const spawn = (name, opts, tag) => {
-    const src = props.get(name);
-    if (!src) return null;
-    const obj = normalise(src.clone(true));
-    place(obj, opts);
-    if (opts.y) obj.position.y += opts.y;
-    scene.add(obj);
-    if (opts.solid !== false) solids.push({ x: opts.x, z: opts.z, r: opts.width * 0.42 });
-    if (tag) obj.userData.station = tag;
-    // The pose has to sit on the actual model, not on a guess about it.
-    opts.top = new THREE.Box3().setFromObject(obj).max.y;
-    return obj;
-  };
-
-  for (const st of STATIONS) st.object = spawn(st.prop, st, st.id);
-  for (const [name, opts] of SCENERY) spawn(name, opts);
-  clearSpots();
-
-  // Everything walk-up-able, in the order you meet it coming out of the door.
-  places.length = 0;
-  for (const st of STATIONS) {
-    places.push({ kind: 'station', station: st, label: st.label, x: st.x, z: st.z,
-      note: `${REPS_PER_SET} reps`, act: st.stat === 'stamina' ? 'Run' : 'Lift' });
-  }
-  const stallLabel = {
-    supplements: ['Supplement stall', 'spend $KEVIN', 'Shop'],
-    crew: ["Kevin's Crew", 'have a look', 'Look'],
-    produce: ['Fresh produce', 'closed, obviously', ''],
-  };
-  for (const st of MARKET) {
-    const [label, note, act] = stallLabel[st.id];
-    if (!act) continue;                       // the produce stall is set dressing
-    places.push({ kind: st.id === 'crew' ? 'nft' : 'shop', label, note, act,
-      x: st.x, z: st.z - 1.2 });
-  }
-  places.push({ kind: 'work', label: "McKevin's", note: 'clock in',
-    act: 'Work', x: FRY.x, z: FRY.counterZ - 1.4 });
-  places.push({ kind: 'cards', label: 'Card table', note: "Kevin's card room",
-    act: 'Play', x: CRIB.table.x + 1.5, z: CRIB.table.z - 0.9 });
-  places.push({ kind: 'map', label: 'The telly', note: 'pick a world',
-    act: 'Worlds', x: CRIB.tv.x - 1.3, z: CRIB.tv.z });
+  await setWorld(state.world ?? 'crib');
 
   // Settle the absence before the first frame, so the number in the toast is
   // the number on the bars.
@@ -1071,7 +1012,18 @@ function frame() {
   // you film a bench press from the side and a chase camera shows the soles of
   // his shoes.
   let lookY = 1.25;
-  if (peek) {
+  if (firstPerson && !set && !shift) {
+    // Eyes, not a chase cam. In a room this size the camera IS the player:
+    // there is no near wall to see past and no roof to lift off, which is why
+    // the crib is first person and the street is not.
+    const p = kevin.group.position;
+    camera.position.set(p.x, 1.58, p.z);
+    aim.set(
+      p.x + Math.sin(look.yaw) * 4,
+      1.58 + Math.tan(look.pitch) * 4,
+      p.z + Math.cos(look.yaw) * 4
+    );
+  } else if (peek) {
     camera.position.copy(peek.pos);
     aim.copy(peek.at);
   } else if (shift && shiftCam) {
@@ -1085,10 +1037,6 @@ function frame() {
     lookY = c.at;
     camera.position.lerp(tmp, 1 - Math.pow(0.004, dt));
     aim.set(set.station.x, lookY, set.station.z);
-  } else if (inCrib(kevin.group.position.x, kevin.group.position.z)) {
-    tmp.set(CRIB.cam.x, CRIB.cam.y, CRIB.cam.z);
-    camera.position.lerp(tmp, 1 - Math.pow(0.002, dt));
-    aim.set(CRIB.x, CRIB.cam.atY, CRIB.z);
   } else {
     // Outside, pull back and up: there is a building to read, and the same
     // shot that frames a room nicely puts your nose against its front wall.
@@ -1112,6 +1060,265 @@ function frame() {
 
   camera.lookAt(aim);
   effect.render(scene, camera);
+}
+
+
+
+/**
+ * The things a gym has that a weights room does not: somewhere to be signed in,
+ * somewhere to buy a tub, and somewhere to fill a bottle. All boxes and painted
+ * quads — furniture seen from a few metres, where a model costs megabytes to
+ * look the same.
+ */
+function buildFittings(scene) {
+  const flat = (color, map = null) => {
+    const m = toon(color, map ? { map } : {});
+    m.userData.outlineParameters = { visible: false };
+    return m;
+  };
+  const solid = (w, h, d, colour, x, y, z, map = null, rotY = 0) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), flat(colour, map));
+    m.position.set(x, y, z);
+    m.rotation.y = rotY;
+    scene.add(m);
+    return m;
+  };
+  const quad = (w, h, map, x, y, z, rotY = 0) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), flat('#FFFFFF', map));
+    m.position.set(x, y, z);
+    m.rotation.y = rotY;
+    scene.add(m);
+    return m;
+  };
+
+  // --- reception, right of the door ----------------------------------------
+  solid(6.4, 1.06, 1.0, '#C7382F', 8.6, 0.53, 7.6);              // desk
+  solid(6.6, 0.12, 1.2, '#1C1C1C', 8.6, 1.12, 7.6);              // its top
+  solid(6.0, 2.4, 0.3, '#E8DFD0', 8.6, 1.2, 10.4);               // back board
+  quad(5.0, 1.1, signTexture(['RECEPTION', 'SIGN IN, THEN SUFFER'],
+    { bg: '#0B0B0B', fg: '#FFE500' }), 8.6, 2.55, 10.24);
+  // Shelves of stock behind it, so the counter has something to sell.
+  for (let i = 0; i < 3; i++) {
+    solid(5.2, 0.09, 0.42, '#8A6A4A', 8.6, 1.7 + i * 0.62, 10.0);
+    for (let j = 0; j < 7; j++) {
+      solid(0.34, 0.44, 0.3, ['#E8232B', '#FFE500', '#2F8F45', '#6B4BC4'][(i + j) % 4],
+        6.3 + j * 0.78, 1.96 + i * 0.62, 10.0);
+    }
+  }
+
+  // --- the water station, left of the door ---------------------------------
+  solid(3.4, 0.16, 0.9, '#B9C7D0', -6.0, 0.9, 9.5);              // shelf
+  solid(0.16, 0.9, 0.9, '#B9C7D0', -7.6, 0.45, 9.5);
+  solid(0.16, 0.9, 0.9, '#B9C7D0', -4.4, 0.45, 9.5);
+  solid(3.6, 1.9, 0.24, '#DCE6EC', -6.0, 1.6, 10.15);
+  quad(3.0, 0.72, signTexture(['WATER', 'DRINK IT'],
+    { bg: '#1E4E6B', fg: '#CFEAF7' }), -6.0, 1.9, 10.02);
+  for (let i = 0; i < 5; i++) {
+    solid(0.2, 0.5, 0.2, '#7FD4F0', -7.2 + i * 0.6, 1.24, 9.4);  // bottles
+  }
+
+  // --- a stretching mat, so the middle of the floor is not dead ------------
+  const mat2 = new THREE.Mesh(new THREE.PlaneGeometry(7.0, 5.0), flat('#2F6E4E'));
+  mat2.rotation.x = -Math.PI / 2;
+  mat2.position.set(4.0, 0.03, 3.2);
+  scene.add(mat2);
+
+  blockers.push(
+    { x0: 5.3, x1: 11.9, z0: 7.0, z1: 8.2 },      // the desk
+    { x0: 5.5, x1: 11.7, z0: 10.1, z1: 10.7 },    // the back board
+    { x0: -7.8, x1: -4.2, z0: 9.1, z1: 10.4 },    // the water station
+  );
+}
+
+// --- worlds -----------------------------------------------------------------
+// Each world owns its scenery and nothing else's. Entering builds it; leaving
+// disposes it, so detail added to one room does not cost anything in another.
+// The player, the lights and the camera are shared and survive the switch.
+
+let worldGroup = null;
+let worldId = null;
+/** First person in the crib, chase camera outside. */
+let firstPerson = false;
+const look = { yaw: Math.PI, pitch: -0.06 };
+
+async function buildGymWorld() {
+  buildRoom(scene);
+  buildExterior(scene);
+  // Skyline and market only. The fry house is its own world now, and building
+  // it here would be the whole point of splitting them thrown away.
+  buildCity(scene, { flat: flatMat, solids, blockers }, { skyline: true, market: true, fry: false });
+  buildFittings(scene);
+  board = buildLeaderboard(scene, { flat: flatMat });
+
+  // Everyone shares one material, so the whole crew costs one shader. They do
+  // NOT get collision: they move, so a static solid would leave an invisible
+  // wall wherever one happened to start, and being nudged past somebody is
+  // better than being stopped by where they used to be.
+  if (CREW?.crew?.length > 1) {
+    const crewMat = toon('#FFFFFF', { vertexColors: true });
+    crewMat.userData.outlineParameters = { thickness: 0.010, color: [0, 0, 0], alpha: 1 };
+    // Started with no spot: props are not loaded yet, so the spots have not
+    // been resolved and seating them now would place them inside machines.
+    const many = Math.min(6, CREW.crew.length - 1);
+    for (let i = 0; i < many; i++) {
+      const npc = makeNpc(CREW.crew[(i + 1) % CREW.crew.length], crewMat, null);
+      npc.group.position.set(-6 + i * 2.4, 0, 5.4);
+      scene.add(npc.group);
+      npcs.push(npc);
+    }
+  }
+  const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
+
+  const need = [...new Set([...STATIONS.map((s) => s.prop), ...SCENERY.map((s) => s[0])])];
+
+  // Four lanes, not twenty-two at once. A phone opening twenty-two connections
+  // is slower than one opening four, and decoding that many meshopt buffers
+  // concurrently is what pushes a mobile tab over its memory ceiling — which
+  // from the outside looks exactly like the button doing nothing.
+  const queue = need.slice();
+  let done = 0;
+  const lane = async () => {
+    for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
+      try {
+        const g = INLINE?.props?.[name]
+          ? await loader.parseAsync(INLINE.props[name], '')
+          : await withTimeout(loader.loadAsync(`./assets/props/${name}.glb`), PROP_TIMEOUT, name);
+        props.set(name, g.scene);
+      } catch {
+        /* missing, slow or broken — the room opens without it rather than not at all */
+      }
+      booting(`Opening… ${++done}/${need.length}`);
+    }
+  };
+  await Promise.all(Array.from({ length: PROP_LANES }, lane));
+
+  const spawn = (name, opts, tag) => {
+    const src = props.get(name);
+    if (!src) return null;
+    const obj = normalise(src.clone(true));
+    place(obj, opts);
+    if (opts.y) obj.position.y += opts.y;
+    scene.add(obj);
+    if (opts.solid !== false) solids.push({ x: opts.x, z: opts.z, r: opts.width * 0.42 });
+    if (tag) obj.userData.station = tag;
+    // The pose has to sit on the actual model, not on a guess about it.
+    opts.top = new THREE.Box3().setFromObject(obj).max.y;
+    return obj;
+  };
+
+  for (const st of STATIONS) st.object = spawn(st.prop, st, st.id);
+  for (const [name, opts] of SCENERY) spawn(name, opts);
+  clearSpots();
+
+  // Everything walk-up-able, in the order you meet it coming out of the door.
+  for (const st of STATIONS) {
+    places.push({ kind: 'station', station: st, label: st.label, x: st.x, z: st.z,
+      note: `${REPS_PER_SET} reps`, act: st.stat === 'stamina' ? 'Run' : 'Lift' });
+  }
+  const stallLabel = {
+    supplements: ['Supplement stall', 'spend $KEVIN', 'Shop'],
+    crew: ["Kevin's Crew", 'have a look', 'Look'],
+    produce: ['Fresh produce', 'closed, obviously', ''],
+  };
+  for (const st of MARKET) {
+    const [label, note, act] = stallLabel[st.id];
+    if (!act) continue;                       // the produce stall is set dressing
+    places.push({ kind: st.id === 'crew' ? 'nft' : 'shop', label, note, act,
+      x: st.x, z: st.z - 1.2 });
+  }
+  places.push({ kind: 'shop', label: 'Reception', note: 'supplements',
+    act: 'Shop', x: 8.6, z: 6.4 });
+  return { fp: false, spawn: { x: 0, z: 15.5 } };
+}
+
+/**
+ * McKevin's. Its own world, so the fry house does not have to be a box at the
+ * end of the gym's forecourt any more — and so the gym does not pay for it.
+ */
+function buildWorkWorld() {
+  buildExterior(scene);
+  buildCity(scene, { flat: flatMat, solids, blockers }, { skyline: true, market: false, fry: true });
+  places.push({ kind: 'work', label: "McKevin's", note: 'clock in',
+    act: 'Work', x: FRY.x, z: FRY.counterZ - 1.4 });
+  return { fp: false, spawn: { x: FRY.x, z: FRY.counterZ - 4.0 } };
+}
+
+function buildCribWorld() {
+  buildCrib(scene, { flat: flatMat, solids, blockers });
+  places.push({ kind: 'cards', label: 'Card table', note: "Kevin's card room",
+    act: 'Play', x: CRIB.table.x + 1.5, z: CRIB.table.z - 0.9 });
+  places.push({ kind: 'map', label: 'The telly', note: 'pick a world',
+    act: 'Worlds', x: CRIB.tv.x - 1.3, z: CRIB.tv.z });
+  places.push({ kind: 'out', label: 'Front door', note: 'go out', act: 'Leave',
+    x: (CRIB.door.x0 + CRIB.door.x1) / 2, z: CRIB.front + 0.9 });
+  return { fp: true, spawn: CRIB.spawn, yaw: CRIB.yaw };
+}
+
+const WORLDS = {
+  crib: { label: "Kevin's Crib", build: buildCribWorld },
+  gym: { label: "Kevin's Gym", build: buildGymWorld },
+  work: { label: "McKevin's", build: buildWorkWorld },
+};
+
+/**
+ * Swap worlds. Tears the old one down before building the new one, so the two
+ * are never resident at the same time — which is the entire reason they are
+ * separate.
+ */
+async function setWorld(id, at = null) {
+  const w = WORLDS[id];
+  if (!w || id === worldId) return;
+  if (set) abortSet();
+  if (worldGroup) {
+    disposeWorld(worldGroup);
+    worldGroup = null;
+  }
+  // Everything that describes the old world's shape has to go with it, or you
+  // collide with a wall that is no longer there.
+  solids.length = 0;
+  blockers.length = 0;
+  places.length = 0;
+  for (const n of npcs) n.group.removeFromParent();
+  npcs.length = 0;
+  board = null;
+  nearest = null;
+  $('#prompt').classList.remove('on');
+
+  booting(`Opening ${w.label}…`);
+  worldGroup = new THREE.Group();
+  scene.add(worldGroup);
+  let meta;
+  await captureInto(scene, worldGroup, async () => { meta = await w.build(); });
+  // captureInto returns before an async builder finishes, so adopt again for
+  // anything the awaited half added.
+  for (const child of [...scene.children]) {
+    if (child !== worldGroup && child !== kevin.group && !child.isLight && !npcs.some((n) => n.group === child)) {
+      worldGroup.add(child);
+    }
+  }
+  worldId = id;
+  state.world = id;
+  save(state);
+  firstPerson = !!meta.fp;
+  kevin.group.visible = !firstPerson;
+  const spot = at ?? meta.spawn;
+  kevin.group.position.set(spot.x, 0, spot.z);
+  if (firstPerson) { look.yaw = meta.yaw ?? 0; look.pitch = -0.05; }
+  if (board) refreshBoard();
+  $('#boot').classList.add('gone');
+}
+
+/**
+ * Where to look, in first person.
+ *
+ * Drag rather than pointer lock. Lock needs a click to arm, is refused outright
+ * in some embedded webviews, and does nothing at all on a phone — and this has
+ * to work in a Telegram browser on a phone before it has to feel like Quake.
+ */
+function lookBy(dx, dy) {
+  look.yaw -= dx * 0.0042;
+  look.pitch = clamp(look.pitch - dy * 0.0034, -0.9, 0.55);
 }
 
 // --- the set ----------------------------------------------------------------
@@ -1323,13 +1530,33 @@ function finishSet() {
 // --- movement ---------------------------------------------------------------
 
 function move(dt, now) {
+  if (input.turn) look.yaw += input.turn * 1.9 * dt;
   const len = Math.hypot(input.f, input.s);
   if (len > 0.02) {
-    const nx = (input.s / len) * SPEED * dt;
-    const nz = (-input.f / len) * SPEED * dt;
+    let nx = (input.s / len) * SPEED * dt;
+    let nz = (-input.f / len) * SPEED * dt;
+    if (firstPerson) {
+      // Forward is where you are facing, not where the world's -z happens to
+      // be. Without this, turning around makes W walk you backwards.
+      const sin = Math.sin(look.yaw), cos = Math.cos(look.yaw);
+      const f = (input.f / len) * SPEED * dt;
+      const r = (input.s / len) * SPEED * dt;
+      nx = f * sin + r * cos;
+      nz = f * cos - r * sin;
+    }
     const p = kevin.group.position;
-    // Inside, you are held by the room. Outside, by the street, which is not
-    // symmetric any more: the crib is off the left end, past the market.
+    // Each world holds you differently, so the crib does not get the street's
+    // limits and vice versa.
+    if (worldId === 'crib') {
+      p.x = clamp(p.x + nx, CRIB.x - CRIB.w / 2 + 0.5, CRIB.x + CRIB.w / 2 - 0.5);
+      p.z = clamp(p.z + nz, CRIB.front + 0.5, CRIB.z + CRIB.d / 2 - 0.5);
+      // Furniture still blocks; back out of anything we have ended up inside.
+      for (let i = 0; i < 6 && depthAt(p.x, p.z) > 0; i++) {
+        p.x -= nx * 0.34;
+        p.z -= nz * 0.34;
+      }
+    } else {
+    // Inside, you are held by the room. Outside, by the street.
     const inRoom = p.z <= ROOM.d / 2;
     // And you cannot walk up the SIDE of the gym. Without this the x limit
     // changes the instant you cross z=7, so stepping north at the left edge of
@@ -1354,8 +1581,9 @@ function move(dt, now) {
       // Allow the move if it lands clear, or if it is digging you out.
       if (depthAt(p.x, p.z) > 0 && depthAt(p.x, p.z) >= before) p[axis] = was;
     }
+    }
 
-    kevin.group.rotation.y = Math.atan2(nx, nz);
+    kevin.group.rotation.y = firstPerson ? look.yaw : Math.atan2(nx, nz);
     const walk = Math.sin(now / 110) * 0.6;
     kevin.legs[0].rotation.x = walk;
     kevin.legs[1].rotation.x = -walk;
@@ -1405,6 +1633,7 @@ function enter(pl) {
   if (pl.kind === 'work') return clockIn();
   if (pl.kind === 'cards') return openCards();
   if (pl.kind === 'map') return openMap();
+  if (pl.kind === 'out') return openMap();
 }
 
 /**
@@ -1436,22 +1665,14 @@ function openMap() {
 }
 
 /**
- * Fast travel. The street is long now — crib at one end, fry house at the
- * other — and walking it is a nice thing to be able to do rather than a thing
- * you must do every time.
+ * Leaving one world for another. Not fast travel any more — they are separate
+ * scenes now, so this is the only way between them.
  */
-const WORLDS = {
-  crib: { label: "Kevin's Crib", x: CRIB.spawn.x, z: CRIB.spawn.z },
-  gym: { label: "Kevin's Gym", x: 0, z: 3.0 },
-  work: { label: "McKevin's", x: FRY.x, z: FRY.counterZ - 2.2 },
-};
 function goWorld(id) {
-  const w = WORLDS[id];
-  if (!w) return;
-  kevin.group.position.set(w.x, 0, w.z);
-  nearest = null;
+  if (!WORLDS[id]) return;
   $('#map').classList.remove('on');
   play('ui');
+  setWorld(id);
 }
 
 // --- floating numbers -------------------------------------------------------
@@ -1878,6 +2099,7 @@ $('#closeShop').onclick = () => { play('ui'); $('#shop').classList.remove('on');
 $('#closeNft').onclick = () => { play('ui'); $('#nft').classList.remove('on'); };
 $('#closeCards').onclick = () => { play('ui'); $('#cards').classList.remove('on'); };
 $('#closeMap').onclick = () => { play('ui'); $('#map').classList.remove('on'); };
+$('#worldBtn').onclick = () => openMap();
 for (const b of document.querySelectorAll('#map .worlds button')) {
   b.onclick = () => goWorld(b.dataset.world);
 }
@@ -1944,10 +2166,40 @@ addEventListener('blur', () => { keys.clear(); readKeys(); });
 
 function readKeys() {
   input.f = (keys.has('w') || keys.has('arrowup') ? 1 : 0) - (keys.has('s') || keys.has('arrowdown') ? 1 : 0);
-  input.s = (keys.has('d') || keys.has('arrowright') ? 1 : 0) - (keys.has('a') || keys.has('arrowleft') ? 1 : 0);
+  // In first person the arrows turn instead of strafing — WASD moves, arrows
+  // look, which is the layout somebody who has never used a mouse-look game
+  // will try first.
+  input.s = (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0);
+  if (!firstPerson) {
+    input.s += (keys.has('arrowright') ? 1 : 0) - (keys.has('arrowleft') ? 1 : 0);
+  }
+  input.turn = firstPerson
+    ? (keys.has('arrowleft') ? 1 : 0) - (keys.has('arrowright') ? 1 : 0)
+    : 0;
 }
 
 if (matchMedia('(pointer:coarse)').matches) document.body.classList.add('touch');
+
+// --- looking around, in first person ---------------------------------------
+// Drag on the canvas. Not pointer lock: it needs a click to arm, some embedded
+// webviews refuse it outright, and it does nothing at all on a phone — and this
+// has to work in a Telegram browser before it has to feel like Quake.
+let lookId = null;
+let lookAt = null;
+canvas.addEventListener('pointerdown', (e) => {
+  if (!firstPerson || lookId !== null) return;
+  lookId = e.pointerId;
+  lookAt = { x: e.clientX, y: e.clientY };
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerId !== lookId) return;
+  lookBy(e.clientX - lookAt.x, e.clientY - lookAt.y);
+  lookAt = { x: e.clientX, y: e.clientY };
+});
+for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+  canvas.addEventListener(ev, (e) => { if (e.pointerId === lookId) { lookId = null; } });
+}
 
 const stick = $('#stick');
 const knob = stick.querySelector('i');
