@@ -1,0 +1,21 @@
+Model Information:
+* title:	GAME READY GYM ENVIRONMENT ASSET PACK
+* source:	https://sketchfab.com/3d-models/game-ready-gym-environment-asset-pack-8aef4a478bbe49d483280968aff59064
+* author:	Oxygen3D (https://sketchfab.com/oxygen3d)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "GAME READY GYM ENVIRONMENT ASSET PACK" (https://sketchfab.com/3d-models/game-ready-gym-environment-asset-pack-8aef4a478bbe49d483280968aff59064) by Oxygen3D (https://sketchfab.com/oxygen3d) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+--
+Used in Kevin's Gym for: bench, treadmill, dumbbell, dumbbell rack (weight
+rack), kettlebell, punching bag, pull-up rig, plate tree, boxing ring, yoga
+mats, exercise bike, incline bench, weight bench, dip station, ab bench,
+barbell and weight plates.
+
+The machines (lat pulldown, cable, leg press, rowing) and the furniture
+(lockers, water cooler, bin, speaker, clock, mirror, tubs) are not in this pack
+and remain generated. normalise() in gym/js/main.js flattens both sources to
+one flat toon material on load, which is what lets them read as one hand.

@@ -488,6 +488,24 @@ const SCENERY = [
   ['gym-clock', { x: -15.85, z: -6.0, width: 1.2, rotY: Math.PI / 2, y: 3.4, solid: false }],
   ['gym-mirror', { x: 15.85, z: -3.0, width: 3.0, rotY: -Math.PI / 2, solid: false }],
 
+  // --- the boxing corner and the rest of the pack ---------------------------
+  // Came with the Sketchfab pack, which is heavy on free weights and boxing and
+  // has none of the machines or the furniture — those stay Tripo's. normalise()
+  // flattens both to the same toon material on load, which is the thing that
+  // lets two sources read as one hand.
+  ['boxing-ring', { x: 9.6, z: 1.6, width: 6.0, rotY: 0 }],
+  ['exercise-bike', { x: 14.4, z: 8.4, width: 1.6, rotY: -Math.PI / 2 }],
+  ['dip-station', { x: -14.4, z: -6.0, width: 1.8, rotY: Math.PI / 2 }],
+  ['incline-bench', { x: -5.0, z: -4.6, width: 1.8, rotY: 0.3 }],
+  ['weight-bench', { x: -12.0, z: -2.0, width: 1.8, rotY: Math.PI / 2 }],
+  ['ab-bench', { x: 0.6, z: 3.4, width: 1.2, rotY: 0.2, solid: false }],
+  ['yoga-mat', { x: 3.4, z: 4.6, width: 1.9, rotY: 0, solid: false }],
+  ['yoga-mat', { x: 5.6, z: 4.6, width: 1.9, rotY: 0, solid: false }],
+  ['barbell', { x: -8.0, z: -6.9, width: 2.2, rotY: 0.1, solid: false }],
+  ['weight-plate', { x: -11.8, z: -9.6, width: 0.6, rotY: 0.4, solid: false }],
+  ['weight-plate', { x: -11.2, z: -9.9, width: 0.6, rotY: 1.1, solid: false }],
+  ['weight-plate', { x: -4.0, z: -6.4, width: 0.55, rotY: 0.7, solid: false }],
+
   // --- out on the forecourt ------------------------------------------------
   ['plate-tree', { x: -9.4, z: 15.6, width: 1.1, rotY: 0.3 }],
   ['dumbbell', { x: 5.6, z: 16.4, width: 0.6, rotY: 0.9, solid: false }],

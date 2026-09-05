@@ -1,0 +1,19 @@
+{
+  "bench": "bench.glb",
+  "dumbbell-rack": "weight_rack.glb",
+  "treadmill": "treadmill.glb",
+  "plate-tree": "weight_plate_1.glb",
+  "pullup-rig": "pull_up_rack.glb",
+  "kettlebell": "kettlebell_1.glb",
+  "dumbbell": "dumbbell_1.glb",
+  "punching-bag": "punching_bag_1.glb",
+  "boxing-ring": "boxing_ring_1.glb",
+  "yoga-mat": "yoga_mat_1.glb",
+  "exercise-bike": "exercise_bike.glb",
+  "incline-bench": "abdominal_bench.glb",
+  "barbell": "barbell_bar.glb",
+  "weight-plate": "weight_plate_10.glb",
+  "ab-bench": "step_platform.glb",
+  "dip-station": "parallel_bars_1.glb",
+  "weight-bench": "weight_bench.glb"
+}
