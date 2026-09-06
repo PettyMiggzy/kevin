@@ -29,7 +29,7 @@ import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, 
   skyTexture, concreteTexture, facadeTexture, bannerTexture, billboardTexture, boardTexture } from './gear.js';
 import { play, setMuted, isMuted } from './audio.js';
 import { buildCity, buildLeaderboard, paintLeaderboard, MARKET, FRY, QUEUE } from './city.js';
-import { buildCrib, CRIB, CRIB_PROPS } from './crib.js';
+import { buildCrib, CRIB, CRIB_PROPS, cribBounds } from './crib.js';
 import { buildMcKevins, buildShop, LOT, SHOP_PROPS } from './mckevins.js';
 import { disposeWorld, captureInto } from './worlds.js';
 import { Shift, ITEMS, SHIFT_LENGTH } from './job.js';
@@ -1838,7 +1838,11 @@ const MOODS = {
       ['#FFC98A', 2.00, 6.0, -15.7, 1.95, 19.4],   // the floor lamp
       ['#FFF0D0', 1.30, 5.5, -16.6, 2.35, 21.4],   // under the kitchen cupboards
       ['#FF5064', 1.10, 5.0, -18.0, 2.70, 11.9],   // the neon over the door
-      ['#FFB4A0', 0.90, 4.0, -12.6, 1.15, 15.2],   // the lamp on the bedside
+      ['#FFC2A4', 2.30, 5.6, -5.15, 1.25, 12.80],  // the lamp on the bedside
+      // The wing, which has no windows either. One wide weak fill so its walls
+      // are not black, the bedside lamp above, and a cold one over the printer.
+      ['#94A0BE', 3.40, 14.0, -6.00, 2.80, 16.80, 1],
+      ['#CFE0FF', 1.45, 5.4, -4.40, 2.40, 20.90],  // over the office
       ['#FFE2B0', 1.70, 5.2, -24.90, 2.05, 13.50],  // over the plan on the desk wall
     ],
   },
@@ -2183,8 +2187,12 @@ function move(dt, now) {
     // Each world holds you differently, so the crib does not get the street's
     // limits and vice versa.
     if (worldId === 'crib') {
-      p.x = clamp(p.x + nx, CRIB.x - CRIB.w / 2 + 0.5, CRIB.x + CRIB.w / 2 - 0.5);
-      p.z = clamp(p.z + nz, CRIB.front + 0.5, CRIB.z + CRIB.d / 2 - 0.5);
+      // The flat's own bounds rather than a rectangle typed out here. It used
+      // to be CRIB.x +- w/2, which is why the crib could only ever be one room:
+      // the walls could say anything, but the clamp said box.
+      const cb = cribBounds();
+      p.x = clamp(p.x + nx, cb.x0, cb.x1);
+      p.z = clamp(p.z + nz, cb.z0, cb.z1);
       // Furniture still blocks; back out of anything we have ended up inside.
       for (let i = 0; i < 6 && depthAt(p.x, p.z) > 0; i++) {
         p.x -= nx * 0.34;

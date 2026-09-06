@@ -37,9 +37,28 @@ import { signTexture, chartTexture, neonTexture, planTexture } from './gear.js';
  * three chances to drift.
  */
 export const CRIB = {
-  x: -18.0, z: 16.8, w: 16.0, d: 11.0, h: 3.4,
+  // 3.9, not 3.4. A sixteen-metre room with a two-and-a-half-metre-high band of
+  // usable wall is a corridor with furniture in it; the extra half metre is the
+  // cheapest thing in this file and the most of it you feel.
+  x: -18.0, z: 16.8, w: 16.0, d: 11.0, h: 3.9,
   get front() { return this.z - this.d / 2; },       // z of the front wall
   door: { x0: -19.2, x1: -16.8 },                    // the gap you walk through
+  /**
+   * THE SECOND ROOM.
+   *
+   * The crib is its own world — it is torn down and rebuilt whenever you leave
+   * it, and it is the smallest of the three by a distance: 277 meshes against
+   * the gym's 907. Nothing was making it one room 16 by 11 except that it had
+   * been built as one room 16 by 11, and a flat where the bed is four metres
+   * from the card table is not a flat, it is a bedsit.
+   *
+   * So there is a bedroom through the wall now, with his office in the back of
+   * it — the whiteboard corner docs/LORE.md describes, the printer, and the bin
+   * things go in when he has decided not to think about them.
+   */
+  wing: { x: -6.0, z: 16.8, w: 8.0, d: 11.0 },
+  /** The opening between the two, in the wall at x = right. */
+  arch: { z0: 12.5, z1: 14.4 },
   table: { x: -22.4, z: 18.4 },                      // the card table
   // Against the wall. At -11.2 the stand's back was 0.80m clear of it, so there
   // was a strip of dead floor behind the television that the player could see
@@ -59,11 +78,28 @@ export const CRIB = {
   yaw: 0,
 };
 
-/** Is this position inside the crib's four walls? */
+/** Is this position inside the flat — either room of it? */
 export function inCrib(x, z) {
-  return x > CRIB.x - CRIB.w / 2 && x < CRIB.x + CRIB.w / 2 &&
-         z > CRIB.front && z < CRIB.z + CRIB.d / 2;
+  const W = CRIB.wing;
+  return z > CRIB.front && z < CRIB.z + CRIB.d / 2 &&
+    x > CRIB.x - CRIB.w / 2 && x < W.x + W.w / 2;
 }
+
+/**
+ * How far the player may walk, in each axis.
+ *
+ * main.js clamped to a single rectangle, which was the whole reason the flat
+ * could not have a second room: whatever the walls said, you could not leave
+ * the box. Both rooms share a z range, so the pair is still one rectangle —
+ * and the wall between them is a blocker like every other wall, so it is what
+ * stops you rather than an invisible line.
+ */
+export const cribBounds = () => ({
+  x0: CRIB.x - CRIB.w / 2 + 0.5,
+  x1: CRIB.wing.x + CRIB.wing.w / 2 - 0.5,
+  z0: CRIB.front + 0.5,
+  z1: CRIB.z + CRIB.d / 2 - 0.5,
+});
 
 /**
  * Every model the crib would use, if it has been downloaded.
@@ -173,36 +209,73 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   paint(4.5, 4.5, '#5A2028', CRIB.table.x, CRIB.table.z, 0.020);
   paint(4.0, 4.0, '#4A1A22', CRIB.table.x, CRIB.table.z, 0.024);
 
-  solid(w, h, 0.3, WALL, x, h / 2, back);
+  // The wing's floor, and its rug. Same boards, so the two rooms are one flat.
+  const W = CRIB.wing;
+  const wx0 = W.x - W.w / 2;                    // the shared wall, = right
+  const wx1 = W.x + W.w / 2;                    // the outer wall
+  paint(W.w, W.d, WOOD, W.x, W.z, 0.01);
+
+  // The outside walls of the pair.
+  solid(w + W.w, h, 0.3, WALL, (left + wx1) / 2, h / 2, back);
   solid(0.3, h, d, WALL, left, h / 2, z);
-  solid(0.3, h, d, WALL, right, h / 2, z);
+  solid(0.3, h, d, WALL, wx1, h / 2, W.z);
+
+  // THE WALL BETWEEN THE ROOMS, with a doorway cut in it. Same trick as the
+  // front door: two pieces and a lintel, so the gap is a real gap rather than
+  // an invisible line you are allowed through.
+  const A = CRIB.arch;
+  const aFront = A.z0 - front;
+  const aBack = back - A.z1;
+  solid(0.3, h, aFront, WALL, right, h / 2, front + aFront / 2);
+  solid(0.3, h, aBack, WALL, right, h / 2, back - aBack / 2);
+  solid(0.3, h - 2.25, A.z1 - A.z0, WALL, right, h - (h - 2.25) / 2, (A.z0 + A.z1) / 2);
+  // A frame round it, because a hole in a wall is a hole and a doorway is a
+  // doorway.
+  solid(0.36, 0.10, A.z1 - A.z0 + 0.24, TRIM, right, 2.30, (A.z0 + A.z1) / 2);
+  for (const az of [A.z0 - 0.06, A.z1 + 0.06]) solid(0.36, 2.30, 0.12, TRIM, right, 1.15, az);
+
   const leftW = CRIB.door.x0 - left;
   const rightW = right - CRIB.door.x1;
   solid(leftW, h, 0.3, WALL, left + leftW / 2, h / 2, front);
-  solid(rightW, h, 0.3, WALL, right - rightW / 2, h / 2, front);
+  solid(rightW + W.w, h, 0.3, WALL, (CRIB.door.x1 + wx1) / 2, h / 2, front);
   solid(CRIB.door.x1 - CRIB.door.x0, h - 2.2, 0.3, WALL,
     (CRIB.door.x0 + CRIB.door.x1) / 2, h - (h - 2.2) / 2, front);      // over the door
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), flat('#2E353F'));
-  ceil.rotation.x = Math.PI / 2;
-  ceil.position.set(x, h - 0.02, z);
-  scene.add(ceil);
+  for (const [cw, cx] of [[w, x], [W.w, W.x]]) {
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(cw, d), flat('#2E353F'));
+    ceil.rotation.x = Math.PI / 2;
+    ceil.position.set(cx, h - 0.02, z);
+    scene.add(ceil);
+  }
   const beam = 0.22;
-  solid(w + 0.4, beam, d + 0.4, TRIM, x, h + beam / 2, z);
+  solid(w + W.w + 0.4, beam, d + 0.4, TRIM, (left + wx1) / 2, h + beam / 2, z);
 
   // Skirting and a picture rail. Two cheap bands are what stop a flat-shaded
   // wall reading as a backdrop, and the rail gives the art a line to hang on.
-  solid(w, 0.18, 0.06, TRIM, x, 0.09, back - 0.16);
-  // Split around the doorway. A skirting board that runs across the gap you
-  // walk through is a trip hazard drawn in wood.
-  solid(leftW, 0.18, 0.06, TRIM, left + leftW / 2, 0.09, front + 0.16);
-  solid(rightW, 0.18, 0.06, TRIM, right - rightW / 2, 0.09, front + 0.16);
-  for (const sx of [left + 0.16, right - 0.16]) solid(0.06, 0.18, d, TRIM, sx, 0.09, z);
-  // Picture rail, dropped to 2.22 so it passes UNDER both neon signs rather
-  // than cutting a 6 cm band across the middle of them.
-  solid(w, 0.06, 0.05, '#3A2A20', x, 2.22, back - 0.16);
-  solid(leftW, 0.06, 0.05, '#3A2A20', left + leftW / 2, 2.22, front + 0.16);
-  solid(rightW, 0.06, 0.05, '#3A2A20', right - rightW / 2, 2.22, front + 0.16);
-  for (const sx of [left + 0.16, right - 0.16]) solid(0.05, 0.06, d, '#3A2A20', sx, 2.22, z);
+  // Run along the back and the front of BOTH rooms, split around the two
+  // doorways. A skirting board that runs across the gap you walk through is a
+  // trip hazard drawn in wood.
+  //
+  // The kitchen occupies x -18.75..-13.30 of the back wall with its units
+  // pushed hard against it, so the back skirting and rail are split around that
+  // too rather than run through five cupboards.
+  for (const [bw, bx] of [[left + 0.16, -18.79], [-13.26, wx1 - 0.16]]) {
+    const seg = Math.abs(bx - bw);
+    solid(seg, 0.18, 0.06, TRIM, (bw + bx) / 2, 0.09, back - 0.16);
+    solid(seg, 0.06, 0.05, '#3A2A20', (bw + bx) / 2, 2.22, back - 0.16);
+  }
+  for (const [fw, fx] of [[leftW, left + leftW / 2], [rightW + W.w, (CRIB.door.x1 + wx1) / 2]]) {
+    solid(fw, 0.18, 0.06, TRIM, fx, 0.09, front + 0.16);
+    solid(fw, 0.06, 0.05, '#3A2A20', fx, 2.22, front + 0.16);
+  }
+  for (const sx of [left + 0.16, wx1 - 0.16]) {
+    solid(0.06, 0.18, d, TRIM, sx, 0.09, z);
+    solid(0.05, 0.06, d, '#3A2A20', sx, 2.22, z);
+  }
+  // And down both faces of the wall between the rooms, stopping at the arch.
+  for (const sx of [right - 0.17, right + 0.17]) {
+    solid(0.06, 0.18, aFront, TRIM, sx, 0.09, front + aFront / 2);
+    solid(0.06, 0.18, aBack, TRIM, sx, 0.09, back - aBack / 2);
+  }
 
   // --- the neon, which is the first thing you see ---------------------------
   // Over the door on the inside, facing the room. A sign facing the street
@@ -648,7 +721,8 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   // carrying it anywhere — the same "what is holding that up" the chandelier
   // had. 1.60 over a 0.95 hob is 65cm of clearance, which is right.
   fixture('extractor', { x: KX[4], z: 21.83, width: 0.85, y: 1.60, rotY: Math.PI });
-  solid(0.34, 0.98, 0.32, '#8A8F98', KX[4], 2.88, 21.97);
+  // Height from the ceiling, not a number typed when the ceiling was 3.4.
+  solid(0.34, h - 2.39, 0.32, '#8A8F98', KX[4], (2.39 + h) / 2, 21.97);
   // On the hob under it, which is now a hob you can see.
   fixture('cook-pot', { x: -14.82, z: 21.60, width: 0.30, y: stoveTop });
   fixture('frying-pan', { x: -14.38, z: 21.72, width: 0.34, y: stoveTop, rotY: 0.6 });
@@ -719,29 +793,114 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   fixture('plant-small', { x: -20.6, z: 12.5, width: 0.34, y: mf.top ?? 0.77 });
   solids.push({ x: -20.6, z: 12.5, r: 0.38 });
 
-  // --- where he sleeps, front right ----------------------------------------
-  const bed = { x: -12.6, z: 13.6 };
+  // --- THE WING: where he sleeps, and the office -----------------------------
+  //
+  // The bed used to be four metres from the card table, in the corner of the
+  // room people play poker in. That is not a flat, it is a bedsit — and the
+  // crib is a world of its own, torn down and rebuilt whenever you leave it,
+  // with a mesh budget a third of the gym's. There was never a reason for it to
+  // be one room except that it had been built as one.
+  const bed = { x: -6.6, z: 13.3 };
+  paint(3.6, 3.2, '#3A2226', bed.x, bed.z + 0.2, 0.016);
+  paint(3.2, 2.8, '#5A2C30', bed.x, bed.z + 0.2, 0.020);
   const bd = { x: bed.x, z: bed.z, width: 2.05, rotY: Math.PI / 2 };
   fixture('bed', bd, () => {
     solid(1.5, 0.45, 2.0, '#4A3524', bed.x, 0.22, bed.z);
     solid(1.4, 0.22, 1.9, '#33333B', bed.x, 0.55, bed.z);
   });
-  // ON the mattress and INSIDE the bed. At y 0.5 it was 18cm down inside a
-  // mattress whose top is 0.68, and at z - 0.74 it hung 19cm off the end.
   fixture('pillow', { x: bed.x, z: bed.z - 0.55, width: 0.64, y: bd.top ?? 0.68, rotY: Math.PI / 2 });
   blockers.push({ x0: bed.x - 1.15, x1: bed.x + 1.15, z0: bed.z - 0.9, z1: bed.z + 0.9 });
-  fixture('bedside', { x: -12.6, z: 15.2, width: 0.52 }, () => {
-    solid(0.48, 0.55, 0.42, '#4A3524', -12.6, 0.28, 15.2);
+  const bs = { x: bed.x + 1.45, z: bed.z - 0.5, width: 0.52 };
+  fixture('bedside', bs, () => {
+    solid(0.48, 0.55, 0.42, '#4A3524', bs.x, 0.28, bs.z);
   });
-  fixture('table-lamp', { x: -12.6, z: 15.2, width: 0.3, y: 0.58 });
-  solids.push({ x: -12.6, z: 15.2, r: 0.35 });
+  fixture('table-lamp', { x: bs.x, z: bs.z, width: 0.3, y: bs.top ?? 0.51 });
+  solids.push({ x: bs.x, z: bs.z, r: 0.35 });
+
+  // A wardrobe, because a bedroom with nowhere to put clothes is a hotel room.
+  // Built rather than bought: the kit has no wardrobe and this is four boxes.
+  const wr = { x: -2.62, z: 13.6 };
+  solid(0.62, 2.24, 2.20, WOOD, wr.x, 1.12, wr.z);
+  solid(0.04, 2.10, 1.04, '#3A2A1C', wr.x + 0.32, 1.14, wr.z - 0.54);
+  solid(0.04, 2.10, 1.04, '#3A2A1C', wr.x + 0.32, 1.14, wr.z + 0.54);
+  for (const hz of [wr.z - 0.10, wr.z + 0.10]) solid(0.05, 0.26, 0.04, GOLD, wr.x + 0.34, 1.20, hz);
+  solids.push({ x: wr.x, z: wr.z, r: 1.0 });
   // Clothes and cardboard where nobody has tidied. A perfectly clean flat is
   // the other way to look fake.
-  // Moved off -13.7: the closed box was 22cm inside the corner of the bed.
-  fixture('box-open', { x: -14.4, z: 12.6, width: 0.5, rotY: 0.6 });
-  fixture('box-closed', { x: -15.3, z: 12.4, width: 0.45, rotY: -0.4 });
-  solids.push({ x: -14.4, z: 12.6, r: 0.4 });
-  solids.push({ x: -15.3, z: 12.4, r: 0.35 });
+  fixture('box-open', { x: -8.9, z: 12.3, width: 0.5, rotY: 0.6 });
+  fixture('box-closed', { x: -8.2, z: 12.1, width: 0.45, rotY: -0.4 });
+  solids.push({ x: -8.9, z: 12.3, r: 0.4 });
+  solids.push({ x: -8.2, z: 12.1, r: 0.35 });
+
+  // --- the office, at the back of the wing ----------------------------------
+  //
+  // "It is written on a whiteboard in what he calls his office, which is a
+  // corner of a storeroom." The whiteboard is over the trading desk in the
+  // other room; this is the rest of what the lore says is in here — the
+  // printer, spraying, and the bin things go in when he has decided not to
+  // think about them.
+  paint(3.4, 3.0, '#2A2028', -4.6, 20.5, 0.016);
+  const pm = { x: -4.40, z: 21.40 };
+  solid(1.30, 0.72, 0.78, '#33333B', pm.x, 0.36, pm.z);               // the body
+  solid(1.36, 0.10, 0.84, '#26262C', pm.x, 0.77, pm.z);               // its lid
+  solid(0.92, 0.04, 0.32, '#26262C', pm.x + 0.08, 0.85, pm.z - 0.30); // the out tray
+  solid(0.34, 0.14, 0.05, GOLD, pm.x - 0.42, 0.66, pm.z - 0.40);      // the panel
+  quad(0.60, 0.11, signTexture(['PRINT-O-MATIC 9000'], { bg: '#26262C', fg: '#FFE500', size: 104 }),
+    pm.x + 0.24, 0.66, pm.z - 0.40, Math.PI);
+  solids.push({ x: pm.x, z: pm.z, r: 0.75 });
+  // The cash. Ten notes on a rising arc out of the tray, which is the only way
+  // a still picture says "spraying" rather than "a printer".
+  for (let i = 0; i < 10; i++) {
+    const t = i / 9;
+    quad(0.22, 0.11, signTexture(['$'], { bg: '#2F6B44', fg: '#DCEBC6', size: 150 }),
+      pm.x + 0.08 + Math.sin(i * 2.1) * 0.62,
+      0.92 + t * 1.62,
+      pm.z - 0.38 - t * 1.05,
+      Math.PI + Math.sin(i * 1.7) * 0.7);
+  }
+  fixture('trashcan', { x: -2.85, z: 21.72, width: 0.45 }, () => {
+    solid(0.4, 0.6, 0.4, '#26262C', -2.85, 0.3, 21.72);
+  });
+  quad(0.36, 0.10, signTexture(['BEARS & FUD'], { bg: '#26262C', fg: '#FFE500', size: 132 }),
+    -2.85, 0.56, 21.48, Math.PI);
+  solids.push({ x: -2.85, z: 21.72, r: 0.3 });
+  // Somewhere to put a cup down while the money prints.
+  const ot = { x: -6.5, z: 21.3, width: 0.66 };
+  fixture('side-table', ot, () => { solid(0.6, 0.1, 0.6, '#5A3A24', ot.x, 0.52, ot.z); });
+  fixture('soda-cup', { x: ot.x, z: ot.z, width: 0.15, y: ot.top ?? 0.55 });
+  solids.push({ x: ot.x, z: ot.z, r: 0.36 });
+  fixture('potted-plant', { x: -8.9, z: 21.5, width: 0.62 }, () => {
+    solid(0.43, 0.3, 0.43, '#B06A3A', -8.9, 0.15, 21.5);
+    solid(0.56, 0.7, 0.56, '#2F8F45', -8.9, 0.62, 21.5);
+  });
+  solids.push({ x: -8.9, z: 21.5, r: 0.3 });
+
+  // A CORNER OF A STOREROOM, which is what the lore calls it and what makes the
+  // middle of this room something other than floor: shelving against the outer
+  // wall and cardboard stacked beside it.
+  const of = { x: -2.66, z: 18.30, width: 1.2, rotY: -Math.PI / 2 };
+  fixture('bookcase', of, () => { solid(0.36, 1.8, 1.1, '#4A3524', of.x, 0.9, of.z); });
+  fixture('books', { x: of.x - 0.06, z: of.z, width: 0.62, y: 1.18, rotY: -Math.PI / 2 });
+  // On the shelf ABOVE the books, which sit at 1.18 and are 0.59 tall — the
+  // same relationship the trophies have with the books in the other room.
+  fixture('box-closed', { x: of.x - 0.02, z: of.z, width: 0.42, y: 1.86, rotY: 0.3 });
+  blockers.push({ x0: -3.10, x1: -2.20, z0: 17.60, z1: 19.00 });
+  // The stack. Three boxes and a fourth open on top, in the corner nobody has
+  // dealt with.
+  const bx0 = { x: -3.30, z: 20.15, width: 0.56, rotY: 0.24 };
+  fixture('box-closed', bx0, () => { solid(0.5, 0.5, 0.5, '#6B4A32', bx0.x, 0.25, bx0.z); });
+  const bx1 = { x: -3.26, z: 20.10, width: 0.52, y: bx0.top ?? 0.6, rotY: -0.36 };
+  fixture('box-closed', bx1, () => { solid(0.46, 0.46, 0.46, '#6B4A32', bx1.x, 0.85, bx1.z); });
+  fixture('box-open', { x: -3.34, z: 20.18, width: 0.46, y: bx1.top ?? 1.18, rotY: 0.5 });
+  solids.push({ x: -3.30, z: 20.15, r: 0.42 });
+  const bx2 = { x: -3.30, z: 19.20, width: 0.50, rotY: -0.5 };
+  fixture('box-open', bx2, () => { solid(0.44, 0.44, 0.44, '#6B4A32', bx2.x, 0.22, bx2.z); });
+  solids.push({ x: -3.30, z: 19.20, r: 0.36 });
+  // And a stack by the bedroom end, so the room reads used along its length.
+  const bx3 = { x: -3.20, z: 15.60, width: 0.54, rotY: 0.4 };
+  fixture('box-closed', bx3, () => { solid(0.48, 0.48, 0.48, '#6B4A32', bx3.x, 0.24, bx3.z); });
+  fixture('box-closed', { x: -3.16, z: 15.66, width: 0.48, y: bx3.top ?? 0.58, rotY: -0.3 });
+  solids.push({ x: -3.20, z: 15.60, r: 0.40 });
 
   // --- the hallway end ------------------------------------------------------
   fixture('doormat', { x: x, z: front + 0.8, width: 1.0 }, () => {
@@ -785,14 +944,17 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   const ART_Y = 1.44;
   const art = [
     [-15.0, ART_Y, front + 0.17, 0, ['GM', 'no thoughts'], '#1C2E3F'],
-    [-12.6, ART_Y, front + 0.17, 0, ['0x63D7fa…', '9e284A'], '#0B0B0B'],
+    [-6.6, ART_Y + 0.30, front + 0.17, 0, ['0x63D7fa…', '9e284A'], '#0B0B0B'],
     [-20.6, ART_Y, back - 0.17, Math.PI, ['WAGMI', 'probably'], '#1C2E3F'],
     [right - 0.17, ART_Y, 15.6, -Math.PI / 2, ['NO PAIN', 'ONLY KEVIN'], '#8E1F1A'],
     [right - 0.17, ART_Y, 19.4, -Math.PI / 2, ["McKEVIN'S", 'employee of the month'], '#8E1F1A'],
     // Moved from z 13.2 to make room for the whiteboard, and a second frame
     // added on the same wall — it is 11 metres of it and it had one picture.
     [left + 0.18, ART_Y, 11.95, Math.PI / 2, ['KEK', 'to the moon'], '#1C2E3F'],
-    [left + 0.18, ART_Y, 16.95, Math.PI / 2, ['CEO OF', 'CHAOS'], '#8E1F1A'],
+    [-4.4, ART_Y + 0.34, back - 0.17, Math.PI, ['CEO OF', 'CHAOS'], '#8E1F1A'],
+    // The wing's outer wall — eight metres of it, and it had nothing.
+    [wx1 - 0.17, ART_Y, 16.60, -Math.PI / 2, ['LFG', 'eventually'], '#1C2E3F'],
+    [wx1 - 0.17, ART_Y, 21.20, -Math.PI / 2, ['NO THOUGHTS', 'just fryer'], '#8E1F1A'],
   ];
   for (const [ax, ay, az, ry, lines, bg] of art) {
     const nx = Math.abs(ry) === Math.PI / 2 ? (ry > 0 ? 0.03 : -0.03) : 0;
@@ -811,11 +973,14 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   // --- collision -----------------------------------------------------------
   // The shell is four boxes rather than a ring, so the doorway is a real gap.
   blockers.push(
-    { x0: left - 0.3, x1: right + 0.3, z0: back - 0.25, z1: back + 0.3 },
+    { x0: left - 0.3, x1: wx1 + 0.3, z0: back - 0.25, z1: back + 0.3 },
     { x0: left - 0.3, x1: left + 0.25, z0: front - 0.3, z1: back + 0.3 },
-    { x0: right - 0.25, x1: right + 0.3, z0: front - 0.3, z1: back + 0.3 },
+    { x0: wx1 - 0.25, x1: wx1 + 0.3, z0: front - 0.3, z1: back + 0.3 },
+    // The wall between the rooms, in two pieces so the arch is walkable.
+    { x0: right - 0.25, x1: right + 0.3, z0: front - 0.3, z1: A.z0 },
+    { x0: right - 0.25, x1: right + 0.3, z0: A.z1, z1: back + 0.3 },
     { x0: left - 0.3, x1: CRIB.door.x0, z0: front - 0.25, z1: front + 0.25 },
-    { x0: CRIB.door.x1, x1: right + 0.3, z0: front - 0.25, z1: front + 0.25 },
+    { x0: CRIB.door.x1, x1: wx1 + 0.3, z0: front - 0.25, z1: front + 0.25 },
   );
 
   return { table: t, tv, desk: dk };
