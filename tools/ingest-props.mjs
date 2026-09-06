@@ -69,8 +69,20 @@ const BONUS = [
   // Restaurant dressing. Not placed yet, but a fast-food pack is bought for the
   // burger on the tray as much as for the fryer, and a matcher that only knows
   // the fourteen names above throws the dressing away.
-  // Kevin's crib. A card room and a flat, furnished out of the same diner kit.
+  // Kevin's crib. A card room and a flat — furnished from two Kenney kits and
+  // six authored pieces, all of which the matcher has to know about or the next
+  // pack gets scored against a roster three worlds out of date.
   'jukebox', 'sink', 'armchair', 'cook-pot', 'frying-pan', 'wall-sign',
+  'crib-sofa', 'crib-armchair', 'card-chair', 'desk-chair', 'coffee-table',
+  'side-table', 'bedside', 'bed', 'pillow', 'bookcase', 'books', 'rug',
+  'doormat', 'coat-rack', 'trashcan', 'floor-lamp', 'table-lamp', 'ceiling-fan',
+  'potted-plant', 'plant-small', 'tv', 'tv-stand', 'radio', 'monitor',
+  'keyboard', 'mouse', 'laptop', 'speaker-hifi', 'desk', 'bar-stool',
+  'kitchen-cabinet', 'kitchen-upper', 'kitchen-sink', 'stove', 'fridge',
+  'mini-fridge', 'microwave', 'coffee-machine', 'extractor',
+  'box-open', 'box-closed', 'card-table', 'chandelier', 'roulette-wheel',
+  'poker-chips', 'playing-cards', 'picture-frame', 'wall-lamp',
+  'slot-machine', 'prize-wheel', 'claw-machine', 'arcade-machine', 'till',
   'diner-table', 'diner-chair', 'drinks-machine', 'coffee-machine', 'microwave',
   'extractor-hood', 'fry-basket', 'heat-lamp', 'menu-board', 'napkin-dispenser',
   'ketchup-bottle', 'burger', 'fries', 'soda-cup', 'food-tray', 'pizza',

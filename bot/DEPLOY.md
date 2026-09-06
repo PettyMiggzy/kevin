@@ -120,7 +120,9 @@ of telling people nobody has it yet.
 | Occasional `429 ... tokens per minute (TPM)` | Normal on the free tier. `openai/gpt-oss-120b` gets **8K TPM / 30 RPM / 1K RPD**, shared across the org, and a long thread in memory can push one request over. The bot now waits out the window Groq quotes and retries once, so most of these never reach the group. If they get frequent, `groq/compound` has **70K TPM** — nine times the budget — but only **250 requests a day** against 1,000, so it is a straight trade of thread length for message count |
 | Startup dies naming the model | Only if the key exposes no chat model at all |
 | Silent in a group that is not the official one | By design — see below |
-| Gives a contract address | Should be impossible while `contract` is null in config.js — `/ca` never touches the model. If it ever happens, stop the bot and tell me |
+| Gives a contract address | **Expected now.** `contract` is set in config.js and `/ca` hands it out deliberately, so the group can learn the real one before the fakes arrive. `/ca` never touches the model — it reads config. The incident is the opposite: see the two rows below |
+| Gives a contract address that is **not** `0x63D7fa…9e284A` | Stop the bot and tell me. Nothing in the bot can invent an address — `/ca` reads config and the model is told the address in its brief — so a different one means config was edited or the host was compromised |
+| Hands out the address **without** "not live yet" | Check `contractLiveAt` in config.js. Before that instant the brief carries an explicit IT IS NOT LIVE YET block and Kevin must repeat it; after it, trading is open and the warning is correctly gone. If the warning is missing *before* the date, stop the bot |
 
 ## Which groups it talks in
 
