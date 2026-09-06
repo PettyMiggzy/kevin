@@ -1572,6 +1572,10 @@ async function init() {
     window.__scene = scene;
     window.__THREE = THREE;          // ?peek only: so tooling can measure boxes
     window.__solids = () => solids;  // ?peek only: the room's own footprints
+    window.__CRIB = CRIB;            // ?peek only: the flat's own dimensions
+    window.__places = () => places;  // ?peek only: every walk-up point
+    // ?peek only: can a body stand here? The game's own test, not a guess at it.
+    window.__free = (x, z) => depthAt(x, z) <= 0;
     // ?peek only: only the props that declared a box, not the building's walls,
     // which the camera is meant to be able to press against.
     window.__propBoxes = () => blockers.filter((b) => b.x1 - b.x0 < 12 && b.z1 - b.z0 < 12);
@@ -2073,6 +2077,12 @@ const MOODS = {
       // are not black, the bedside lamp above, and a cold one over the printer.
       ['#94A0BE', 3.40, 14.0, -6.00, 2.80, 16.80, 1],
       ['#CFE0FF', 1.45, 5.4, -4.40, 2.40, 20.90],  // over the office
+      // The front wall, which had furniture on it and no light. Half of its
+      // twenty-four metres was bare charcoal in the band you actually look at,
+      // and unlit is the other half of that fault.
+      ['#FFD9A8', 1.90, 6.4, -12.40, 1.95, 12.10],  // over the console
+      ['#B9C6E0', 1.30, 5.0, -8.60, 1.95, 12.10],   // over the chest of drawers
+      ['#FFD9A8', 1.05, 4.0, -15.75, 1.95, 11.95],  // over the hall shelf
       ['#FFE2B0', 1.70, 5.2, -24.90, 2.05, 13.50],  // over the plan on the desk wall
     ],
   },

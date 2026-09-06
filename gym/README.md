@@ -61,11 +61,12 @@ scene, the walk back and the save.
 **Three worlds you walk between**, each built and torn down on entry so detail
 in one costs nothing in the others:
 
-- **Kevin's Crib** (16 x 11, first person, 229 meshes) — a card room with a
-  green felt table under a chandelier, a slot machine, prize wheel and claw
-  machine down one wall, a six-monitor trading desk running $KEVIN candles, a
-  kitchen, a bed, and his own face framed on the walls with the contract
-  address over the bed
+- **Kevin's Crib** (24 x 11 over two rooms, first person, 399 meshes) — a card
+  room with a green felt table under a chandelier, a slot machine, prize wheel
+  and claw machine down one wall, a six-monitor trading desk running $KEVIN
+  candles, a fitted kitchen, and through the arch a bedroom with his office in
+  the back of it. His own face framed on the walls, the contract address over
+  the bed, and no wall left bare in the band you actually look at
 - **Kevin's Gym** (32 x 24, 877 meshes) — painted zones (a wooden lifting
   platform, a turf lane with metre marks, a cardio deck, a changing end), an
   exposed steel truss with fifteen strip lights and banners, five ceiling lamps
