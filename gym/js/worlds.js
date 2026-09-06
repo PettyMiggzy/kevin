@@ -36,7 +36,11 @@ export function disposeWorld(group) {
         // in the game — so disposing it here frees something this world does not
         // own, on behalf of every other world too.
         for (const k of ['map', 'alphaMap', 'emissiveMap', 'normalMap']) {
-          if (m[k]?.isTexture) textures.add(m[k]);
+          // userData.shared marks a texture this world borrowed rather than
+          // made — the prop cache's own maps, carried into a per-instance
+          // material by normalise(). Freeing one takes it from every world that
+          // spawns that prop next, exactly as with sharedGeometry above.
+          if (m[k]?.isTexture && !m[k].userData?.shared) textures.add(m[k]);
         }
         m.dispose();
       }

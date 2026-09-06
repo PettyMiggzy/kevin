@@ -46,7 +46,8 @@ function wordmark() {
  *   passed in rather than rebuilt so Kevin shares the room's gradient ramp.
  *
  * Returns the same shape buildCrewBody does — group, rig, torso, head, arms,
- * legs, torsoH — because main.js drives all four bodies through one code path.
+ * legs, torsoH, legH — because main.js drives all four bodies through one code
+ * path and reads all of them off whatever body it is holding.
  * No `unit` field: that is what tells applyMuscle this is a built body rather
  * than a voxel one.
  */

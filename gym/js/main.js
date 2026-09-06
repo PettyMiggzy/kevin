@@ -1374,24 +1374,7 @@ async function init() {
   applyMuscle(kevin, state.muscle / 100);
   refreshHud();
   refreshBoard();
-  if (gone.days >= 1) {
-    if (gone.frozen) {
-      // What is actually left, not an assumption. The player can hold two, and
-      // this line used to say "that was the last spare" either way — a flat
-      // untruth half the time it appeared, about the one resource the shop
-      // charges 200 coins for.
-      const left = state.freezes === 0
-        ? 'That was your last spare.'
-        : `${state.freezes} spare left.`;
-      toast(`Protein shake used.<br><small>One missed day covered. ${left}</small>`, 4200);
-    } else if (gone.lost > 0.4) {
-      toast(
-        `You were gone ${gone.days < 2 ? 'a day' : Math.floor(gone.days) + ' days'}.` +
-        `<br><small>−${gone.lost.toFixed(1)} muscle. It comes off. That is just how it works.</small>`,
-        5200
-      );
-    }
-  }
+  absenceToast(gone);
 
   if (location.search.includes('peek')) {
     window.__peek = (pos, at) => {
@@ -1409,6 +1392,7 @@ async function init() {
     // ?peek only: renderer.info.memory is the only honest answer to "did that
     // leak" — mesh counts say nothing about buffers still held on the GPU.
     window.__renderer = renderer;
+    window.__bar = () => bar;        // ?peek only: the barbell, to check where it went
     window.__customers = customers;
     window.__npcs = npcs;
   }
@@ -1433,12 +1417,31 @@ const tmp = new THREE.Vector3();
 const aim = new THREE.Vector3();
 
 let shake = 0;
+/**
+ * Milliseconds of ACTUAL PLAY, for the one part of the game that runs on a
+ * clock rather than on frames.
+ *
+ * The customers at McKevin's ran on performance.now(), and requestAnimationFrame
+ * stops when a tab is hidden — so alt-tabbing mid-shift and coming back a minute
+ * later burned a minute of patience nobody was there to spend. Every customer
+ * left in the queue walked out in the first frame back, one after another, and
+ * the shift was over before the player saw the window.
+ *
+ * The reps never had this problem because a set is driven by dt. This gives the
+ * shift the same clock: dt is clamped to 50ms a frame, so a hidden tab, a long
+ * world load or a garbage collection pause all cost the same nothing.
+ */
+let playClock = 0;
 
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const now = performance.now();
+  // PLAY TIME, not wall time. dt is already clamped to 50ms, so this only
+  // advances while frames are actually being drawn — which is what a customer's
+  // patience should be measured against. See tickShift.
+  playClock += dt * 1000;
 
-  if (shift) tickShift(now);
+  if (shift) tickShift(playClock);
   else if (set) tickSet(dt, now);
   else move(dt, now);
 
@@ -1621,7 +1624,20 @@ function spawnProp(name, opts, tag) {
   // world teardown disposed the prop cache's own buffers and the next visit
   // re-uploaded all of them. Not fatal (three re-uploads on next use) but it
   // defeats the whole point of caching decoded props across worlds.
-  obj.traverse((o) => { if (o.isMesh) o.userData.sharedGeometry = true; });
+  obj.traverse((o) => {
+    if (!o.isMesh) return;
+    o.userData.sharedGeometry = true;
+    // AND SO IS THE TEXTURE. normalise() builds a fresh material per instance —
+    // it has to, every world tints its own — but it carries the cached model's
+    // map straight into it by reference. disposeWorld() only knew to skip
+    // geometry, so every world change freed the prop cache's own textures and
+    // the next spawn re-uploaded all of them. Same bug as the geometry one, one
+    // line further down the material, and the same effect: a cache that decodes
+    // once and then pays the upload every single time it is used.
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+      if (m?.map) m.map.userData.shared = true;
+    }
+  });
   // Names the prop in the scene graph. Not used by the game; used by tooling
   // that has to answer "what is this and where did it end up", which is
   // otherwise unanswerable once a prop is one anonymous Group among hundreds.
@@ -2419,7 +2435,7 @@ function clockIn() {
     at: new THREE.Vector3(-2.2, 1.1, FRY.counterZ + 1.4),
   };
 
-  shift = new Shift(performance.now());
+  shift = new Shift(playClock);
   spawnCustomers();
   document.body.classList.add('working');
   $('#prompt').classList.remove('on');
@@ -2482,7 +2498,7 @@ function tickShift(now) {
 function pressItem(id) {
   if (!shift) return;
   const before = shift.index;
-  const r = shift.press(id, performance.now());
+  const r = shift.press(id, playClock);
   const btn = $(`#tray button[data-id="${id}"]`);
   if (btn) {
     btn.classList.add(r.ok ? 'hit' : 'bad');
@@ -2928,16 +2944,50 @@ $('#start').onclick = () => {
     });
 };
 
+/**
+ * Say what the absence cost. Silent decay reads as a bug, not a mechanic.
+ *
+ * Shared by the two places that settle: boot, and the tab coming back. They
+ * used to say different things — the tab said nothing at all — so leaving the
+ * game open overnight took the muscle without ever mentioning it.
+ */
+function absenceToast(gone) {
+  if (gone.days < 1) return;
+  if (gone.frozen) {
+    // What is actually left, not an assumption. The player can hold two, and
+    // this line used to say "that was the last spare" either way — a flat
+    // untruth half the time it appeared, about the one resource the shop
+    // charges 200 coins for.
+    const left = state.freezes === 0
+      ? 'That was your last spare.'
+      : `${state.freezes} spare left.`;
+    toast(`Protein shake used.<br><small>One missed day covered. ${left}</small>`, 4200);
+  } else if (gone.lost > 0.4) {
+    toast(
+      `You were gone ${gone.days < 2 ? 'a day' : Math.floor(gone.days) + ' days'}.` +
+      `<br><small>−${gone.lost.toFixed(1)} muscle. It comes off. That is just how it works.</small>`,
+      5200
+    );
+  }
+}
+
 // Re-settle when the tab comes back after a long time away, so somebody who
 // leaves it open overnight sees the same thing as somebody who closed it.
 addEventListener('visibilitychange', () => {
   if (document.hidden || !kevin) return;
   const gone = settle(state, Date.now());
-  if (gone.lost > 0.05) {
-    save(state);
-    applyMuscle(kevin, state.muscle / 100);
-    refreshHud();
-  }
+  // SAVE WHATEVER IT DID, not only what it cost. settle() mutates: it always
+  // moves lastSeen, and it can spend a protein shake or end a streak while
+  // taking no muscle at all — a shake covers a missed day precisely so that
+  // nothing is lost. Gating the save on `lost > 0.05` meant a shake spent here
+  // was deducted on screen and still in the save afterwards, and a streak
+  // ended here came back on reload. Under a day settle() only moves lastSeen,
+  // so writing every time costs a JSON.stringify nobody will feel.
+  save(state);
+  if (gone.days < 1) return;
+  applyMuscle(kevin, state.muscle / 100);
+  refreshHud();
+  absenceToast(gone);
 });
 
 // Decay is time-based, so the projection goes stale just sitting there.

@@ -81,7 +81,16 @@ export function buildSpriteKevin(texture) {
     legs: [spare(), spare()],
     head: spare(),
     torso: spare(),
-    torsoH: 0.7,
+    // torsoH AND legH, as fractions of his own height, because main.js drives
+    // all four bodies through one code path and reads both off whatever it is
+    // given: the dumbbells hang off torsoH, and the bench press reach is
+    // `legH + torsoH * 0.94`.
+    //
+    // legH was missing here and only here. undefined + a number is NaN, so
+    // lying on the bench as the sprite put the barbell at NaN — which three
+    // does not draw and does not warn about. The bar simply was not there.
+    torsoH: HEIGHT * 0.378,
+    legH: HEIGHT * 0.42,
     frame: 0,
     facing: Math.PI,
   };
