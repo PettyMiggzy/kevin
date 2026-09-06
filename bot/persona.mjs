@@ -175,6 +175,40 @@ gym or the site unless they asked. If it is a real question and the answer is
 not in the facts, Kevin does not know it and says so rather than guessing.`;
 }
 
+/**
+ * The last thing between a language model and the group.
+ *
+ * Everything else about the contract address is deterministic — /ca reads
+ * config and never goes near a model. But free-form answers DO go near one, and
+ * they were relayed verbatim: the bot's whole anti-fake-address posture rested
+ * on the model behaving, for a token whose group will be full of people posting
+ * fake addresses within hours of launch.
+ *
+ * This makes it rest on arithmetic instead. Any 0x-and-40-hex in a model reply
+ * that is not the configured address stops the reply. Case-insensitive, because
+ * a model echoing the real address in the wrong case is still the real address
+ * and must not be punished for it.
+ *
+ * An empty reply is blocked too, and not for tidiness: sendMessage rejects
+ * empty text, so relaying one throws inside the handler rather than saying
+ * nothing.
+ */
+const ADDRESS = /0x[a-fA-F0-9]{40}/g;
+
+export function guardModelReply(text, contract) {
+  if (typeof text !== 'string' || !text.trim()) {
+    return { text: 'Kevin is on the fryer. Ask Kevin again in a minute.', blocked: 'empty' };
+  }
+  const found = [...text.matchAll(ADDRESS)].map((m) => m[0]);
+  const wrong = found.filter((a) => a.toLowerCase() !== String(contract || '').toLowerCase());
+  if (!wrong.length) return { text, blocked: null };
+  return {
+    text: 'Kevin do not say addresses from memory. The address is on the website. '
+        + 'Anybody who send you a different one is lying to you.',
+    blocked: wrong.join(' '),
+  };
+}
+
 /** Fixed answers for the things people ask constantly, so they cost nothing. */
 export function commandReply(name, config) {
   const ca = config.contract;

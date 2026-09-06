@@ -16,7 +16,7 @@ import { readFile } from 'node:fs/promises';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildBrief } from './brief.mjs';
-import { systemPrompt, commandReply } from './persona.mjs';
+import { systemPrompt, commandReply, guardModelReply } from './persona.mjs';
 import { loadKey, listModels, checkModel, chat, DEFAULT_MODEL } from './groq.mjs';
 import { welcome, cleanName, loadImages, pickImage, liftLine } from './welcome.mjs';
 import { top, render, hasScores } from './scores.mjs';
@@ -474,6 +474,16 @@ async function main() {
         if (canned) { await reply(canned); continue; }
       }
 
+      // A COMMAND NEVER REACHES THE MODEL. parseCommand returns null when the
+      // /cmd@suffix names some other bot, and commandReply returns nothing for a
+      // command it does not know — and in both cases this fell through to the
+      // model. So "/ca@anyone" answered from a model instead of from config,
+      // defeating the one property /ca exists to have.
+      if (/^\s*\//.test(msg.text || '')) {
+        if (msg.chat.type === 'private') await reply(commandReply('help', config));
+        continue;
+      }
+
       const question = clean(msg.text, me);
       if (!question) continue;
 
@@ -488,7 +498,11 @@ async function main() {
             { role: 'user', content: question },
           ],
         });
-        await reply(text);
+        // Deterministic gate: see guardModelReply. A model that invents or is
+        // talked into an address does not get to say it.
+        const safe = guardModelReply(text, config.contract);
+        if (safe.blocked) console.error('blocked model reply:', safe.blocked);
+        await reply(safe.text);
         memory.set(chatId, [
           ...history,
           { role: 'user', content: question },
