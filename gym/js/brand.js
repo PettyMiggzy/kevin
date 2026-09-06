@@ -32,12 +32,21 @@ export const KEVIN_PALETTE = {
   '#f9a39e': '#C7382F',   // salmon upholstery -> brand red
   '#a1bef0': '#C7382F',   // baby blue upholstery -> the same red, deliberately
   '#96a7a7': '#26262C',   // cool grey -> near black, for screens and casings
-  '#f8fdfa': '#E8E2D4',   // white -> cream, so nothing is pure white
-  '#fcffff': '#E8E2D4',
+  // White goes to a MID cream, not a bright one. At #E8E2D4 the kit's whites
+  // were the brightest surface in a charcoal room lit at a fraction of daylight,
+  // so a full-height fridge became the thing your eye went to on entering a flat
+  // whose subject is a card table and six trading screens.
+  '#f8fdfa': '#C6BEAC',
+  '#fcffff': '#C6BEAC',
   '#daebe3': '#8A8F98',   // pale mint -> steel
   '#fff5ca': '#FFE07A',   // lampshade -> warm gold, the card-room light
   '#d7b495': '#5A3A24',   // mid wood -> darker
   '#cd9491': '#A82B24',   // dusty rose -> the red's shadow tone
+  // Kenney's foliage mint, which misses the guard above by a hair (0.073
+  // against a 0.06 threshold) and so stayed the one pastel left in the room.
+  // A houseplant should be green; it should not be the brightest green in a
+  // charcoal flat.
+  '#afedd8': '#4C8A61',
 };
 
 /** Parsed once. Comparing colours in a loop over every vertex is not free. */

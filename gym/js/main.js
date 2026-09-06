@@ -1333,13 +1333,14 @@ async function init() {
   // and a 32-metre room lit that way has no depth in it at all: a second light
   // low and warm from the other side is what separates the far wall from the
   // near one under a toon ramp, which has very few steps to play with.
-  scene.add(new THREE.HemisphereLight('#EAF2FF', '#6E6354', 1.55));
-  const key = new THREE.DirectionalLight('#FFF4DA', 1.65);
-  key.position.set(9, 14, 8);
-  scene.add(key);
-  const fill = new THREE.DirectionalLight('#FFC98A', 0.55);
-  fill.position.set(-12, 6, -10);
-  scene.add(fill);
+  hemi = new THREE.HemisphereLight('#EAF2FF', '#6E6354', 1.55);
+  scene.add(hemi);
+  keyLight = new THREE.DirectionalLight('#FFF4DA', 1.65);
+  keyLight.position.set(9, 14, 8);
+  scene.add(keyLight);
+  fillLight = new THREE.DirectionalLight('#FFC98A', 0.55);
+  fillLight.position.set(-12, 6, -10);
+  scene.add(fillLight);
 
   if (location.search.includes('sprite')) {
     walkAtlas = await new THREE.TextureLoader().loadAsync('../assets/sprites/walk-atlas.png')
@@ -1393,6 +1394,14 @@ async function init() {
     // leak" — mesh counts say nothing about buffers still held on the GPU.
     window.__renderer = renderer;
     window.__bar = () => bar;        // ?peek only: the barbell, to check where it went
+    // ?peek only: stand somewhere and look at something. __peek moves the chase
+    // camera, which the crib does not have — it is first person, so the camera
+    // IS the player, and posing it means moving him and turning his head.
+    window.__stand = (x, z, lookAtX, lookAtZ, pitch = -0.05) => {
+      kevin.group.position.set(x, 0, z);
+      look.yaw = Math.atan2(lookAtX - x, lookAtZ - z);
+      look.pitch = pitch;
+    };
     window.__customers = customers;
     window.__npcs = npcs;
   }
@@ -1768,7 +1777,7 @@ async function buildCribWorld() {
     act: 'Worlds', x: CRIB.tv.x - 1.3, z: CRIB.tv.z });
   places.push({ kind: 'door', to: 'gym', label: 'Front door', note: "out to the gym",
     act: 'Go out', x: (CRIB.door.x0 + CRIB.door.x1) / 2, z: CRIB.front + 0.9 });
-  return { fp: true, spawn: CRIB.spawn, yaw: CRIB.yaw };
+  return { fp: true, spawn: CRIB.spawn, yaw: CRIB.yaw, mood: 'crib' };
 }
 
 const WORLDS = {
@@ -1776,6 +1785,72 @@ const WORLDS = {
   gym: { label: "Kevin's Gym", build: buildGymWorld },
   work: { label: "McKevin's", build: buildWorkWorld },
 };
+
+/**
+ * Three worlds lit by one set of lights, which is why one of them looked wrong.
+ *
+ * The lights were built once, for the gym: a bright cold sky, a sun from the
+ * top right, a warm bounce. That is correct for a forecourt with a car park on
+ * it. The crib is a windowless flat with a chandelier over a card table and six
+ * monitors in the corner, and it was lit by the same midday sky at the same
+ * intensity — so it had no pools of light, no dark corners and nothing to walk
+ * towards. Evenly bright is the specific thing that reads as cheap: it is what
+ * a room looks like when nobody decided anything about it.
+ *
+ * A mood is three numbers on the lights that already exist plus a handful of
+ * point lights owned by the world, so they are torn down with it and cannot
+ * leak into the next one.
+ */
+const MOODS = {
+  outdoor: {
+    hemi: ['#EAF2FF', '#6E6354', 1.55],
+    key: ['#FFF4DA', 1.65],
+    fill: ['#FFC98A', 0.55],
+    points: [],
+  },
+  // The flat. Almost no sky, a weak warm ceiling wash, and then the room is lit
+  // by the things in it: the chandelier over the felt, the monitors, the floor
+  // lamp, the strip under the kitchen cupboards and the neon over the door.
+  crib: {
+    hemi: ['#4E5C74', '#2A2119', 0.80],
+    key: ['#FFE2B0', 0.44],
+    fill: ['#7A5340', 0.32],
+    points: [
+      // One wide, weak, cool light in the middle of the room, with DECAY 1 so it
+      // actually arrives. Without it the walls fall to flat black and every
+      // piece of furniture reads as floating in a void — a bookcase pushed hard
+      // against the back wall looked marooned in open floor, because there was
+      // no wall behind it to see. At the default decay of 2 the same light lost
+      // 97% of itself crossing the room and did nothing at all.
+      ['#8894B2', 2.60, 18.0, -18.0, 2.60, 16.8, 1],
+      ['#FFD07A', 2.60, 7.5, -22.4, 2.15, 18.4],   // the chandelier over the cards
+      ['#8FD0FF', 1.35, 4.2, -22.1, 1.45, 13.4],   // six monitors, on his face
+      ['#FFC98A', 2.00, 6.0, -16.6, 1.95, 20.2],   // the floor lamp
+      ['#FFF0D0', 1.30, 5.5, -16.6, 2.35, 21.4],   // under the kitchen cupboards
+      ['#FF5064', 1.10, 5.0, -18.0, 2.70, 11.9],   // the neon over the door
+      ['#FFB4A0', 0.90, 4.0, -12.6, 1.15, 15.2],   // the lamp on the bedside
+      ['#FFE2B0', 1.70, 5.2, -24.90, 2.05, 13.50],  // over the plan on the desk wall
+    ],
+  },
+};
+
+let hemi = null;
+let keyLight = null;
+let fillLight = null;
+
+function applyMood(name, group) {
+  const m = MOODS[name] ?? MOODS.outdoor;
+  if (hemi) { hemi.color.set(m.hemi[0]); hemi.groundColor.set(m.hemi[1]); hemi.intensity = m.hemi[2]; }
+  if (keyLight) { keyLight.color.set(m.key[0]); keyLight.intensity = m.key[1]; }
+  if (fillLight) { fillLight.color.set(m.fill[0]); fillLight.intensity = m.fill[1]; }
+  // Into the WORLD group, not the scene: disposeWorld takes the group with it,
+  // so a lamp cannot survive into a world that has no lamp in it.
+  for (const [colour, intensity, distance, px, py, pz, decay] of m.points) {
+    const l = new THREE.PointLight(colour, intensity, distance, decay ?? 2);
+    l.position.set(px, py, pz);
+    group.add(l);
+  }
+}
 
 /**
  * Swap worlds. Tears the old one down before building the new one, so the two
@@ -1816,6 +1891,7 @@ async function setWorld(id, at = null) {
       worldGroup.add(child);
     }
   }
+  applyMood(meta.mood ?? 'outdoor', worldGroup);
   worldId = id;
   state.world = id;
   save(state);

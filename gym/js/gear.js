@@ -308,6 +308,30 @@ export const billboardTexture = () =>
     x.fillText('OR CRY LATER', w / 2, h - 48);
   });
 
+/**
+ * A whiteboard with a list on it, for the wall of Kevin's flat.
+ *
+ * signTexture centres every line and shrinks everything after the first, which
+ * is right for a sign over a door and wrong for a list: a plan with four items
+ * on it only reads as a plan if the items line up down the left edge.
+ */
+export const planTexture = (title, lines, { bg = '#E6E4DA', fg = '#1A1A1A', accent = '#C7382F' } = {}) =>
+  canvasTexture(1024, 660, (x, w, h) => {
+    x.fillStyle = bg;
+    x.fillRect(0, 0, w, h);
+    x.strokeStyle = '#8A8272';
+    x.lineWidth = 10;
+    x.strokeRect(5, 5, w - 10, h - 10);
+    x.textAlign = 'left';
+    x.textBaseline = 'top';
+    x.fillStyle = accent;
+    x.font = '700 82px ui-monospace, Menlo, monospace';
+    x.fillText(title, 62, 54);
+    x.fillStyle = fg;
+    x.font = '700 70px ui-monospace, Menlo, monospace';
+    lines.forEach((line, i) => x.fillText(line, 96, 200 + i * 100));
+  });
+
 /** The hand-painted board by the door. */
 export const boardTexture = () =>
   canvasTexture(512, 384, (x, w, h) => {
