@@ -59,6 +59,9 @@ contract LocalFloor is Script {
         KevinFloorV4 floor = new KevinFloorV4(me, manager, key, address(kevin));
         floor.setOperator(me);
         floor.setRails(200_000 ether, 0.05 ether, 2_000_000 ether, 0.5 ether, 60);
+        // A rehearsal wants the yielding visible in minutes, not days. In
+        // production this is 3 days / 1.5% a day / 30% and you leave it alone.
+        floor.setPatience(vm.envOr("PATIENCE", uint256(120)), 150, 3_000);
         floor.setFloorFromSpot(1500);
         kevin.mint(address(floor), 3_000_000 ether);
         vm.stopBroadcast();
@@ -69,5 +72,7 @@ contract LocalFloor is Script {
         console2.log("POOL_MANAGER=%s", address(manager));
         console2.log("SWAPPER=%s", address(swapper));
         console2.log("upIsUp=%s (false is correct for an ETH pool)", floor.upIsUp());
+        console2.log("patience=%ss decay=%s bps/day cap=%s bps",
+            floor.patience(), floor.decayBpsPerDay(), floor.maxDecayBps());
     }
 }

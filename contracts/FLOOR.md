@@ -82,6 +82,66 @@ rise first and sells into what is left.
 That was also found by driving it: the first version sold into a 30 ETH pump and
 left the floor exactly where it started.
 
+## What if the price never comes back?
+
+It sells anyway, eventually, and this is the part worth reading twice.
+
+A floor that only ratchets up stops working the first time the chart makes a
+high it does not revisit. The floor climbs under the top, the market drifts
+down and sits there, and the contract waits for a price that is not coming
+while the tokens it is supposed to be distributing pile up. The floor becomes
+a ceiling on its own activity.
+
+So the floor is a **high-water mark, not a promise**. While the price is under
+it, it holds for `patience`, and then eases toward the market at
+`decayBpsPerDay` a day, and never further than `maxDecayBps` below the mark.
+
+```
+patience         3 days    hold at full height first
+decayBpsPerDay      150    then give up 1.5% a day looking for the market
+maxDecayBps       3_000    and stop at 30% under the mark, whatever happens
+```
+
+Three things make this safe to have:
+
+- **Waiting only counts while the market is actually gone.** The clock measures
+  time since the price was last at or above the floor — not time since the last
+  sale, and not time since the last ratchet. A quiet fortnight with a healthy
+  chart costs nothing, and neither does a keeper outage: the first call the
+  keeper makes puts the floor back to full height *before* it decides whether
+  to sell.
+- **One tick at the floor undoes all of it.** The moment the price comes back,
+  the yielding resets to zero and the floor is whole again.
+- **It bounds the rate, exactly.** In a market with no buyers at all, the most
+  this contract can put the price below the high-water mark is
+  `decayBpsPerDay` per day — because a day of waiting is all the room a day of
+  waiting opens, and a sale stops dead at that room's edge. A 1.5%-a-day drip
+  with a hard bottom, not a dump. `test_inADeadMarketItCannotWalkTheChart-
+  FasterThanTheDecay` offers it twenty million tokens every day for forty days
+  with no cooldown and checks that bound on every one of them.
+
+`sellStopBps` is untouched by any of this and still caps every individual sale
+at 2.5%, so the yielding never shows up as a candle.
+
+Set `decayBpsPerDay` to zero and the floor never yields — which is a real
+choice, and `test_zeroDecayMeansItHoldsOutForever` is there to show you what it
+costs. `setFloorFromSpot()` is the manual override either way: one call from
+the owner re-anchors the floor to the current price.
+
+## Every percentage here is a PRICE percentage
+
+`floorGapBps`, `sellStopBps`, `ratchetBps`, `buyBandBps` and the decay are all
+moves in the **price of $KEVIN**, which is not the same as a move in the sqrt
+price — a 2.5% move in sqrt space is a 5.06% move in price.
+
+The first version applied the bps straight to the sqrt price, so every number
+in this file, and every number you would have set after reading it, meant about
+twice what it said. On `sellStopBps` — the one dial that carries "never wreck
+my chart" — that is not a rounding difference. The conversion now happens in
+one place, `_worseBy`/`_betterBy`, and `test_theFloorGapIsAPricePercentage`,
+`test_theBuyBandIsAPricePercentage` and `test_ratchet_isCappedPerCall` assert it
+in price terms so it cannot drift back.
+
 ## What it does not do
 
 **Selling into buy pressure is still selling.** The floor stops wicks; it does
@@ -129,6 +189,7 @@ The operator is a hot key on a server. Assume it leaks.
 | `dailyTokenCap` / `dailyQuoteCap`, rolling 24h | a bad day costing more than a day |
 | `cooldown` | the daily cap going in one block |
 | `floorSqrtPriceX96` as the swap's own limit | the price ever going through the floor |
+| `maxDecayBps` | the yielding ever becoming a way out |
 | `pause()` | everything, immediately, from the owner |
 
 `test_dailyCapBoundsALeakedKey` pokes twenty times with the operator key and
@@ -145,6 +206,10 @@ ratchetBps      500    and climbs at most 5% per call
 buyBandBps      800    bid once spot is 8% under the floor
 buybackBps     3000    30% of every sale is kept to bid with
 sellStopBps     250    no single sale may walk the price more than 2.5%
+
+patience     3 days    hold at full height before yielding to a gone market
+decayBpsPerDay  150    then 1.5% a day, which is also the most it can bleed
+maxDecayBps    3000    and never more than 30% under the high-water mark
 
 MAX_TOKENS_PER_TRADE  250_000e18
 DAILY_TOKEN_CAP     2_000_000e18   under one day's allocation, on purpose
@@ -181,7 +246,8 @@ Then, from the owner:
 
 1. `setOperator(...)` and `setRails(...)` if the deployer was not the owner.
 2. `setFloorFromSpot(1500)` — **it does nothing at all until a floor is set.**
-3. Send it tokens.
+3. `setPatience(...)` if you want something other than 3 days / 1.5% / 30%.
+4. Send it tokens.
 
 Send a fraction of one day's allocation first and watch a fill land before the
 rest.
@@ -211,10 +277,21 @@ watch it think before it has any money.
 `keeper/kevin-floor.service` is the systemd unit, and it starts in dry run.
 
 It has been driven end to end against a local anvil with a real v4 PoolManager,
-a real pool and real liquidity: it read the contract, sold into the room above
-the floor, stopped at the floor to the wei, honoured the cooldown, and ratcheted
-the floor up under a rising price. `contracts/script/LocalFloor.s.sol` builds
-that world in one command if you want to rehearse it yourself.
+a real pool and real liquidity, through the whole cycle: it sold into the room
+above the floor and stopped there to the wei, honoured the cooldown, ratcheted
+under a rising price, went quiet when the market walked away, started yielding
+after its patience ran out, sold into the room that opened, and reset the whole
+of the yielding the moment the price came back — selling after that reset
+against the *full* floor and moving the chart exactly 2.50%, which is the sell
+stop to four figures.
+
+`contracts/script/LocalFloor.s.sol` builds that world in one command (set
+`PATIENCE` to a couple of minutes so the yielding is visible in a rehearsal),
+and `LocalPump.s.sol` moves the price either way — `ETH_IN` buys, `KEVIN_IN`
+sells. Two bugs in this file were found that way and could not have been found
+any other way: it was reading its own system clock instead of the chain's, and
+it was checking the cooldown before the ratchet, so a pump arriving in the five
+minutes after a sale was neither ratcheted under nor reset.
 
 ## Other v4 addresses on Robinhood Chain (4663)
 

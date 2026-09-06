@@ -12,10 +12,12 @@
 // WHAT IT DOES EVERY TICK
 //
 //   1. read the contract and the pool
-//   2. if there is room above the floor, poke it — the pool decides the size,
+//   2. if the price has risen, ratchet the floor up under it
+//   3. if the price is back at a floor that had started to yield, ratchet
+//      anyway — that call is what tells the contract the wait is over
+//   4. if there is room above the floor, poke it — the pool decides the size,
 //      not this script, because the swap carries the floor as its price limit
-//   3. if the price has risen, ratchet the floor up under it
-//   4. otherwise say why not, and wait
+//   5. otherwise say why not, and wait
 //
 // It never sizes a trade cleverly. It offers the maximum and lets the pool fill
 // what fits above the floor. Sizing is the part a keeper gets wrong at 3am and
@@ -80,6 +82,12 @@ const ABI = [
   { type: 'function', name: 'cooldown', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'paused', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
   { type: 'function', name: 'upIsUp', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
+  { type: 'function', name: 'effectiveFloorSqrtPriceX96', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint160' }] },
+  { type: 'function', name: 'floorDecayBps', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'floorHeldSince', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'maxDecayBps', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'patience', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'decayBpsPerDay', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'floorGapBps', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'ratchetBps', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'tokensSoldInWindow', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -103,6 +111,15 @@ const warn = (...a) => console.error(stamp(), '!!', ...a);
 function readable(sqrtPriceX96) {
   const q = (Number(sqrtPriceX96) / 2 ** 96) ** 2;
   return q < 0.001 || q > 1000 ? q.toExponential(4) : q.toFixed(6);
+}
+
+/** Seconds, said the way a person would say them. */
+function forHumans(secs) {
+  const n = Number(secs);
+  if (n < 90) return `${n}s`;
+  if (n < 5400) return `${(n / 60).toFixed(0)}m`;
+  if (n < 172800) return `${(n / 3600).toFixed(1)}h`;
+  return `${(n / 86400).toFixed(1)}d`;
 }
 
 /** How far apart two sqrt prices are, in percent of the first. */
@@ -149,6 +166,13 @@ async function main() {
   try {
     const up = await read('upIsUp');
     say('  upIsUp   ', up, up ? '(a rising $KEVIN is a RISING sqrtPrice)' : '(a rising $KEVIN is a FALLING sqrtPrice)');
+    const [pat, perDay, maxD] = await Promise.all([
+      read('patience'), read('decayBpsPerDay'), read('maxDecayBps'),
+    ]);
+    say('  patience ', perDay === 0n
+      ? 'never yields — if the price does not come back it will not sell again'
+      : `holds ${forHumans(pat)} under water, then gives up ${Number(perDay) / 100}%/day,`
+        + ` down to -${Number(maxD) / 100}% and no further`);
   } catch (e) {
     warn('could not read the contract at all:', e.shortMessage || e.message);
     warn('check FLOOR_ADDRESS and the RPC before going live.');
@@ -168,23 +192,28 @@ async function main() {
   }
 
   async function tick() {
-    const [reading, paused, last, cool, sold, capT, spent, capQ, chest] = await Promise.all([
-      read('reading'), read('paused'), read('lastTradeAt'), read('cooldown'),
-      read('tokensSoldInWindow'), read('dailyTokenCap'),
-      read('quoteSpentInWindow'), read('dailyQuoteCap'), read('warChest'),
-    ]);
+    const [reading, paused, last, cool, sold, capT, spent, capQ, chest, mark, decay, gapBps, up, blk] =
+      await Promise.all([
+        read('reading'), read('paused'), read('lastTradeAt'), read('cooldown'),
+        read('tokensSoldInWindow'), read('dailyTokenCap'),
+        read('quoteSpentInWindow'), read('dailyQuoteCap'), read('warChest'),
+        read('floorSqrtPriceX96'), read('floorDecayBps'),
+        read('floorGapBps'), read('upIsUp'), pub.getBlock(),
+      ]);
+    // `floorAt` is the EFFECTIVE floor — the high-water mark eased by whatever
+    // the waiting has cost it. `mark` is the mark itself. They are the same
+    // number in a healthy market and the difference is the whole of the
+    // yielding, so both are read and both are printed.
     const [sell, buy, spot, floorAt] = reading;
 
     if (paused) return note('paused by the owner');
     if (floorAt === 0n) return note('no floor set yet — setFloorFromSpot() first, it does nothing until then');
 
-    const now = BigInt(Math.floor(Date.now() / 1000));
-    const readyAt = last === 0n ? 0n : last + cool;
-    if (now < readyAt) return note(`cooling down, ${readyAt - now}s left`);
-
     const state =
       `spot ${readable(spot)} floor ${readable(floorAt)} (${gapPct(floorAt, spot).toFixed(2)}%)` +
+      (decay > 0n ? ` YIELDING ${(Number(decay) / 100).toFixed(2)}% under the mark ${readable(mark)}` : '') +
       ` sold ${formatUnits(sold, 18)}/${formatUnits(capT, 18)}` +
+      ` sold-for ${formatEther(spent)}/${formatEther(capQ)}` +
       ` chest ${formatEther(chest)}`;
 
     // RATCHET BEFORE SELLING, and the order is the whole point.
@@ -198,31 +227,77 @@ async function main() {
     // exactly where it started.
     //
     // Ratcheting first means the rise is banked before any of it is sold into.
-    if (await worthRatcheting(spot, floorAt)) {
+    //
+    // NOTE the comparison is against the MARK, not against `floorAt`. The
+    // effective floor is already lower when the contract has been waiting, and
+    // ratchet() measures its step from the mark — so checking the effective
+    // one would have the keeper paying gas for a call that does nothing.
+    if (worthRatcheting(spot, mark, up, gapBps)) {
       return act('ratchet', [], `RATCHET the floor up under a higher price · ${state}`);
     }
+
+    // The price is back at a floor that had started to yield. ratchet() is
+    // what tells the contract so, and it must happen BEFORE any sale: sell
+    // first and the sale goes out against a floor that is lower than the one
+    // the market has just proved it will pay.
+    if (decay > 0n && !worse(spot, mark, up)) {
+      return act('ratchet', [], `RESET the yielding — the market came back · ${state}`);
+    }
+
+    // The cooldown is checked HERE and not before the two branches above,
+    // because ratchet() has no cooldown on chain — it is permissionless and it
+    // only ever moves the floor in the direction that costs an attacker money.
+    // Checking it first meant that a pump arriving during the five minutes
+    // after a sale was neither ratcheted under nor reset, and the sale at the
+    // end of the cooldown then went out against a stale floor. Which is the
+    // one ordering mistake this whole file exists to avoid.
+    //
+    // THE CHAIN'S CLOCK, NOT THIS BOX'S. Every deadline in the contract is in
+    // block time, and the two are not the same number — a keeper with a
+    // drifting system clock would either sit out its own cooldown for hours or
+    // hammer the contract with calls it is going to refuse. Found by driving
+    // this against an anvil warped eight days forward: it reported "cooling
+    // down, 691149s left" on a sixty-second cooldown.
+    const now = blk.timestamp;
+    const readyAt = last === 0n ? 0n : last + cool;
+    // Short on purpose: this one prints every tick until it clears.
+    if (now < readyAt) return note(`cooling down, ${forHumans(readyAt - now)} left`);
+
     if (sell) return act('poke', [(1n << 255n)], `SELL into the room above the floor · ${state}`);
     if (buy) return act('poke', [(1n << 255n)], `BID under the floor · ${state}`);
     return note(`nothing to do · ${state}`);
   }
 
   /**
-   * Would `ratchet()` actually move the floor? The contract decides how far —
+   * Would `ratchet()` actually move the mark? The contract decides how far —
    * capped at ratchetBps a call — this only avoids paying gas for a no-op.
    *
-   * It mirrors the contract's own arithmetic: the floor wants to sit floorGapBps
-   * on the wrong side of spot, and it only ever moves toward a better $KEVIN
-   * price.
+   * It mirrors the contract's own arithmetic: the mark wants to sit floorGapBps
+   * under spot IN PRICE TERMS, which in sqrt-price space is a move of the
+   * square root of that ratio. Applying the bps straight to the sqrt price —
+   * which is what this did first, and the contract with it — makes every
+   * number mean about twice what it says.
    */
-  async function worthRatcheting(spot, floorAt) {
-    const [up, gapBps] = await Promise.all([read('upIsUp'), read('floorGapBps')]);
-    const B = 10_000n;
-    // Where the floor would like to be, given where the price is now.
-    const target = up ? (spot * (B - gapBps)) / B : (spot * (B + gapBps)) / B;
-    const better = up ? target > floorAt : target < floorAt;
+  function worthRatcheting(spot, mark, up, gapBps) {
+    const target = worseBy(spot, gapBps, up);
+    const better = up ? target > mark : target < mark;
     if (!better) return false;
     // Ignore a step under a tenth of a percent: it is dust and it costs gas.
-    return Math.abs(gapPct(floorAt, target)) > 0.1;
+    return Math.abs(gapPct(mark, target)) > 0.1;
+  }
+
+  /** Is `a` a worse $KEVIN price than `b`? */
+  function worse(a, b, up) {
+    return up ? a < b : a > b;
+  }
+
+  /** `x`, moved so that $KEVIN is worth `bps` less. Price bps, not sqrt bps. */
+  function worseBy(x, bps, up) {
+    const B = 10_000n;
+    const [num, den] = up ? [B - bps, B] : [B, B - bps];
+    // sqrt(num/den) in floating point is plenty here: this only decides whether
+    // to pay for a call, and the contract redoes the arithmetic exactly.
+    return BigInt(Math.floor(Number(x) * Math.sqrt(Number(num) / Number(den))));
   }
 
   function note(why) {

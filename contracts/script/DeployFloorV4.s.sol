@@ -105,6 +105,11 @@ contract DeployFloorV4 is Script {
         console2.log("  setFloorFromSpot(1500)   puts the floor 15% under spot");
         console2.log("It does nothing at all until a floor is set.");
         console2.log("");
+        console2.log("Defaults hold the floor 3 days under water, then yield");
+        console2.log("1.5%/day down to -30% of the mark, so a price that never");
+        console2.log("comes back does not stall it forever. setPatience() to");
+        console2.log("change that; setPatience(x, 0, y) to never yield at all.");
+        console2.log("");
         console2.log("Then send it tokens. Send a fraction of one day's");
         console2.log("allocation first and watch one fill land before the rest.");
     }

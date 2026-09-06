@@ -126,6 +126,29 @@ contract KevinFloorV4Test is Test {
         );
     }
 
+    /// @dev How much BETTER a $KEVIN price `to` is than `from`, in bps. This
+    ///      pool is inverted — upIsUp is false — so a better price is a SMALLER
+    ///      sqrt price, and the price ratio is the square of the sqrt ratio.
+    ///      Every assertion below is in these terms on purpose: the contract's
+    ///      parameters are price bps, and a test that measured sqrt bps would
+    ///      pass while the numbers meant twice what they said.
+    function _betterByBps(uint160 to, uint160 from) internal pure returns (uint256) {
+        uint256 r = (uint256(from) * 1e18) / uint256(to);
+        uint256 ratio = (r * r) / 1e18;
+        return ratio <= 1e18 ? 0 : ((ratio - 1e18) * 10_000) / 1e18;
+    }
+
+    /// @dev And the other way: how much WORSE, in bps of the starting price.
+    function _worseByBps(uint160 to, uint160 from) internal pure returns (uint256) {
+        uint256 r = (uint256(to) * 1e18) / uint256(from);
+        uint256 ratio = (r * r) / 1e18;
+        return ratio <= 1e18 ? 0 : ((ratio - 1e18) * 10_000) / ratio;
+    }
+
+    function _mark() internal view returns (uint160) {
+        return floor.floorSqrtPriceX96();
+    }
+
     function _arm(uint256 gapBps) internal {
         vm.prank(owner);
         floor.setFloorFromSpot(gapBps);
@@ -221,8 +244,9 @@ contract KevinFloorV4Test is Test {
         uint160 before = floor.floorSqrtPriceX96();
         _buyPressure(60 ether); // a big move up
         floor.ratchet();
-        // upIsUp false: better means a SMALLER sqrtPrice, capped at -5%.
-        assertEq(floor.floorSqrtPriceX96(), uint160((uint256(before) * 9_500) / 10_000), "one step");
+        // ratchetBps is 500 — five percent of the $KEVIN PRICE, which in this
+        // inverted pool is a sqrt-price step of sqrt(1/1.05), not of 0.95.
+        assertApproxEqAbs(_betterByBps(floor.floorSqrtPriceX96(), before), 500, 1, "one 5% step");
     }
 
     function test_ratchet_needsAFloorFirst() public {
@@ -396,8 +420,9 @@ contract KevinFloorV4Test is Test {
         vm.prank(operator);
         floor.poke(type(uint256).max);
         uint160 after_ = _spot();
-        // upIsUp is false, so a worse KEVIN price is a HIGHER sqrtPrice.
-        uint256 movedBps = ((uint256(after_) - uint256(before)) * 10_000) / uint256(before);
+        // In PRICE terms, which is what sellStopBps is denominated in and what
+        // anybody looking at the chart would measure.
+        uint256 movedBps = _worseByBps(after_, before);
         assertLe(movedBps, 251, "one sale moved the price no further than the stop");
         assertGt(movedBps, 0, "and it did sell something");
     }
@@ -422,6 +447,248 @@ contract KevinFloorV4Test is Test {
         vm.stopPrank();
     }
 
+
+    // --- patience: the answer to "what if that price never comes back" ------
+    //
+    // Every test in this section exists because a floor that only ratchets up
+    // stops selling the first time the chart makes a high it does not revisit,
+    // and then the tokens it is supposed to be distributing just pile up.
+
+    /// @dev The market makes a high, drifts about 20% off it, and sits there.
+    ///      Not a crash — a chart that simply does not come back. That is the
+    ///      case the yielding exists for, and 12 tokens is what a 20% drift
+    ///      costs against this pool's ~14 ETH of liquidity. Anything much
+    ///      larger runs off the end of the tick range and stops being a market.
+    function _marketWalksAway() internal {
+        _arm(1_500);
+        _sellPressure(12 ether);
+        (bool sell,,,) = floor.reading();
+        assertFalse(sell, "setup: the price is under the floor and it is stuck");
+        assertLt(_worseByBps(_spot(), _mark()), 1_000, "setup: a drift, not a collapse");
+    }
+
+    function test_theFloorYieldsRatherThanWaitForAPriceThatNeverComes() public {
+        _marketWalksAway();
+        kevin.mint(address(floor), 5_000_000 ether);
+        vm.prank(owner);
+        floor.setRails(5_000_000 ether, 50 ether, 50_000_000 ether, 200 ether, 0);
+
+        // A month of nothing. Without the yielding this is a permanent stall.
+        vm.warp(block.timestamp + 30 days);
+        (bool sell,,,) = floor.reading();
+        assertTrue(sell, "it found the market rather than waiting forever");
+
+        uint256 before = kevin.balanceOf(address(floor));
+        vm.prank(operator);
+        floor.poke(type(uint256).max);
+        assertLt(kevin.balanceOf(address(floor)), before, "and it actually sold");
+    }
+
+    function test_nothingYieldsWhilePatienceLasts() public {
+        _marketWalksAway();
+        vm.warp(block.timestamp + floor.patience());
+        assertEq(floor.floorDecayBps(), 0, "still holding at full height");
+        assertEq(floor.effectiveFloorSqrtPriceX96(), _mark(), "not a basis point");
+
+        vm.warp(block.timestamp + 1 days);
+        assertEq(floor.floorDecayBps(), 150, "and then a day is a day");
+    }
+
+    function test_theYieldingHasAHardBottom() public {
+        _marketWalksAway();
+        vm.warp(block.timestamp + 3650 days); // ten years of nothing
+        assertEq(floor.floorDecayBps(), floor.maxDecayBps(), "it stops chasing");
+        assertApproxEqAbs(
+            _worseByBps(floor.effectiveFloorSqrtPriceX96(), _mark()),
+            floor.maxDecayBps(),
+            1,
+            "30% under the high-water mark and no further, forever"
+        );
+    }
+
+    function test_thePriceComingBackPutsTheFloorStraightBackUp() public {
+        _marketWalksAway();
+        vm.warp(block.timestamp + 20 days);
+        assertGt(floor.floorDecayBps(), 0, "it had started to yield");
+
+        _buyPressure(120 ether); // the market comes back over the floor
+        floor.ratchet();
+        assertEq(floor.floorDecayBps(), 0, "one tick at the floor and it is whole again");
+    }
+
+    function test_waitingIsNotCountedWhileThePriceIsHealthy() public {
+        _arm(1_500); // the floor sits under spot, which is the normal state
+        for (uint256 i = 0; i < 10; i++) {
+            vm.warp(block.timestamp + 5 days);
+            floor.ratchet();
+            assertEq(floor.floorDecayBps(), 0, "a quiet market above the floor is not waiting");
+        }
+    }
+
+    /// @dev A keeper that was down for a fortnight must not come back and sell
+    ///      into a decayed floor when the chart was fine the whole time. The
+    ///      first call it makes puts the floor back before it decides anything.
+    function test_anOutageDoesNotCostTheFloorAnything() public {
+        _arm(1_500);
+        vm.warp(block.timestamp + 14 days); // nobody called anything
+        assertGt(floor.floorDecayBps(), 0, "the clock ran, because nothing touched it");
+
+        uint160 mark = _mark();
+        vm.prank(operator);
+        floor.poke(type(uint256).max); // the keeper wakes up
+        assertEq(floor.floorDecayBps(), 0, "and the first thing it does is notice");
+        assertLe(_spot(), mark, "so the sale was against the full floor");
+    }
+
+    /// @dev THE RATE CLAIM, and the reason the yielding is safe to have.
+    ///
+    ///      In a market with no buyers at all, this contract can never put the
+    ///      price more than `decayBpsPerDay` per day below the high-water mark,
+    ///      because a day of waiting is all the room a day of waiting opens.
+    ///      Forty days of offering it everything, every day, with no cooldown:
+    ///      it is a 1.5%-a-day drip with a hard bottom, not a dump.
+    function test_inADeadMarketItCannotWalkTheChartFasterThanTheDecay() public {
+        _marketWalksAway();
+        uint160 mark = _mark();
+        // The market walked off on its own before the contract did anything;
+        // that drop is not the contract's and the bound has to allow for it.
+        uint256 notOurs = _worseByBps(_spot(), mark);
+        kevin.mint(address(floor), 20_000_000 ether);
+        vm.prank(owner);
+        floor.setRails(20_000_000 ether, 50 ether, 500_000_000 ether, 200 ether, 0);
+
+        bool everSold;
+        for (uint256 day = 0; day < 40; day++) {
+            vm.warp(block.timestamp + 1 days);
+            uint256 held = kevin.balanceOf(address(floor));
+            // Offer it everything, over and over, with no cooldown in the way.
+            for (uint256 i = 0; i < 6; i++) {
+                vm.prank(operator);
+                try floor.poke(type(uint256).max) {} catch {}
+            }
+            if (kevin.balanceOf(address(floor)) < held) everSold = true;
+            uint256 earned = floor.floorDecayBps();
+            assertLe(
+                _worseByBps(_spot(), mark),
+                (earned > notOurs ? earned : notOurs) + 1,
+                "never further down than the waiting has earned"
+            );
+        }
+        assertTrue(everSold, "and it did distribute, which was the whole point");
+        // After forty days it is parked on the bottom, selling nothing further.
+        assertEq(floor.floorDecayBps(), floor.maxDecayBps(), "on the hard bottom");
+        assertLe(_worseByBps(_spot(), mark), floor.maxDecayBps() + 1, "which is where it stops");
+    }
+
+    function test_theYieldingCannotBeHurriedByCallingMoreOften() public {
+        _marketWalksAway();
+        vm.warp(block.timestamp + 10 days);
+        uint256 once = floor.floorDecayBps();
+        for (uint256 i = 0; i < 50; i++) {
+            floor.ratchet();
+        }
+        assertEq(floor.floorDecayBps(), once, "it is a function of the clock, not of calls");
+    }
+
+    function test_theHighWaterMarkItselfNeverMoves() public {
+        _marketWalksAway();
+        uint160 mark = _mark();
+        vm.warp(block.timestamp + 60 days);
+        assertEq(_mark(), mark, "the floor of record is untouched; only what it defends bends");
+        assertTrue(_isWorse(floor.effectiveFloorSqrtPriceX96(), mark), "and it has bent");
+    }
+
+    function _isWorse(uint160 a, uint160 b) internal pure returns (bool) {
+        return a > b; // upIsUp is false here
+    }
+
+    function test_zeroDecayMeansItHoldsOutForever() public {
+        vm.prank(owner);
+        floor.setPatience(3 days, 0, 3_000);
+        _marketWalksAway();
+        vm.warp(block.timestamp + 3650 days);
+        assertEq(floor.floorDecayBps(), 0, "told never to yield, it never yields");
+        (bool sell,,,) = floor.reading();
+        assertFalse(sell, "which is a real choice, and this is what it costs");
+    }
+
+    function test_setPatience_refusesNonsense() public {
+        vm.startPrank(owner);
+        vm.expectRevert(KevinFloorV4.BadParam.selector);
+        floor.setPatience(3 days, 150, 10_000); // a bottom of "everything"
+        vm.expectRevert(KevinFloorV4.BadParam.selector);
+        floor.setPatience(3 days, 4_000, 3_000); // a day bigger than the whole allowance
+        vm.stopPrank();
+    }
+
+    function test_operatorCannotChangeThePatience() public {
+        vm.prank(operator);
+        vm.expectRevert(
+            abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, operator)
+        );
+        floor.setPatience(0, 5_000, 9_000);
+    }
+
+    /// @dev The price arithmetic works in sqrt space and the result is cast
+    ///      down to uint160. Near the top of v4's range that cast would wrap —
+    ///      turning a limit meaning "never below this" into one meaning "sell
+    ///      into anything". No real pool goes near these numbers, which is
+    ///      precisely why nobody would ever catch it happening.
+    function test_theArithmeticCannotWrapAtTheEdgeOfTheRange() public {
+        uint160 nearTheTop = 1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_341;
+        vm.startPrank(owner);
+        floor.setFloor(nearTheTop);
+        floor.setPatience(0, 3_000, 3_000); // yield the maximum immediately
+        vm.stopPrank();
+        _sellPressure(12 ether); // put the price under it so the clock runs
+        vm.warp(block.timestamp + 40 days);
+
+        assertEq(floor.floorDecayBps(), 3_000, "it is asking for the full easing");
+        assertEq(
+            floor.effectiveFloorSqrtPriceX96(),
+            nearTheTop,
+            "and gets the top of the range, not a wrapped number near zero"
+        );
+    }
+
+    // --- the parameters mean what the documentation says they mean ----------
+
+    function test_theFloorGapIsAPricePercentage() public {
+        uint160 spot = _spot();
+        _arm(1_500);
+        assertApproxEqAbs(_worseByBps(_mark(), spot), 1_500, 1, "15% means 15% of the price");
+    }
+
+    function test_theBuyBandIsAPricePercentage() public {
+        _arm(1_500);
+        vm.prank(operator);
+        floor.poke(type(uint256).max); // fills the chest so `buy` can be true
+        uint160 mark = _mark();
+
+        // Walk the price down a token at a time and watch where it starts
+        // bidding. buyBandBps is 800, so it should hold its money until the
+        // price is 8% of the PRICE under the floor and not before.
+        bool crossed;
+        for (uint256 i = 0; i < 30; i++) {
+            _sellPressure(1 ether);
+            (, bool buy,,) = floor.reading();
+            uint256 under = _worseByBps(_spot(), mark);
+            if (under > 850) {
+                crossed = true;
+                assertTrue(buy, "past the band, it bids");
+                break;
+            }
+            if (under < 750) assertFalse(buy, "inside the band, it holds its money");
+        }
+        assertTrue(crossed, "setup: the band was actually crossed");
+    }
+
+    function test_setPolicy_refusesABuyBandThatWouldDivideByZero() public {
+        vm.prank(owner);
+        vm.expectRevert(KevinFloorV4.BadParam.selector);
+        floor.setPolicy(1_500, 500, 10_000, 3_000, 250);
+    }
+
     // --- fuzz ---------------------------------------------------------------
 
     /// @dev Whatever is offered and whatever the market has done first, the
@@ -442,5 +709,31 @@ contract KevinFloorV4Test is Test {
         // Buying by others can take the price past the floor in the GOOD
         // direction; this contract must never take it past in the bad one.
         if (pressure == 0) assertLe(_spot(), floorAt, "never through the floor");
+    }
+
+    /// @dev The same claim once the floor is allowed to yield: however long it
+    ///      has been waiting, the price never ends up further down than the
+    ///      waiting has earned. The floor bends; it does not break.
+    function testFuzz_theEffectiveFloorIsNeverCrossed(uint256 waited, uint256 offer) public {
+        waited = bound(waited, 0, 400 days);
+        offer = bound(offer, 1 ether, 20_000_000 ether);
+        _marketWalksAway();
+        uint160 mark = _mark();
+        kevin.mint(address(floor), 20_000_000 ether);
+        vm.prank(owner);
+        floor.setRails(20_000_000 ether, 50 ether, 500_000_000 ether, 200 ether, 0);
+
+        uint256 notOurs = _worseByBps(_spot(), mark);
+        vm.warp(block.timestamp + waited);
+        uint256 earned = floor.floorDecayBps();
+        for (uint256 i = 0; i < 4; i++) {
+            vm.prank(operator);
+            try floor.poke(offer) {} catch {}
+        }
+        assertLe(
+            _worseByBps(_spot(), mark),
+            (earned > notOurs ? earned : notOurs) + 1,
+            "never past what waiting has earned"
+        );
     }
 }

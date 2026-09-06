@@ -7,6 +7,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {IUnlockCallback} from "v4-core/src/interfaces/callback/IUnlockCallback.sol";
@@ -63,6 +64,30 @@ import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
  *       `floorGapBps` under spot. So the level being defended rises with the
  *       chart instead of anchoring to launch day, and one manipulated block
  *       cannot drag it anywhere.
+ *
+ *       ---------------------------------------------------------------------
+ *       ...AND IT YIELDS, OR IT WOULD NEVER SELL AGAIN
+ *       ---------------------------------------------------------------------
+ *       A floor that only goes up is a floor that stops working the first time
+ *       the price makes a high and does not come back. The chart sets a top,
+ *       the floor ratchets under it, the market drifts down and sits there —
+ *       and the contract waits forever for a price that is not coming, while
+ *       the tokens it is supposed to be distributing pile up.
+ *
+ *       So the floor is a HIGH-WATER MARK, not a promise. While the price is
+ *       under it, it waits `patience`, and then eases toward the market at
+ *       `decayBpsPerDay` a day, never further than `maxDecayBps` below the
+ *       high-water mark. The moment the price is back at the floor, the wait
+ *       resets and the floor is at full height again — waiting only counts
+ *       while the market is actually gone.
+ *
+ *       That does not weaken the "never wreck my chart" guarantee, because
+ *       `sellStopBps` is a separate limit on every individual sale. What it
+ *       bounds is the RATE: in a market with no buyers at all, the most this
+ *       contract can walk the price down is `decayBpsPerDay` per day, because
+ *       that is all the room a day of waiting opens — and it stops entirely
+ *       once `maxDecayBps` is spent. A slow drip with a hard bottom, instead
+ *       of an indefinite stall.
  *
  *       ---------------------------------------------------------------------
  *       WHICH WAY IS UP
@@ -128,6 +153,24 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
     /// @notice Proceeds set aside by `buybackBps` and not yet spent.
     uint256 public warChest;
 
+    // --- patience -----------------------------------------------------------
+    // The floor above is the high-water mark. What is actually defended is
+    // `effectiveFloorSqrtPriceX96()`, which is that mark eased toward a market
+    // that has walked away from it.
+
+    /// @notice How long the price may sit under the floor before it starts to
+    ///         yield. Zero disables the yielding entirely.
+    uint256 public patience;
+    /// @notice How far the floor eases per day of waiting, in price bps.
+    uint256 public decayBpsPerDay;
+    /// @notice The most the floor may ever sit below its high-water mark.
+    ///         The hard bottom: past this it stops chasing and just waits.
+    uint256 public maxDecayBps;
+    /// @notice The last time the price was at or above the floor. Waiting is
+    ///         measured from here, so an outage or a quiet market with a
+    ///         healthy price costs nothing.
+    uint256 public floorHeldSince;
+
     // --- the rails ----------------------------------------------------------
 
     uint256 public maxTokensPerTrade;
@@ -165,6 +208,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
     );
     event Sold(uint256 tokensIn, uint256 quoteOut, uint256 reserved, uint160 spotAfter);
     event Bought(uint256 quoteIn, uint256 tokensOut, uint160 spotAfter);
+    event PatienceSet(uint256 patience, uint256 decayBpsPerDay, uint256 maxDecayBps);
     event Swept(address indexed asset, address indexed to, uint256 amount);
 
     error NotOperator();
@@ -212,6 +256,9 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         buyBandBps = 800; // bid once spot is 8% under the floor
         buybackBps = 3_000; // 30% of every sale is kept to bid with
         sellStopBps = 250; // no sale may walk the price more than 2.5%
+        patience = 3 days; // hold at full height for three days under water
+        decayBpsPerDay = 150; // then give up 1.5% a day looking for the market
+        maxDecayBps = 3_000; // and never more than 30% under the high-water mark
         cooldown = 5 minutes;
         windowStart = block.timestamp;
     }
@@ -231,21 +278,62 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         (sqrtPriceX96,,,) = manager.getSlot0(poolId());
     }
 
+    /// @notice How far the floor has eased below its high-water mark, in price
+    ///         bps, purely as a function of how long the price has been under
+    ///         it. Nothing accrues it and nothing has to be called to advance
+    ///         it — which is also why nobody can advance it faster by calling
+    ///         more often.
+    function floorDecayBps() public view returns (uint256) {
+        if (floorSqrtPriceX96 == 0 || decayBpsPerDay == 0) return 0;
+        uint256 held = block.timestamp - floorHeldSince;
+        if (held <= patience) return 0;
+        uint256 d = ((held - patience) * decayBpsPerDay) / DAY;
+        return d > maxDecayBps ? maxDecayBps : d;
+    }
+
+    /// @notice The level actually defended right now: the high-water floor,
+    ///         eased by whatever the waiting has cost it. This is the number
+    ///         every swap carries as its price limit.
+    function effectiveFloorSqrtPriceX96() public view returns (uint160) {
+        uint160 f = floorSqrtPriceX96;
+        if (f == 0) return 0;
+        uint256 d = floorDecayBps();
+        return d == 0 ? f : _worseBy(f, d); // _scale keeps it inside v4's bounds
+    }
+
+    /// @dev The price being back at the floor is the end of waiting. Called on
+    ///      every path that changes state, so a keeper outage cannot quietly
+    ///      run the clock down while the chart was fine the whole time.
+    function _touchFloor() internal {
+        if (floorSqrtPriceX96 == 0) return;
+        if (!_isBetter(floorSqrtPriceX96, spotSqrtPriceX96())) floorHeldSince = block.timestamp;
+    }
+
     /// @notice Is `a` a better price for $KEVIN than `b`?
     function _isBetter(uint160 a, uint160 b) internal view returns (bool) {
         return upIsUp ? a > b : a < b;
     }
 
-    /// @dev `x` moved `bps` in the direction that is worse for $KEVIN.
+    /// @dev `x`, moved so that $KEVIN is worth `bps` LESS.
+    ///
+    /// EVERY BPS IN THIS CONTRACT IS A PRICE MOVE, NOT A SQRT-PRICE MOVE, and
+    /// the two are not the same thing: a 2.5% move in sqrt space is a 5.06%
+    /// move in price. The first version applied the bps straight to the sqrt
+    /// price, so every number in the docs — and every number you would set
+    /// after reading them — meant about twice what it said. On the one dial
+    /// that matters, "no sale may move the chart more than 2.5%", that is not
+    /// a rounding difference. So the conversion happens here, once, and
+    /// `sellStopBps = 250` means the $KEVIN price moved 2.5%.
     function _worseBy(uint160 x, uint256 bps) internal view returns (uint160) {
-        uint256 v = upIsUp ? (uint256(x) * (BPS - bps)) / BPS : (uint256(x) * (BPS + bps)) / BPS;
-        return uint160(v);
+        return upIsUp ? _scale(x, BPS - bps, BPS) : _scale(x, BPS, BPS - bps);
     }
 
-    /// @notice What a poke would do right now.
+    /// @notice What a poke would do right now. `floorAt` is the EFFECTIVE
+    ///         floor — the high-water mark eased by any waiting — because that
+    ///         is the level the swaps will actually carry.
     function reading() public view returns (bool sell, bool buy, uint160 spot, uint160 floorAt) {
         spot = spotSqrtPriceX96();
-        floorAt = floorSqrtPriceX96;
+        floorAt = effectiveFloorSqrtPriceX96();
         if (floorAt == 0) return (false, false, spot, floorAt);
         // Sell whenever there is any room above the floor at all: the pool
         // itself decides how much, which is the point.
@@ -264,6 +352,9 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
      */
     function poke(uint256 size) external nonReentrant whenNotPaused onlyOperator {
         if (floorSqrtPriceX96 == 0) revert NoFloorYet();
+        // Before deciding anything: if the price is back at the floor, the
+        // waiting is over and the floor is at full height again.
+        _touchFloor();
         (bool sell, bool buy,,) = reading();
         if (sell) {
             _sell(size);
@@ -281,17 +372,38 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         uint160 spot = spotSqrtPriceX96();
         uint160 was = floorSqrtPriceX96;
         if (was == 0) revert NoFloorYet();
+        // Permissionless and cheap, so the keeper calls it every tick — which
+        // makes it the reliable place to notice that the price came back and
+        // stop the floor from yielding any further.
+        _touchFloor();
         uint160 target = _worseBy(spot, floorGapBps);
         if (!_isBetter(target, was)) return; // the floor never comes down
         uint160 ceiling = _betterBy(was, ratchetBps);
         uint160 next = _isBetter(target, ceiling) ? ceiling : target;
         floorSqrtPriceX96 = next;
+        floorHeldSince = block.timestamp;
         emit FloorMoved(was, next, spot);
     }
 
-    /// @dev `x` moved `bps` in the direction that is better for $KEVIN.
+    /// @dev `x`, moved so that $KEVIN is worth `bps` MORE.
     function _betterBy(uint160 x, uint256 bps) internal view returns (uint160) {
-        uint256 v = upIsUp ? (uint256(x) * (BPS + bps)) / BPS : (uint256(x) * (BPS - bps)) / BPS;
+        return upIsUp ? _scale(x, BPS + bps, BPS) : _scale(x, BPS, BPS + bps);
+    }
+
+    /// @dev x * sqrt(num/den). A price ratio of num/den is a sqrt-price ratio
+    ///      of its square root, which is the whole reason this helper exists.
+    ///      Full-width throughout: x is up to 2^160 and the Q96 multiplier up
+    ///      to 2^103, so the intermediate product does not fit in a word.
+    function _scale(uint160 x, uint256 num, uint256 den) internal pure returns (uint160) {
+        uint256 mQ96 = Math.sqrt(Math.mulDiv(num, 1 << 192, den));
+        uint256 v = Math.mulDiv(uint256(x), mQ96, 1 << 96);
+        // Clamped rather than cast, because a bare uint160() here would wrap a
+        // price near the top of the range around to a tiny one — which is to
+        // say, silently turn a limit that means "do not go below this" into one
+        // that means "sell into anything". Real pool prices are nowhere near
+        // these bounds; that is exactly why it would never be noticed.
+        if (v <= MIN_SQRT) return MIN_SQRT + 1;
+        if (v >= MAX_SQRT) return MAX_SQRT - 1;
         return uint160(v);
     }
 
@@ -313,8 +425,9 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         // crossed, and a stop `sellStopBps` under the current price, which caps
         // how far this one sale may walk the chart. Without the second, a floor
         // sitting 15% down means every sale sells 15% down.
+        uint160 defended = effectiveFloorSqrtPriceX96();
         uint160 stop = _worseBy(spotSqrtPriceX96(), sellStopBps);
-        uint160 limit = _isBetter(stop, floorSqrtPriceX96) ? stop : floorSqrtPriceX96;
+        uint160 limit = _isBetter(stop, defended) ? stop : defended;
         (uint256 spent, uint256 got) = _swap(true, amountIn, limit);
         if (spent == 0) revert NothingToDo();
 
@@ -334,7 +447,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
 
         // Buying pushes the price toward the floor from below. Stop at the
         // floor: past it the contract would be bidding above its own level.
-        (uint256 spent, uint256 got) = _swap(false, amountIn, floorSqrtPriceX96);
+        (uint256 spent, uint256 got) = _swap(false, amountIn, effectiveFloorSqrtPriceX96());
         if (spent == 0) revert NothingToDo();
 
         warChest -= spent;
@@ -438,6 +551,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         if (sqrtPriceX96 <= MIN_SQRT || sqrtPriceX96 >= MAX_SQRT) revert BadParam();
         emit FloorMoved(floorSqrtPriceX96, sqrtPriceX96, spotSqrtPriceX96());
         floorSqrtPriceX96 = sqrtPriceX96;
+        floorHeldSince = block.timestamp;
     }
 
     /// @notice Put the floor a set distance under the current price, in one call.
@@ -447,6 +561,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         uint160 next = _worseBy(spot, gapBps);
         emit FloorMoved(floorSqrtPriceX96, next, spot);
         floorSqrtPriceX96 = next;
+        floorHeldSince = block.timestamp;
     }
 
     function setPolicy(
@@ -457,7 +572,10 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         uint256 sellStopBps_
     ) external onlyOwner {
         if (floorGapBps_ == 0 || floorGapBps_ >= BPS) revert BadParam();
-        if (ratchetBps_ > BPS) revert BadParam();
+        if (ratchetBps_ >= BPS) revert BadParam();
+        // Every bps here ends up inside _worseBy/_betterBy, which divide by
+        // (BPS - bps). BPS itself is not a permitted value for any of them.
+        if (buyBandBps_ >= BPS) revert BadParam();
         if (buybackBps_ > BPS) revert BadParam();
         // A stop of zero would mean no sale can move the price at all, which is
         // no sale; a stop at 100% is no stop.
@@ -468,6 +586,26 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         buybackBps = buybackBps_;
         sellStopBps = sellStopBps_;
         emit PolicySet(floorGapBps_, ratchetBps_, buyBandBps_, buybackBps_, sellStopBps_);
+    }
+
+    /// @notice How long the floor holds out, and how far it will bend.
+    /// @param  patience_        seconds under water before it starts to yield
+    /// @param  decayBpsPerDay_  price bps a day thereafter. Zero: never yields,
+    ///                          which means it may never sell again — that is
+    ///                          a real choice, just make it deliberately.
+    /// @param  maxDecayBps_     the hard bottom, in price bps under the mark
+    function setPatience(uint256 patience_, uint256 decayBpsPerDay_, uint256 maxDecayBps_)
+        external
+        onlyOwner
+    {
+        if (maxDecayBps_ >= BPS) revert BadParam();
+        // A day of decay that could exceed the whole allowance is not a rate,
+        // it is a switch, and it would make the bottom unreachable by degrees.
+        if (decayBpsPerDay_ > maxDecayBps_) revert BadParam();
+        patience = patience_;
+        decayBpsPerDay = decayBpsPerDay_;
+        maxDecayBps = maxDecayBps_;
+        emit PatienceSet(patience_, decayBpsPerDay_, maxDecayBps_);
     }
 
     function setRails(
