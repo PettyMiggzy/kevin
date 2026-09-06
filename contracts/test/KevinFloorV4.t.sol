@@ -43,6 +43,7 @@ contract KevinFloorV4Test is Test {
     address internal operator = address(0x09E12A);
     address internal stranger = address(0xBAD);
 
+    uint256 internal constant MAX_STOP = 500; // KevinFloorV4.MAX_SELL_STOP_BPS
     uint24 internal constant FEE = 3000;
     int24 internal constant SPACING = 60;
 
@@ -149,6 +150,19 @@ contract KevinFloorV4Test is Test {
         return floor.floorSqrtPriceX96();
     }
 
+    /// @dev ratchet() is onlyOperator now — it was permissionless, and that was
+    ///      a critical bug: see test_ratchetCannotBeWalkedUpInOneBlock.
+    function _ratchet() internal {
+        vm.prank(operator);
+        floor.ratchet();
+    }
+
+    /// @dev The cooldown has a floor of MIN_COOLDOWN now, so tests that used to
+    ///      set it to zero step time forward instead.
+    function _tock() internal {
+        vm.warp(block.timestamp + 61);
+    }
+
     function _arm(uint256 gapBps) internal {
         vm.prank(owner);
         floor.setFloorFromSpot(gapBps);
@@ -179,10 +193,11 @@ contract KevinFloorV4Test is Test {
 
         kevin.mint(address(floor), 5_000_000 ether);
         vm.prank(owner);
-        floor.setRails(5_000_000 ether, 50 ether, 50_000_000 ether, 200 ether, 0);
+        floor.setRails(5_000_000 ether, 50 ether, 50_000_000 ether, 200 ether, 60);
 
         // Offer the pool everything, repeatedly. It cannot go through.
         for (uint256 i = 0; i < 12; i++) {
+            _tock();
             vm.prank(operator);
             try floor.poke(type(uint256).max) {} catch {}
         }
@@ -235,15 +250,16 @@ contract KevinFloorV4Test is Test {
         _arm(1_500);
         uint160 before = floor.floorSqrtPriceX96();
         _sellPressure(200_000 ether); // the price falls
-        floor.ratchet();
+        _ratchet();
         assertEq(floor.floorSqrtPriceX96(), before, "a dip does not lower the floor");
     }
 
     function test_ratchet_isCappedPerCall() public {
         _arm(1_500);
+        vm.warp(block.timestamp + 1 hours); // past the ratchet's own cooldown
         uint160 before = floor.floorSqrtPriceX96();
         _buyPressure(60 ether); // a big move up
-        floor.ratchet();
+        _ratchet();
         // ratchetBps is 500 — five percent of the $KEVIN PRICE, which in this
         // inverted pool is a sqrt-price step of sqrt(1/1.05), not of 0.95.
         assertApproxEqAbs(_betterByBps(floor.floorSqrtPriceX96(), before), 500, 1, "one 5% step");
@@ -251,6 +267,7 @@ contract KevinFloorV4Test is Test {
 
     function test_ratchet_needsAFloorFirst() public {
         vm.expectRevert(KevinFloorV4.NoFloorYet.selector);
+        vm.prank(operator);
         floor.ratchet();
     }
 
@@ -329,16 +346,17 @@ contract KevinFloorV4Test is Test {
     function test_perTradeCapClamps() public {
         _arm(1_500);
         vm.startPrank(owner);
-        // Widen the sell stop right out, so the CAP is the binding constraint
-        // and not the stop — with the default 2.5% stop this pool fills 2.5
-        // tokens and the cap never bites, which is the stop working.
-        floor.setPolicy(1_500, 500, 800, 3_000, 9_000);
-        floor.setRails(5 ether, 50 ether, 2_000_000 ether, 200 ether, 5 minutes);
+        // Widen the sell stop to its ceiling, so the CAP is the binding
+        // constraint and not the stop. It cannot go above 5% any more — that is
+        // MAX_SELL_STOP_BPS, and it is a constant precisely so no key can raise
+        // it — so the cap has to come down to meet it instead.
+        floor.setPolicy(1_500, 500, 800, 3_000, MAX_STOP);
+        floor.setRails(1 ether, 50 ether, 2_000_000 ether, 200 ether, 5 minutes);
         vm.stopPrank();
         uint256 before = kevin.balanceOf(address(floor));
         vm.prank(operator);
         floor.poke(type(uint256).max);
-        assertEq(before - kevin.balanceOf(address(floor)), 5 ether, "clamped to the cap");
+        assertEq(before - kevin.balanceOf(address(floor)), 1 ether, "clamped to the cap");
     }
 
     /// @dev And the case where the ROOM is the smaller of the two: a cap far
@@ -431,7 +449,7 @@ contract KevinFloorV4Test is Test {
     function test_theFloorStillBindsWhenItIsTighterThanTheStop() public {
         _arm(100); // a floor 1% down
         vm.prank(owner);
-        floor.setPolicy(1_500, 500, 800, 3_000, 2_000); // a 20% stop, far looser
+        floor.setPolicy(1_500, 500, 800, 3_000, MAX_STOP); // the loosest stop allowed
         uint160 floorAt = floor.floorSqrtPriceX96();
         vm.prank(operator);
         floor.poke(type(uint256).max);
@@ -443,7 +461,7 @@ contract KevinFloorV4Test is Test {
         vm.expectRevert(KevinFloorV4.BadParam.selector);
         floor.setPolicy(1_500, 500, 800, 3_000, 0);
         vm.expectRevert(KevinFloorV4.BadParam.selector);
-        floor.setPolicy(1_500, 500, 800, 3_000, 10_000);
+        floor.setPolicy(1_500, 500, 800, 3_000, MAX_STOP + 1);
         vm.stopPrank();
     }
 
@@ -471,7 +489,7 @@ contract KevinFloorV4Test is Test {
         _marketWalksAway();
         kevin.mint(address(floor), 5_000_000 ether);
         vm.prank(owner);
-        floor.setRails(5_000_000 ether, 50 ether, 50_000_000 ether, 200 ether, 0);
+        floor.setRails(5_000_000 ether, 50 ether, 50_000_000 ether, 200 ether, 60);
 
         // A month of nothing. Without the yielding this is a permanent stall.
         vm.warp(block.timestamp + 30 days);
@@ -512,7 +530,7 @@ contract KevinFloorV4Test is Test {
         assertGt(floor.floorDecayBps(), 0, "it had started to yield");
 
         _buyPressure(120 ether); // the market comes back over the floor
-        floor.ratchet();
+        _ratchet();
         assertEq(floor.floorDecayBps(), 0, "one tick at the floor and it is whole again");
     }
 
@@ -520,7 +538,7 @@ contract KevinFloorV4Test is Test {
         _arm(1_500); // the floor sits under spot, which is the normal state
         for (uint256 i = 0; i < 10; i++) {
             vm.warp(block.timestamp + 5 days);
-            floor.ratchet();
+            _ratchet();
             assertEq(floor.floorDecayBps(), 0, "a quiet market above the floor is not waiting");
         }
     }
@@ -555,7 +573,7 @@ contract KevinFloorV4Test is Test {
         uint256 notOurs = _worseByBps(_spot(), mark);
         kevin.mint(address(floor), 20_000_000 ether);
         vm.prank(owner);
-        floor.setRails(20_000_000 ether, 50 ether, 500_000_000 ether, 200 ether, 0);
+        floor.setRails(20_000_000 ether, 50 ether, 500_000_000 ether, 200 ether, 60);
 
         bool everSold;
         for (uint256 day = 0; day < 40; day++) {
@@ -563,6 +581,7 @@ contract KevinFloorV4Test is Test {
             uint256 held = kevin.balanceOf(address(floor));
             // Offer it everything, over and over, with no cooldown in the way.
             for (uint256 i = 0; i < 6; i++) {
+                _tock();
                 vm.prank(operator);
                 try floor.poke(type(uint256).max) {} catch {}
             }
@@ -585,7 +604,7 @@ contract KevinFloorV4Test is Test {
         vm.warp(block.timestamp + 10 days);
         uint256 once = floor.floorDecayBps();
         for (uint256 i = 0; i < 50; i++) {
-            floor.ratchet();
+            _ratchet();
         }
         assertEq(floor.floorDecayBps(), once, "it is a function of the clock, not of calls");
     }
@@ -689,6 +708,116 @@ contract KevinFloorV4Test is Test {
         floor.setPolicy(1_500, 500, 10_000, 3_000, 250);
     }
 
+
+    // --- the lockbox, and what sweep may no longer do -----------------------
+
+    function test_kevinCanOnlyBeSweptBackToTheLockboxOnceOneIsNamed() public {
+        address lockbox = address(0x10CC);
+        vm.prank(owner);
+        floor.setLockbox(lockbox);
+
+        vm.prank(owner);
+        vm.expectRevert(KevinFloorV4.BadParam.selector);
+        floor.sweep(address(kevin), owner, 1 ether);
+
+        vm.prank(owner);
+        floor.sweep(address(kevin), lockbox, 1 ether);
+        assertEq(kevin.balanceOf(lockbox), 1 ether, "back to the lockbox, or nowhere");
+    }
+
+    /// @dev One shot. A lockbox the owner can re-point the day after publishing
+    ///      it is not a commitment, it is a setting.
+    function test_theLockboxCanBeNamedOnceAndNeverAgain() public {
+        vm.startPrank(owner);
+        floor.setLockbox(address(0x10CC));
+        vm.expectRevert(KevinFloorV4.BadParam.selector);
+        floor.setLockbox(address(0xBEEF));
+        vm.expectRevert(KevinFloorV4.BadParam.selector);
+        floor.setLockbox(address(0));
+        vm.stopPrank();
+        assertEq(floor.lockbox(), address(0x10CC));
+    }
+
+    function test_beforeALockboxIsNamedSweepIsUnrestricted() public {
+        vm.prank(owner);
+        floor.sweep(address(kevin), owner, 1 ether);
+        assertEq(kevin.balanceOf(owner), 1 ether, "and anyone can see lockbox() is unset");
+    }
+
+    /// @dev Everything that is not $KEVIN stays sweepable wherever.
+    function test_theLockboxDoesNotTrapAnythingElse() public {
+        vm.prank(owner);
+        floor.setLockbox(address(0x10CC));
+        vm.deal(address(floor), 1 ether);
+        vm.prank(owner);
+        floor.sweep(address(0), owner, 1 ether);
+        assertEq(owner.balance, 1 ether);
+    }
+
+    // --- the ceilings a stolen key cannot raise -----------------------------
+
+    /// @dev A stolen owner key does not need sweep(). Two transactions moving
+    ///      zero tokens would have turned "no sale may move the chart more than
+    ///      2.5%" into no guarantee at all, and nothing on chain would look
+    ///      like a theft until the candle printed.
+    function test_theGuaranteesCannotBeTurnedOffByTheOwner() public {
+        vm.startPrank(owner);
+        vm.expectRevert(KevinFloorV4.BadParam.selector);
+        floor.setPolicy(1_500, 500, 800, 3_000, 9_999); // the chart-wrecking one
+        vm.expectRevert(KevinFloorV4.BadParam.selector);
+        floor.setPolicy(9_000, 500, 800, 3_000, 250); // a floor 90% down
+        vm.expectRevert(KevinFloorV4.BadParam.selector);
+        floor.setPolicy(1_500, 9_000, 800, 3_000, 250); // a 90% ratchet step
+        vm.expectRevert(KevinFloorV4.BadParam.selector);
+        floor.setPolicy(1_500, 500, 9_000, 3_000, 250); // a 90% buy band
+        vm.expectRevert(KevinFloorV4.BadParam.selector);
+        floor.setRails(1 ether, 1 ether, 2 ether, 2 ether, 0); // no cooldown
+        vm.expectRevert(KevinFloorV4.BadParam.selector);
+        floor.setRatchetCooldown(0);
+        vm.stopPrank();
+
+        // and they are constants, so anyone can read the ceilings off the code
+        assertEq(floor.MAX_SELL_STOP_BPS(), 500);
+        assertEq(floor.MIN_COOLDOWN(), 60);
+    }
+
+    // --- the daily cap clamps rather than refusing ---------------------------
+
+    /// @dev It compared the OFFERED size against the cap, and the offer is
+    ///      always the whole per-trade maximum — so it began refusing at one
+    ///      trade short of the cap however small the real fill would be.
+    function test_theLastOfTheDailyCapIsStillUsable() public {
+        _arm(1_500);
+        kevin.mint(address(floor), 5_000_000 ether);
+        vm.prank(owner);
+        // One token an offer, a day and a half's worth of cap. The first poke
+        // uses a whole token; the second is offered a whole token again with
+        // only half a token of room left in the day.
+        floor.setRails(1 ether, 50 ether, 1.5 ether, 200 ether, 60);
+
+        vm.prank(operator);
+        floor.poke(type(uint256).max);
+        assertEq(floor.tokensSoldInWindow(), 1 ether, "the first trade took its fill");
+
+        _tock();
+        vm.prank(operator);
+        floor.poke(type(uint256).max); // used to revert OverDailyCap here
+        assertEq(floor.tokensSoldInWindow(), 1.5 ether, "and the half left over is usable");
+    }
+
+    function test_theDailyCapStillBinds() public {
+        _arm(1_500);
+        kevin.mint(address(floor), 5_000_000 ether);
+        vm.prank(owner);
+        floor.setRails(1 ether, 50 ether, 1.5 ether, 200 ether, 60);
+        for (uint256 i = 0; i < 10; i++) {
+            _tock();
+            vm.prank(operator);
+            try floor.poke(type(uint256).max) {} catch {}
+        }
+        assertEq(floor.tokensSoldInWindow(), 1.5 ether, "a day is still a day");
+    }
+
     // --- fuzz ---------------------------------------------------------------
 
     /// @dev Whatever is offered and whatever the market has done first, the
@@ -700,7 +829,7 @@ contract KevinFloorV4Test is Test {
         uint160 floorAt = floor.floorSqrtPriceX96();
         kevin.mint(address(floor), 5_000_000 ether);
         vm.prank(owner);
-        floor.setRails(5_000_000 ether, 50 ether, 50_000_000 ether, 200 ether, 0);
+        floor.setRails(5_000_000 ether, 50 ether, 50_000_000 ether, 200 ether, 60);
 
         if (pressure > 0) _buyPressure(pressure);
         vm.prank(operator);
@@ -721,12 +850,13 @@ contract KevinFloorV4Test is Test {
         uint160 mark = _mark();
         kevin.mint(address(floor), 20_000_000 ether);
         vm.prank(owner);
-        floor.setRails(20_000_000 ether, 50 ether, 500_000_000 ether, 200 ether, 0);
+        floor.setRails(20_000_000 ether, 50 ether, 500_000_000 ether, 200 ether, 60);
 
         uint256 notOurs = _worseByBps(_spot(), mark);
         vm.warp(block.timestamp + waited);
         uint256 earned = floor.floorDecayBps();
         for (uint256 i = 0; i < 4; i++) {
+            _tock();
             vm.prank(operator);
             try floor.poke(offer) {} catch {}
         }

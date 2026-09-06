@@ -78,6 +78,15 @@ contract KevinLock {
     /// @notice How much public notice a slow exit gives. Immutable, because a
     ///         notice period the beneficiary can shorten is not a notice period.
     uint256 public immutable exitDelay;
+    /// @notice How long a ripe exit stays executable before it expires.
+    ///
+    /// WITHOUT THIS THE NOTICE PERIOD IS A ONE-TIME COST, NOT A CONSTRAINT.
+    /// File a request on day zero for the whole bag, let it ripen, and never
+    /// execute it: from day fourteen onward the beneficiary holds a permanent,
+    /// silent, one-transaction exit and the countdown everyone watched has
+    /// bought nobody anything. A request now has to be used while it is fresh
+    /// or filed again in public. Immutable for the same reason as the delay.
+    uint256 public immutable exitWindow;
 
     /// @notice The published drip. May only ever be lowered.
     uint256 public ratePerDay;
@@ -93,7 +102,7 @@ contract KevinLock {
 
     event Released(uint256 amount, uint256 total);
     event SlowedDown(uint256 from, uint256 to);
-    event ExitRequested(uint256 amount, uint256 executableAt);
+    event ExitRequested(uint256 amount, uint256 executableAt, uint256 expiresAt);
     event ExitCancelled(uint256 amount);
     event ExitExecuted(uint256 amount);
 
@@ -102,6 +111,7 @@ contract KevinLock {
     error OnlySlower();
     error NoExitPending();
     error TooSoon(uint256 executableAt);
+    error ExitExpired(uint256 expiredAt);
     error BadParam();
 
     modifier onlyBeneficiary() {
@@ -114,7 +124,8 @@ contract KevinLock {
         address floor_,
         address beneficiary_,
         uint256 ratePerDay_,
-        uint256 exitDelay_
+        uint256 exitDelay_,
+        uint256 exitWindow_
     ) {
         if (address(token_) == address(0) || floor_ == address(0) || beneficiary_ == address(0)) {
             revert BadParam();
@@ -122,11 +133,15 @@ contract KevinLock {
         // A same-day exit is not a notice period, and a rate of zero at deploy
         // would just be a contract nobody can use.
         if (exitDelay_ < 1 days || ratePerDay_ == 0) revert BadParam();
+        // A window under an hour could be missed by a stuck RPC; one longer
+        // than the notice itself starts to defeat the point of having one.
+        if (exitWindow_ < 1 hours || exitWindow_ > exitDelay_) revert BadParam();
 
         token = token_;
         floor = floor_;
         beneficiary = beneficiary_;
         exitDelay = exitDelay_;
+        exitWindow = exitWindow_;
         ratePerDay = ratePerDay_;
         // Starts empty: the first day's allowance has to actually pass.
         lastRelease = block.timestamp;
@@ -203,7 +218,7 @@ contract KevinLock {
         if (amount == 0) revert BadParam();
         exitAmount = amount;
         exitAt = block.timestamp + exitDelay;
-        emit ExitRequested(amount, exitAt);
+        emit ExitRequested(amount, exitAt, exitAt + exitWindow);
     }
 
     function cancelExit() external onlyBeneficiary {
@@ -216,6 +231,7 @@ contract KevinLock {
     function executeExit() external onlyBeneficiary returns (uint256 amount) {
         if (exitAt == 0) revert NoExitPending();
         if (block.timestamp < exitAt) revert TooSoon(exitAt);
+        if (block.timestamp > exitAt + exitWindow) revert ExitExpired(exitAt + exitWindow);
 
         uint256 bal = token.balanceOf(address(this));
         amount = exitAmount < bal ? exitAmount : bal;
@@ -225,8 +241,29 @@ contract KevinLock {
         emit ExitExecuted(amount);
     }
 
-    /// @notice Seconds until a pending exit may be executed. Zero if none is
-    ///         pending or it is already executable. For anyone watching.
+    /**
+     * @notice Everything about a pending exit, in one call, for anyone watching.
+     *
+     * @dev This replaced an `exitCountdown()` that returned zero for BOTH
+     *      "nothing is pending" and "it is ripe and can be executed this
+     *      second" — the same number for the safest state and the most
+     *      dangerous one, in the view whose whole job was telling them apart.
+     */
+    function exitState()
+        external
+        view
+        returns (bool pending, bool executable, uint256 amount, uint256 at, uint256 expiresAt)
+    {
+        if (exitAt == 0) return (false, false, 0, 0, 0);
+        expiresAt = exitAt + exitWindow;
+        pending = block.timestamp <= expiresAt;
+        executable = pending && block.timestamp >= exitAt;
+        return (pending, executable, exitAmount, exitAt, expiresAt);
+    }
+
+    /// @notice Seconds until a pending exit may be executed, or zero if it is
+    ///         not pending or already ripe. Prefer `exitState()`, which can
+    ///         tell those two apart.
     function exitCountdown() external view returns (uint256) {
         if (exitAt == 0 || block.timestamp >= exitAt) return 0;
         return exitAt - block.timestamp;

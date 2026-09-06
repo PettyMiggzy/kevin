@@ -82,6 +82,57 @@ rise first and sells into what is left.
 That was also found by driving it: the first version sold into a 30 ETH pump and
 left the floor exactly where it started.
 
+## The bug an audit found, which is the most important thing in this file
+
+`ratchet()` was permissionless, and the argument for that was written down
+right above it: the floor only moves in the direction that makes this contract
+sell *less*, "which costs an attacker money and saves us none."
+
+That is false, because **freezing the distribution is the attacker's goal.**
+
+`ratchetBps` capped the move per CALL, with the ceiling recomputed from the
+freshly-written floor each time — so thirty calls compounded 1.05 thirty times.
+`nonReentrant` does not help; it releases between top-level calls. One
+transaction: pump the price, loop `ratchet()`, dump back out, same block.
+Measured against a pool deeper than any of ours, it cost **0.0153 ETH** and put
+the floor permanently above the market. The floor never comes down, so the
+contract could never sell again — 20% of supply with nowhere to go but a
+`sweep()`, which is precisely the thing [`KevinLock`](./LOCK.md) exists to stop.
+
+Two changes, both needed:
+
+- **`onlyOperator`.** Nobody else ever had a reason to call it, and the argument
+  for letting them was the false one above.
+- **`ratchetCooldown`,** so `ratchetBps` bounds the floor's movement per unit of
+  *time* rather than per call. That is what bounds the one caller left — a
+  leaked operator key.
+
+`test_theAttackNoLongerWorks` runs the original attacker contract unchanged and
+asserts it is refused. `test_ratchetCannotBeWalkedUpInOneBlock` gives the
+attacker the operator key anyway and asserts that thirty calls buy exactly one
+5% step. Both live in `test/RatchetGrief.t.sol`, kept rather than deleted.
+
+## The ceilings a stolen owner key cannot raise
+
+A stolen owner key does not need `sweep()` to hurt you. Two transactions that
+move zero tokens — `sellStopBps = 9999` and `cooldown = 0` — would turn "no sale
+may move the chart more than 2.5%" into no guarantee at all, quietly, with
+nothing on chain that looks like a theft until the candle prints.
+
+So the settings have ceilings, and the ceilings are `constant`s in the deployed
+bytecode rather than storage the owner can move:
+
+| | ceiling |
+|---|---|
+| `MAX_SELL_STOP_BPS` | 500 — no sale may ever move the price more than 5% |
+| `MAX_FLOOR_GAP_BPS` | 3 000 |
+| `MAX_RATCHET_BPS` | 2 000 |
+| `MAX_BUY_BAND_BPS` | 3 000 |
+| `MIN_COOLDOWN` | 60 seconds |
+
+**This, and not a multisig, is the real answer to running one key.** Anybody can
+read the ceilings off the contract and know that no key can exceed them.
+
 ## What this does NOT protect you from
 
 **Other people's selling.** Read that again before relying on any of this.
@@ -214,6 +265,26 @@ Two things follow, and they are the levers that actually matter:
 - **The daily cap is the real dial.** If a few million tokens a day is a large
   share of volume, feed it less than you receive and hold the rest.
 
+## If your pool is quoted in a token, not in ETH
+
+WETH, KEK and GME pairs are all quoted in an ERC-20, which changes two code
+paths: the swap settles by sync-transfer-settle instead of sending value, and
+the war chest is denominated in that token. Every test in this repo used to run
+against a native ETH pool, so the case least likely to be deployed had all the
+coverage and the likely one had none. `test/KevinFloorV4Erc20.t.sol` now covers
+it — and also the entire `upIsUp == true` branch, which nothing else reaches.
+
+It found a real bug: `sweep()` only ever adjusted `warChest` on the *native*
+branch. Against a token-quoted pool that is backwards both ways — sweeping
+stray ETH debited a chest denominated in the quote token, and sweeping the
+quote token itself removed the backing while leaving the number untouched,
+after which every bid reverted trying to settle tokens the contract no longer
+held. It now debits whatever the quote actually is.
+
+`fundWarChest()` is payable and only works on an ETH pool. Use
+`fundWarChestToken(amount)` on the other two. Both are permissionless: anyone
+may back the bid.
+
 ## Which way is up
 
 v4 prices a pool as **currency1 per currency0**, and native ETH is `address(0)`,
@@ -247,6 +318,9 @@ The operator is a hot key on a server. Assume it leaks.
 | `floorSqrtPriceX96` as the swap's own limit | the price ever going through the floor |
 | `maxDecayBps` | the yielding ever becoming a way out |
 | `pause()` | everything, immediately, from the owner |
+| `ratchetCooldown` | the floor being walked up in one block |
+| `MAX_SELL_STOP_BPS` and friends | the owner turning the guarantees off |
+| `lockbox`, once set | $KEVIN being swept anywhere but back to the lockbox |
 
 `test_dailyCapBoundsALeakedKey` pokes twenty times with the operator key and
 asserts what left is at most one day's allowance.
@@ -309,7 +383,10 @@ Then, from the owner:
 1. `setOperator(...)` and `setRails(...)` if the deployer was not the owner.
 2. `setFloorFromSpot(1500)` — **it does nothing at all until a floor is set.**
 3. `setPatience(...)` if you want something other than 3 days / 1.5% / 30%.
-4. Send it tokens.
+4. `setLockbox(<the KevinLock address>)` — **one shot, and do not skip it.**
+   Until it is called, $KEVIN sitting here can be swept anywhere by one key with
+   no notice, and these pools are small enough that inventory *will* sit here.
+5. Send it tokens.
 
 Send a fraction of one day's allocation first and watch a fill land before the
 rest.

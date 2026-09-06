@@ -42,9 +42,10 @@ contract DeployLock is Script {
         address beneficiary = vm.envOr("BENEFICIARY", address(0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf));
         uint256 rate = vm.envUint("RATE_PER_DAY");
         uint256 delay = vm.envOr("EXIT_DELAY", uint256(14 days));
+        uint256 window = vm.envOr("EXIT_WINDOW", uint256(3 days));
 
         vm.startBroadcast(pk);
-        lock = new KevinLock(IERC20(token), floor, beneficiary, rate, delay);
+        lock = new KevinLock(IERC20(token), floor, beneficiary, rate, delay, window);
         vm.stopBroadcast();
 
         console2.log("KevinLock    ", address(lock));
@@ -53,9 +54,18 @@ contract DeployLock is Script {
         console2.log("beneficiary  ", beneficiary, "  <- the ONLY slow way out, immutable");
         console2.log("rate/day     ", rate / 1e18);
         console2.log("exit notice  ", delay / 1 days, "days, immutable");
+        console2.log("exit window  ", window / 1 days, "days to use it, then it expires");
         console2.log("");
         console2.log("Check both addresses above against what you deployed.");
         console2.log("Neither can be changed and there is no rescue function.");
+        console2.log("");
+        console2.log("NEXT, AND DO NOT SKIP IT:");
+        console2.log("  floor.setLockbox(<this address>)   from the floor owner");
+        console2.log("");
+        console2.log("Until that is done, $KEVIN released into the floor keeper");
+        console2.log("can be swept anywhere by one key with no notice -- so the");
+        console2.log("lock would be funnelling the bag straight past itself.");
+        console2.log("setLockbox is ONE SHOT and cannot be changed after.");
         console2.log("");
         console2.log("Then: send it 1000 tokens, wait, call release(), and watch");
         console2.log("them land in the floor keeper. Only then send the bag.");

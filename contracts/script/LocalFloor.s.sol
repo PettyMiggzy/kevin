@@ -69,9 +69,11 @@ contract LocalFloor is Script {
 
         // The lockbox, holding the bag, dripping into the floor keeper.
         KevinLock lock = new KevinLock(
-            IERC20(address(kevin)), address(floor), me, 2_000_000 ether, vm.envOr("EXIT_DELAY", uint256(1 days))
+            IERC20(address(kevin)), address(floor), me, 2_000_000 ether,
+            vm.envOr("EXIT_DELAY", uint256(1 days)), vm.envOr("EXIT_WINDOW", uint256(1 hours))
         );
         kevin.mint(address(lock), 40_000_000 ether);
+        floor.setLockbox(address(lock));
         vm.stopBroadcast();
 
         console2.log("");

@@ -26,13 +26,14 @@ contract KevinLockTest is Test {
 
     uint256 internal constant RATE = 2_000_000 ether; // a day
     uint256 internal constant NOTICE = 14 days;
+    uint256 internal constant WINDOW = 3 days;
     uint256 internal constant BAG = 200_000_000 ether;
 
     uint256 internal deployedAt;
 
     function setUp() public {
         kevin = new MockERC20("Kevin", "KEVIN", 18);
-        lock = new KevinLock(IERC20(address(kevin)), floor, treasury, RATE, NOTICE);
+        lock = new KevinLock(IERC20(address(kevin)), floor, treasury, RATE, NOTICE, WINDOW);
         deployedAt = block.timestamp;
         kevin.mint(address(lock), BAG);
     }
@@ -80,7 +81,7 @@ contract KevinLockTest is Test {
     ///      allowance it could not use — otherwise topping the box up on the
     ///      wrong day silently costs the treasury a day.
     function test_anAllowanceTheBalanceCouldNotCoverIsNotForfeited() public {
-        KevinLock small = new KevinLock(IERC20(address(kevin)), floor, treasury, RATE, NOTICE);
+        KevinLock small = new KevinLock(IERC20(address(kevin)), floor, treasury, RATE, NOTICE, WINDOW);
         kevin.mint(address(small), RATE / 4); // only a quarter of a day in the box
         vm.warp(block.timestamp + 1 days);
 
@@ -160,7 +161,7 @@ contract KevinLockTest is Test {
 
     function test_theRequestIsPublicTheMomentItIsMade() public {
         vm.expectEmit(true, true, true, true);
-        emit KevinLock.ExitRequested(BAG, block.timestamp + NOTICE);
+        emit KevinLock.ExitRequested(BAG, block.timestamp + NOTICE, block.timestamp + NOTICE + WINDOW);
         vm.prank(treasury);
         lock.requestExit(BAG);
     }
@@ -198,6 +199,82 @@ contract KevinLockTest is Test {
         assertEq(kevin.balanceOf(treasury), BAG, "one request, one withdrawal");
     }
 
+
+    // --- the notice period has to stay a constraint -------------------------
+
+    /// @dev Without an expiry the notice is a ONE-TIME COST, not a constraint.
+    ///      File on day zero for the whole bag, let it ripen, never execute —
+    ///      and from day fourteen the beneficiary holds a permanent, silent,
+    ///      one-transaction exit. The countdown everybody watched bought them
+    ///      nothing at all.
+    function test_aRipeExitDoesNotStayRipeForever() public {
+        vm.prank(treasury);
+        lock.requestExit(BAG);
+        vm.warp(block.timestamp + NOTICE + WINDOW + 1);
+
+        // exitAt() into a local first — an external call inside the
+        // expectRevert argument spends the prank before executeExit sees it.
+        uint256 expiredAt = lock.exitAt() + WINDOW;
+        vm.expectRevert(abi.encodeWithSelector(KevinLock.ExitExpired.selector, expiredAt));
+        vm.prank(treasury);
+        lock.executeExit();
+        assertEq(kevin.balanceOf(treasury), 0, "it has to be asked for again, in public");
+    }
+
+    function test_theWindowIsLongEnoughToActuallyUse() public {
+        vm.prank(treasury);
+        lock.requestExit(BAG);
+        vm.warp(block.timestamp + NOTICE + WINDOW - 1);
+        vm.prank(treasury);
+        lock.executeExit();
+        assertEq(kevin.balanceOf(treasury), BAG, "right up to the last second of it");
+    }
+
+    function test_askingAgainAfterExpiryStartsTheWholeNoticeOver() public {
+        vm.startPrank(treasury);
+        lock.requestExit(BAG);
+        vm.warp(block.timestamp + NOTICE + WINDOW + 1);
+        lock.requestExit(BAG); // expired, so ask again
+        vm.stopPrank();
+        assertEq(lock.exitCountdown(), NOTICE, "the full fourteen days, from now");
+    }
+
+    /// @dev The old view returned zero for BOTH "nothing pending" and "ripe and
+    ///      executable this second" — the same number for the safest state and
+    ///      the most dangerous one, in the view whose whole job was telling
+    ///      them apart.
+    function test_theExitStateSaysWhichStateItIsIn() public {
+        (bool pending, bool executable,,,) = lock.exitState();
+        assertFalse(pending, "nothing filed");
+        assertFalse(executable);
+
+        vm.prank(treasury);
+        lock.requestExit(BAG);
+        uint256 at;
+        uint256 expires;
+        (pending, executable,, at, expires) = lock.exitState();
+        assertTrue(pending, "filed");
+        assertFalse(executable, "but not yet");
+        assertEq(at, block.timestamp + NOTICE);
+        assertEq(expires, at + WINDOW);
+
+        vm.warp(at);
+        (pending, executable,,,) = lock.exitState();
+        assertTrue(executable, "and now it is, which is the state that matters");
+
+        vm.warp(expires + 1);
+        (pending, executable,,,) = lock.exitState();
+        assertFalse(pending, "gone");
+        assertFalse(executable);
+    }
+
+    function test_theConstructorRefusesAWindowThatDefeatsTheNotice() public {
+        vm.expectRevert(KevinLock.BadParam.selector);
+        new KevinLock(IERC20(address(kevin)), floor, treasury, RATE, NOTICE, 59 minutes);
+        vm.expectRevert(KevinLock.BadParam.selector);
+        new KevinLock(IERC20(address(kevin)), floor, treasury, RATE, NOTICE, NOTICE + 1);
+    }
+
     // --- there is no third way -----------------------------------------------
 
     function test_nobodyElseCanTouchAnyOfIt() public {
@@ -225,13 +302,13 @@ contract KevinLockTest is Test {
 
     function test_theConstructorRefusesAToothlessLock() public {
         vm.expectRevert(KevinLock.BadParam.selector);
-        new KevinLock(IERC20(address(kevin)), floor, treasury, RATE, 23 hours); // no real notice
+        new KevinLock(IERC20(address(kevin)), floor, treasury, RATE, 23 hours, WINDOW); // no real notice
         vm.expectRevert(KevinLock.BadParam.selector);
-        new KevinLock(IERC20(address(kevin)), floor, treasury, 0, NOTICE); // unusable
+        new KevinLock(IERC20(address(kevin)), floor, treasury, 0, NOTICE, WINDOW); // unusable
         vm.expectRevert(KevinLock.BadParam.selector);
-        new KevinLock(IERC20(address(kevin)), address(0), treasury, RATE, NOTICE);
+        new KevinLock(IERC20(address(kevin)), address(0), treasury, RATE, NOTICE, WINDOW);
         vm.expectRevert(KevinLock.BadParam.selector);
-        new KevinLock(IERC20(address(kevin)), floor, address(0), RATE, NOTICE);
+        new KevinLock(IERC20(address(kevin)), floor, address(0), RATE, NOTICE, WINDOW);
     }
 
     // --- the claim, as an invariant -----------------------------------------

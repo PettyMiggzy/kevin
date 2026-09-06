@@ -95,6 +95,9 @@ const ABI = [
   { type: 'function', name: 'decayBpsPerDay', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'floorGapBps', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'ratchetBps', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'lastRatchetAt', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'ratchetCooldown', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'lockbox', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'tokensSoldInWindow', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'dailyTokenCap', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'quoteSpentInWindow', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -203,6 +206,16 @@ async function main() {
         warn('one of the two addresses is wrong. Refusing to start.');
         process.exit(1);
       }
+      // If the floor keeper has named a lockbox, it had better be this one:
+      // sweep() will only return $KEVIN there, so a mismatch means the keeper
+      // is feeding a contract whose tokens can never come back.
+      const named = await read('lockbox');
+      if (named !== '0x0000000000000000000000000000000000000000'
+          && named.toLowerCase() !== cfg.lock.toLowerCase()) {
+        warn(`the floor keeper's lockbox is ${named}, but LOCK_ADDRESS is ${cfg.lock}.`);
+        warn('one of the two is wrong. Refusing to start.');
+        process.exit(1);
+      }
       const [rate, held] = await Promise.all([
         pub.readContract({ address: cfg.lock, abi: LOCK_ABI, functionName: 'ratePerDay' }),
         pub.readContract({ address: cfg.lock, abi: LOCK_ABI, functionName: 'locked' }),
@@ -244,6 +257,9 @@ async function main() {
         read('floorSqrtPriceX96'), read('floorDecayBps'),
         read('floorGapBps'), read('upIsUp'), pub.getBlock(),
       ]);
+    const [ratchetedAt, ratchetCool] = await Promise.all([
+      read('lastRatchetAt'), read('ratchetCooldown'),
+    ]);
     const [lockReady, lockRate, floorHas] = cfg.lock
       ? await Promise.all([
         pub.readContract({ address: cfg.lock, abi: LOCK_ABI, functionName: 'releasable' }),
@@ -283,7 +299,12 @@ async function main() {
     // effective floor is already lower when the contract has been waiting, and
     // ratchet() measures its step from the mark — so checking the effective
     // one would have the keeper paying gas for a call that does nothing.
-    if (worthRatcheting(spot, mark, up, gapBps)) {
+    // ratchet() RETURNS rather than reverts while it is cooling down, so a
+    // simulation succeeds and the keeper would happily pay for a no-op every
+    // tick forever. The cooldown has to be checked here as well as there.
+    const canRatchet = blk.timestamp >= ratchetedAt + ratchetCool;
+
+    if (canRatchet && worthRatcheting(spot, mark, up, gapBps)) {
       return act('ratchet', [], `RATCHET the floor up under a higher price · ${state}`);
     }
 
@@ -291,7 +312,7 @@ async function main() {
     // what tells the contract so, and it must happen BEFORE any sale: sell
     // first and the sale goes out against a floor that is lower than the one
     // the market has just proved it will pay.
-    if (decay > 0n && !worse(spot, mark, up)) {
+    if (canRatchet && decay > 0n && !worse(spot, mark, up)) {
       return act('ratchet', [], `RESET the yielding — the market came back · ${state}`);
     }
 

@@ -107,6 +107,22 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
     using PoolIdLibrary for PoolKey;
 
     uint256 private constant BPS = 10_000;
+
+    // --- what the owner may never do, whatever happens to the key ----------
+    //
+    // A stolen owner key does not need `sweep()`. Two transactions moving zero
+    // tokens — `sellStopBps = 9999` and `cooldown = 0` — would turn "no sale
+    // may move the chart more than 2.5%" into no guarantee at all, quietly,
+    // with nothing on chain that looks like a theft until the candle prints.
+    //
+    // These are the published ceilings. They are constants, so they are part of
+    // the deployed bytecode and anybody can check that no setting can ever
+    // exceed them. This, and not a multisig, is the real answer to one key.
+    uint256 public constant MAX_SELL_STOP_BPS = 500; // no sale may move price >5%
+    uint256 public constant MAX_FLOOR_GAP_BPS = 3_000;
+    uint256 public constant MAX_RATCHET_BPS = 2_000;
+    uint256 public constant MAX_BUY_BAND_BPS = 3_000;
+    uint256 public constant MIN_COOLDOWN = 60;
     uint256 private constant DAY = 1 days;
     /// @dev v4's own bounds on a price limit, from TickMath.
     uint160 private constant MIN_SQRT = 4_295_128_739;
@@ -123,10 +139,15 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
     /// @dev $KEVIN is currency0 of the pair. Decided once, at deploy.
     bool public immutable tokenIsZero;
     /// @dev A higher sqrtPrice means a higher $KEVIN price. True iff $KEVIN is
-    ///      currency1 — v4 prices currency1 per currency0.
+    ///      currency0 — v4 prices currency1 PER currency0, so $KEVIN as
+    ///      currency1 makes the pool price the inverse of $KEVIN's.
+    ///      (This comment said "currency1" and was simply wrong. The code is
+    ///      right, and it is the one field the docs tell every reader to check.)
     bool public immutable upIsUp;
 
     address public operator;
+    /// @notice Once set, the only address $KEVIN may be swept to. See sweep().
+    address public lockbox;
 
     // --- the floor ----------------------------------------------------------
 
@@ -180,6 +201,11 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
     uint256 public cooldown;
 
     uint256 public lastTradeAt;
+    /// @notice When the floor last moved up. The ratchet's own rate limit.
+    uint256 public lastRatchetAt;
+    /// @notice How long the floor must wait between upward moves, so that
+    ///         `ratchetBps` is a rate rather than a per-call constant.
+    uint256 public ratchetCooldown;
     uint256 public windowStart;
     uint256 public tokensSoldInWindow;
     uint256 public quoteSpentInWindow;
@@ -209,6 +235,8 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
     event Sold(uint256 tokensIn, uint256 quoteOut, uint256 reserved, uint160 spotAfter);
     event Bought(uint256 quoteIn, uint256 tokensOut, uint160 spotAfter);
     event PatienceSet(uint256 patience, uint256 decayBpsPerDay, uint256 maxDecayBps);
+    event RatchetCooldownSet(uint256 seconds_);
+    event LockboxSet(address indexed lockbox);
     event Swept(address indexed asset, address indexed to, uint256 amount);
 
     error NotOperator();
@@ -260,6 +288,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         decayBpsPerDay = 150; // then give up 1.5% a day looking for the market
         maxDecayBps = 3_000; // and never more than 30% under the high-water mark
         cooldown = 5 minutes;
+        ratchetCooldown = 5 minutes;
         windowStart = block.timestamp;
     }
 
@@ -365,13 +394,37 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         }
     }
 
-    /// @notice Move the floor up toward spot. Permissionless: it can only ever
-    ///         move in the direction that makes this contract sell less and bid
-    ///         less, which costs an attacker money and saves us none.
-    function ratchet() external nonReentrant whenNotPaused {
+    /**
+     * @notice Move the floor up toward spot.
+     *
+     * @dev THIS WAS PERMISSIONLESS AND IT WAS A CRITICAL BUG. The reasoning was
+     *      that the floor only moves in the direction that makes this contract
+     *      sell less, "which costs an attacker money and saves us none". That is
+     *      false, because freezing the distribution IS the attacker's goal.
+     *
+     *      `ratchetBps` caps the move per CALL, and the ceiling is recomputed
+     *      from the freshly-written floor every time. So an attacker contract
+     *      pumped the price, called this thirty times in ONE transaction — each
+     *      call compounding 1.05 on the last — dumped, and left in the same
+     *      block. `nonReentrant` does not help: it releases between top-level
+     *      calls. The measured cost against a pool deeper than ours was 0.0153
+     *      ETH, and the floor never comes down, so the sell side was dead
+     *      permanently: 20% of supply with nowhere to go but a `sweep()`.
+     *      `test_ratchetCannotBeWalkedUpInOneBlock` is that attack, kept.
+     *
+     *      Two changes, both needed. `onlyOperator`, because nobody else ever
+     *      had a reason to call this and the argument for letting them was the
+     *      false one above. And a cooldown, so `ratchetBps` bounds the move per
+     *      unit of TIME rather than per call — which is what bounds a leaked
+     *      operator key, the one caller that is left.
+     */
+    function ratchet() external nonReentrant whenNotPaused onlyOperator {
         uint160 spot = spotSqrtPriceX96();
         uint160 was = floorSqrtPriceX96;
         if (was == 0) revert NoFloorYet();
+        // Returns rather than reverts: the keeper calls this every tick and a
+        // revert would be indistinguishable from a real failure in its log.
+        if (block.timestamp < lastRatchetAt + ratchetCooldown) return;
         // Permissionless and cheap, so the keeper calls it every tick — which
         // makes it the reliable place to notice that the price came back and
         // stop the floor from yielding any further.
@@ -382,6 +435,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         uint160 next = _isBetter(target, ceiling) ? ceiling : target;
         floorSqrtPriceX96 = next;
         floorHeldSince = block.timestamp;
+        lastRatchetAt = block.timestamp;
         emit FloorMoved(was, next, spot);
     }
 
@@ -415,7 +469,14 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         uint256 amountIn = size < have ? size : have;
         if (amountIn > maxTokensPerTrade) amountIn = maxTokensPerTrade;
         if (amountIn == 0) revert NothingToDo();
-        if (tokensSoldInWindow + amountIn > dailyTokenCap) revert OverDailyCap();
+        // Clamp to the day's remaining room rather than refusing. This compared
+        // the OFFERED size against the cap, and the offer is always the whole
+        // per-trade maximum — so it started reverting OverDailyCap once the
+        // window was within one trade of the cap, whatever the actual fill
+        // would have been, and handed the keeper a revert instead of a sale.
+        uint256 room = dailyTokenCap > tokensSoldInWindow ? dailyTokenCap - tokensSoldInWindow : 0;
+        if (amountIn > room) amountIn = room;
+        if (amountIn == 0) revert OverDailyCap();
 
         // THE WHOLE MECHANISM. The pool fills what fits above the limit and
         // stops, so overshooting `amountIn` is free — the unfilled remainder
@@ -443,7 +504,9 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         uint256 amountIn = size < warChest ? size : warChest;
         if (amountIn > maxQuotePerTrade) amountIn = maxQuotePerTrade;
         if (amountIn == 0) revert NothingToDo();
-        if (quoteSpentInWindow + amountIn > dailyQuoteCap) revert OverDailyCap();
+        uint256 room = dailyQuoteCap > quoteSpentInWindow ? dailyQuoteCap - quoteSpentInWindow : 0;
+        if (amountIn > room) amountIn = room;
+        if (amountIn == 0) revert OverDailyCap();
 
         // Buying pushes the price toward the floor from below. Stop at the
         // floor: past it the contract would be bidding above its own level.
@@ -571,15 +634,15 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         uint256 buybackBps_,
         uint256 sellStopBps_
     ) external onlyOwner {
-        if (floorGapBps_ == 0 || floorGapBps_ >= BPS) revert BadParam();
-        if (ratchetBps_ >= BPS) revert BadParam();
-        // Every bps here ends up inside _worseBy/_betterBy, which divide by
-        // (BPS - bps). BPS itself is not a permitted value for any of them.
-        if (buyBandBps_ >= BPS) revert BadParam();
+        if (floorGapBps_ == 0 || floorGapBps_ > MAX_FLOOR_GAP_BPS) revert BadParam();
+        if (ratchetBps_ > MAX_RATCHET_BPS) revert BadParam();
+        if (buyBandBps_ > MAX_BUY_BAND_BPS) revert BadParam();
         if (buybackBps_ > BPS) revert BadParam();
         // A stop of zero would mean no sale can move the price at all, which is
-        // no sale; a stop at 100% is no stop.
-        if (sellStopBps_ == 0 || sellStopBps_ >= BPS) revert BadParam();
+        // no sale. The ceiling is the one that matters: it is the whole of
+        // "never wreck my chart", and it must not be raisable by whoever holds
+        // the key at the time.
+        if (sellStopBps_ == 0 || sellStopBps_ > MAX_SELL_STOP_BPS) revert BadParam();
         floorGapBps = floorGapBps_;
         ratchetBps = ratchetBps_;
         buyBandBps = buyBandBps_;
@@ -618,6 +681,8 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         if (maxTokensPerTrade_ > dailyTokenCap_ || maxQuotePerTrade_ > dailyQuoteCap_) {
             revert BadParam();
         }
+        // A cooldown of zero turns every per-trade cap into a per-block cap.
+        if (cooldown_ < MIN_COOLDOWN) revert BadParam();
         maxTokensPerTrade = maxTokensPerTrade_;
         maxQuotePerTrade = maxQuotePerTrade_;
         dailyTokenCap = dailyTokenCap_;
@@ -628,6 +693,14 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         );
     }
 
+    /// @notice How long the floor must wait between upward moves. Floored, so
+    ///         the ratchet can never again become a per-call step.
+    function setRatchetCooldown(uint256 seconds_) external onlyOwner {
+        if (seconds_ < MIN_COOLDOWN) revert BadParam();
+        ratchetCooldown = seconds_;
+        emit RatchetCooldownSet(seconds_);
+    }
+
     function pause() external onlyOwner {
         _pause();
     }
@@ -636,13 +709,36 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         _unpause();
     }
 
-    /// @notice Take anything out. The owner can always empty this, and saying so
-    ///         plainly beats a timelock nobody would wait out. Use a multisig.
+    /**
+     * @notice Take assets out.
+     *
+     * @dev Once `lockbox` is set, $KEVIN can only be swept BACK TO THE LOCKBOX.
+     *      Everything else stays sweepable to anywhere.
+     *
+     *      That restriction is the whole point of KevinLock existing. These
+     *      pools are tiny — a walk from spot to a 15% floor moves about 0.009
+     *      ETH of tokens — so inventory released by the lock ACCUMULATES here
+     *      rather than selling. Without this, every token the lock protects
+     *      transits through a contract the same single key can empty instantly
+     *      with no notice, and a 20% lock funnelling into an unrestricted sweep
+     *      is a worse commitment than no lock at all, because the claim has
+     *      been published.
+     */
     function sweep(address asset, address to, uint256 amount) external onlyOwner nonReentrant {
         if (to == address(0)) revert BadParam();
+        if (asset == _token() && lockbox != address(0) && to != lockbox) revert BadParam();
+
+        // The war chest is denominated in the QUOTE, which is only the native
+        // currency in an ETH pool. Against a WETH, KEK or GME pair this
+        // decremented the chest when sweeping stray ETH it had nothing to do
+        // with, and did NOT decrement it when sweeping the quote token itself —
+        // leaving `warChest` claiming money that had gone, after which every
+        // bid reverted trying to settle tokens the contract no longer held.
+        if (asset == Currency.unwrap(_quote())) {
+            warChest = amount > warChest ? 0 : warChest - amount;
+        }
+
         if (asset == address(0)) {
-            if (amount > warChest) warChest = 0;
-            else warChest -= amount;
             (bool ok,) = to.call{value: amount}("");
             if (!ok) revert BadParam();
         } else {
@@ -651,10 +747,32 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         emit Swept(asset, to, amount);
     }
 
-    /// @notice Add to the bidding money without selling anything first.
+    /// @notice Name the lockbox this contract's $KEVIN may be returned to.
+    ///         One shot: it can be set once and never changed or unset, so
+    ///         `lockbox()` is a promise anybody can check in one call rather
+    ///         than a setting the owner can walk back the moment it binds.
+    function setLockbox(address lockbox_) external onlyOwner {
+        if (lockbox != address(0) || lockbox_ == address(0)) revert BadParam();
+        lockbox = lockbox_;
+        emit LockboxSet(lockbox_);
+    }
+
+    /// @notice Add to the bidding money without selling anything first, in an
+    ///         ETH-quoted pool. Permissionless: anyone may back the bid.
     function fundWarChest() external payable {
         if (!_quote().isAddressZero()) revert BadParam();
         warChest += msg.value;
+    }
+
+    /// @notice The same, for a pool quoted in a token — WETH, KEK, GME. The
+    ///         payable version above reverts on those, which quietly left the
+    ///         bid side with no way to be topped up on two of the three pools
+    ///         this is actually going to be pointed at.
+    function fundWarChestToken(uint256 amount) external {
+        Currency q = _quote();
+        if (q.isAddressZero()) revert BadParam();
+        IERC20(Currency.unwrap(q)).safeTransferFrom(msg.sender, address(this), amount);
+        warChest += amount;
     }
 
     receive() external payable {}

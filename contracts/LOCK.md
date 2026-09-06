@@ -39,6 +39,20 @@ there is no reason to gate it.
 second one, and asking twice always restarts the full delay, so there is no way
 to shorten it by being impatient.
 
+**A ripe exit expires.** `exitWindow` (default 3 days) is how long a request
+stays executable once it ripens, and without it the notice period would be a
+one-time cost rather than a constraint: file on day zero for the whole bag, let
+it ripen, never execute — and from day fourteen onward the beneficiary holds a
+permanent, silent, one-transaction exit, and the countdown everybody watched
+bought them nothing. A request now has to be used while it is fresh or filed
+again in public. Immutable, for the same reason the delay is.
+
+Read `exitState()` to see where things stand — it returns `pending`,
+`executable`, the amount, the ripening time and the expiry. The view it replaced
+returned zero for both "nothing is pending" and "ripe and executable this
+second": the same number for the safest state and the most dangerous one, in the
+view whose only job was telling them apart.
+
 **There is no owner, no sweep, no rescue and no upgrade.** `floor`,
 `beneficiary` and `exitDelay` are immutable. `ratePerDay` can only ever be
 *lowered*. Every lever on the contract points the same direction: slower.
@@ -108,7 +122,16 @@ Then, in order:
 2. Send it a thousand tokens. Wait. Call `release()`. Watch them land in the
    floor keeper and get sold.
 3. Only then send the bag.
-4. **Publish the address.** A lock nobody knows about is worth exactly nothing
+4. From the **floor keeper's** owner: `setLockbox(<this address>)`.
+   **Do not skip this, and it is one shot.** Until it is called, everything the
+   lock releases lands in a contract the same single key can empty instantly
+   with no notice — so the lock would be funnelling the bag straight past
+   itself. These pools are small enough that a walk from spot to a 15% floor
+   moves about 0.009 ETH of tokens, so inventory *accumulates* in the floor
+   keeper rather than selling. A 20% lock draining into an unrestricted
+   `sweep()` is not a weaker commitment than no lock; it is a worse one,
+   because you will have published the claim.
+5. **Publish the address.** A lock nobody knows about is worth exactly nothing
    — the entire point is that people can check it themselves.
 
 ## The keeper drives it
