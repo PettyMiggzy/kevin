@@ -104,5 +104,44 @@ console.log('C. fuzz: 4000 hands, 2-6 seats, random legal actions');
   console.log(`  ${ok(!deadlocks && !stalls && !leaks)}`);
 }
 
+console.log('D. a finished hand leaves nothing on the table twice');
+{
+  // collect() SWEEPS bets into the pots; it does not zero them. nextStreet has
+  // always cleared them afterwards and finish() did not, so from the end of a
+  // hand until the next deal, potTotal() — pots plus live bets — counted the
+  // final street's money twice, and the readout over the felt doubled at the
+  // exact moment the player looked at it to see what they had won.
+  let doubled = 0, hands = 0;
+  for (let round = 0; round < 240; round++) {
+    const n = 2 + (round % 5);
+    const g = createGame({
+      seats: Array.from({ length: n }, (_, i) => ({ id: i, name: `P${i}`, chips: 400 + i * 25, human: false })),
+      smallBlind: 10, bigBlind: 20,
+    });
+    for (let h = 0; h < 4 && g.seats.filter((s) => s.chips > 0).length > 1; h++) {
+      startHand(g);
+      for (let steps = 0; steps < 400 && g.street !== 'showdown' && g.street !== 'over'; steps++) {
+        if (g.turn < 0) break;
+        const o = options(g, g.turn);
+        if (!o.length) break;
+        const pick = o[(steps + round) % o.length];
+        const before = { street: g.street, turn: g.turn, pot: potTotal(g) };
+        act(g, g.turn, pick, pick === 'raise' || pick === 'bet'
+          ? Math.min(g.seats[g.turn].bet + g.seats[g.turn].chips, toCall(g, g.turn) + g.bigBlind * 2) : 0);
+        if (g.street === before.street && g.turn === before.turn && potTotal(g) === before.pot) break;
+      }
+      if (g.street !== 'showdown') continue;
+      hands++;
+      const onSeats = g.seats.reduce((a, s) => a + s.bet, 0);
+      const inPots = g.pots.reduce((a, p) => a + p.amount, 0);
+      // Everything must be in the pots and nothing still in front of anybody,
+      // so the readout equals the pot that was actually awarded.
+      if (onSeats !== 0 || potTotal(g) !== inPots) doubled++;
+    }
+  }
+  console.log(`  hands reaching showdown=${hands} with money counted twice=${doubled}`);
+  console.log(`  ${ok(hands > 40 && doubled === 0)}`);
+}
+
 console.log(failed ? `\n${failed} FAILED` : '\nall pass');
 process.exit(failed ? 1 : 0);

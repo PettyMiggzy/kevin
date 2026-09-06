@@ -234,6 +234,14 @@ const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x))
 
 function finish(g) {
   collect(g);
+  // AND CLEAR THEM, which nextStreet does on every other street and this did
+  // not. collect() SWEEPS the bets into g.pots; it does not zero them, so from
+  // the moment a hand ended until the next one was dealt, potTotal() — pots
+  // plus live bets — counted the final street's money twice and the readout
+  // over the table jumped to roughly double at exactly the moment the player
+  // was looking at it to see what they had just won. The chips were always
+  // right; only the number on the felt was wrong.
+  for (const s of g.seats) s.bet = 0;
   const contenders = live(g);
   for (const s of contenders) {
     s.result = bestOfSeven([...s.hole, ...g.board]);
