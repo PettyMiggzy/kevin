@@ -82,6 +82,21 @@
   #shop.on { display: block; }
   #shop h2 { font-size: 17px; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
   #shop p.note { font-size: 11px; opacity: .7; margin-bottom: 12px; line-height: 1.4; }
+  /* Bottom-anchored panels grow UPWARD, off the top of the screen.
+     #shop, #nft and #map are all `inset: auto 12px 12px 12px` with no height
+     cap, so they are only ever as tall as their content — fine for the three
+     items the shop launched with, fatal for the eighteen it has now. Measured
+     on an iPhone 13 viewport: the panel stood 1549px tall in 664px, its first
+     item at y -795, TEN of eighteen entirely off-screen above, and nothing
+     scrollable to reach them. Cap the panel to the viewport and let the list
+     inside it scroll. */
+  #shop, #nft, #map { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); }
+  #shopItems, #nftGrid, #map .worlds {
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;   /* do not scroll the page behind it */
+    min-height: 0; flex: 1 1 auto;  /* min-height:0 or a flex child will not shrink */
+  }
+
   .item { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 3px solid var(--ink); }
   .item h3 { font-size: 13px; text-transform: uppercase; }
   .item small { display: block; font-size: 11px; opacity: .75; line-height: 1.4; margin-top: 2px; }
@@ -128,6 +143,10 @@
   /* --- the crew stall ------------------------------------------------------ */
   #nft { position: absolute; inset: auto 12px 12px 12px; max-width: 460px; margin: 0 auto; padding: 16px; display: none; }
   #nft.on { display: block; }
+  /* AFTER the three display:block rules above, deliberately. Same specificity,
+     so source order decides; declared earlier this is silently overridden and
+     the panels go back to growing off the top of the screen. */
+  #shop.on, #nft.on, #map.on { display: flex; flex-direction: column; }
   #nft h2 { font-size: 17px; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
   #nftGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; max-height: 210px; overflow-y: auto; }
   #nftGrid canvas { width: 100%; height: auto; display: block; border: 3px solid var(--ink); border-radius: 8px;
