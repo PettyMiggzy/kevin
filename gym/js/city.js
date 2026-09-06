@@ -56,7 +56,7 @@ export const QUEUE = [
  *               the world split exists to stop.
  */
 export function buildCity(scene, { flat, solids, blockers },
-                          parts = { skyline: true, market: true, fry: true }) {
+                          parts = { skyline: true, market: true }) {
   const solid = (w, h, d, colour, x, y, z, map = null, rotY = 0) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), flat(colour, map));
     m.position.set(x, y, z);
@@ -74,9 +74,16 @@ export function buildCity(scene, { flat, solids, blockers },
 
   if (parts.skyline) buildSkyline(solid);
   const stalls = parts.market ? MARKET.map((s) => buildStall(s, { solid, quad, solids })) : [];
-  const counter = parts.fry ? buildFryHouse({ solid, quad, solids, blockers }) : null;
-
-  return { stalls, counter };
+  // The fry house used to be a unit on this street with a service window. It is
+  // McKevin's now — its own world, with an interior you work a shift inside —
+  // so buildFryHouse and the `fry` part are gone rather than left switched off.
+  // Both callers already passed fry:false; the DEFAULT still said true, so
+  // buildCity(scene, ctx) with no parts would have built a second fry house
+  // inside the gym. Dead code that was also a trap.
+  //
+  // The old return carried a `counter` alongside the stalls and neither caller
+  // ever read either, so it returns the stalls and nothing else.
+  return { stalls };
 }
 
 /**
@@ -133,46 +140,6 @@ function buildStall(s, { solid, quad, solids }) {
   return g;
 }
 
-/** The fry house: a unit with a service window you can be served at, or work. */
-function buildFryHouse({ solid, quad, solids, blockers }) {
-  const { x, z, w, d, h, counterZ } = FRY;
-  const front = z + d / 2;                    // the side you queue at
-
-  solid(w, h, d, '#E8DFD0', x, h / 2, z);
-  // Fascia above the front, standing proud like the gym's does.
-  // The band goes on FIRST and the sign in front of it. Painted at front+0.02
-  // with the band at front-0.12, the band's own front face lands at front-0.12
-  // +0.15 = front+0.03 and wins the depth test by a hundredth of a unit: the
-  // fascia renders, is covered, and the shop has a blank red stripe where its
-  // name should be.
-  solid(w + 0.8, 2.1, 0.3, '#E8232B', x, h + 0.9, front - 0.12);
-  quad(w + 0.6, 2.0, fryHouseTexture(), x, h + 0.9, front + 0.06);
-  // Roof trim so the box has an edge.
-  solid(w + 0.5, 0.3, d + 0.5, '#C7382F', x, h + 0.1, z);
-
-  // Service window: a dark recess with a bright counter under it.
-  solid(4.6, 1.6, 0.2, '#1A1A20', x, 2.0, front + 0.06);
-  solid(5.2, 0.22, 1.0, '#D8D2C4', x, 1.24, counterZ);
-  solid(5.2, 1.2, 0.5, '#C8C2B4', x, 0.6, counterZ - 0.2);
-  // Menu inside the window, and a fryer glow so the recess is not just black.
-  quad(1.9, 1.33, menuTexture(), x - 1.4, 2.1, front + 0.18);
-  solid(1.4, 0.5, 0.4, '#FFC64A', x + 1.5, 1.85, front + 0.4);
-
-  // The building blocks; the counter you stand at does not, or you could never
-  // reach it. A rectangle, not a circle — a circle at this width leaves gaps at
-  // the corners you can walk through into the wall.
-  blockers.push({
-    x0: x - w / 2 - 0.3, x1: x + w / 2 + 0.3,
-    z0: z - d / 2 - 0.3, z1: front + 0.4,
-  });
-  solids.push({ x, z: counterZ - 0.4, r: 2.1 });
-
-  // A bin and a stack of trays outside, because a fast food place has them.
-  solid(0.7, 1.0, 0.7, '#3A3A40', x - 3.9, 0.5, front - 0.4);
-  solid(0.6, 0.5, 0.6, '#C7382F', x + 3.8, 0.25, front - 0.6);
-
-  return { x, z: counterZ, workX: x, workZ: counterZ + 1.5 };
-}
 
 
 /**

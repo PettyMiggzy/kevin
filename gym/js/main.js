@@ -1622,7 +1622,7 @@ async function buildGymWorld() {
   buildExterior(scene);
   // Skyline and market only. The fry house is its own world now, and building
   // it here would be the whole point of splitting them thrown away.
-  buildCity(scene, { flat: flatMat, solids, blockers }, { skyline: true, market: true, fry: false });
+  buildCity(scene, { flat: flatMat, solids, blockers }, { skyline: true, market: true });
   buildFittings(scene);
   board = buildLeaderboard(scene, { flat: flatMat });
 
@@ -1692,7 +1692,7 @@ async function buildWorkWorld() {
   // and grass belong to the gym, and McKevin's lays its own tarmac.
   buildExterior(scene, { unit: false, ground: false });
   // The old box shop is retired; buildShop is the real one.
-  buildCity(scene, { flat: flatMat, solids, blockers }, { skyline: true, market: false, fry: false });
+  buildCity(scene, { flat: flatMat, solids, blockers }, { skyline: true, market: false });
   await loadProps(SHOP_PROPS);
   const ctx = { flat: flatMat, solids, blockers, spawn: spawnProp };
   buildShop(scene, ctx);
