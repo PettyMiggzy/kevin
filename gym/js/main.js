@@ -561,7 +561,15 @@ const SCENERY = [
   // has none of the machines or the furniture — those stay Tripo's. normalise()
   // flattens both to the same toon material on load, which is the thing that
   // lets two sources read as one hand.
-  ['boxing-ring', { x: 9.6, z: 1.6, width: 6.0, rotY: 0 }],
+  // MOVED off the cardio deck. At 9.6/1.6 the six-metre ring spanned x 6.9-12.3
+  // and z -1.4-4.6, which swallowed a rowing machine whole (overlap fraction
+  // 1.0, measured) and cut 1.07 m into a treadmill. It only ever looked right
+  // because place() was displacing it before the rotation-order fix; there is no
+  // "intended" position to restore, so this is chosen rather than reverted.
+  // -5.5/4.0 is bare floor — clear of the wood platform, the turf lane, the
+  // cardio deck and the changing end — and puts the ring where you see it on
+  // the way in, which is where a gym would put it.
+  ['boxing-ring', { x: -5.5, z: 4.0, width: 6.0, rotY: 0 }],
   ['exercise-bike', { x: 14.4, z: 8.4, width: 1.6, rotY: -Math.PI / 2 }],
   ['dip-station', { x: -14.4, z: -6.0, width: 1.8, rotY: Math.PI / 2 }],
   ['incline-bench', { x: -5.0, z: -4.6, width: 1.8, rotY: 0.3 }],
@@ -1556,6 +1564,10 @@ function spawnProp(name, opts, tag) {
   // re-uploaded all of them. Not fatal (three re-uploads on next use) but it
   // defeats the whole point of caching decoded props across worlds.
   obj.traverse((o) => { if (o.isMesh) o.userData.sharedGeometry = true; });
+  // Names the prop in the scene graph. Not used by the game; used by tooling
+  // that has to answer "what is this and where did it end up", which is
+  // otherwise unanswerable once a prop is one anonymous Group among hundreds.
+  obj.userData.propName = name;
   place(obj, opts);
   if (opts.y) obj.position.y += opts.y;
   scene.add(obj);

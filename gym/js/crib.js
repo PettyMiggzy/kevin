@@ -304,7 +304,11 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
     solid(1.1, 1.8, 0.36, '#4A3524', -11.6, 0.9, 20.9);
   });
   fixture('books', { x: -11.6, z: 20.9, width: 0.85, y: 1.18, rotY: Math.PI });
-  fixture('radio', { x: -11.6, z: 20.8, width: 0.36, y: 1.84, rotY: Math.PI });
+  // The radio used to sit at y 1.84 "on" the bookcase and measured as fully
+  // inside it — the fallback box is 1.8 tall but the MODEL is not, and an
+  // author-time y cannot know that. It lives on the desk now, where a radio
+  // belongs anyway and the surface height is one we set ourselves.
+  fixture('radio', { x: dk.x + 0.72, z: dk.z - 0.95, width: 0.34, y: 0.76, rotY: Math.PI / 2 });
   for (let i = 0; i < 4; i++) {
     solid(0.13, 0.34, 0.13, ['#FFE500', '#E8232B', '#D8D2C4', '#FFE500'][i],
       -12.0 + i * 0.22, 1.55, 20.85);
@@ -346,7 +350,7 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   }
   // What is left on the counter, which is more characterful than the counter.
   fixture('tray-stack', { x: -18.6, z: KZ, width: 0.4, y: 0.92, rotY: Math.PI });
-  fixture('soda-cup', { x: -17.1, z: KZ - 0.1, width: 0.15, y: 0.92 });
+  fixture('soda-cup', { x: -18.0, z: KZ - 0.1, width: 0.15, y: 0.92 });
   fixture('soda-cup', { x: -16.9, z: KZ + 0.06, width: 0.15, y: 0.92, rotY: 0.8 });
   fixture('box-closed', { x: -19.3, z: KZ, width: 0.5, y: 0.92, rotY: 0.2 });
   blockers.push({ x0: -19.6, x1: -12.9, z0: KZ - 0.42, z1: back });
