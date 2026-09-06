@@ -124,8 +124,24 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
    * caller either way, because whether you can walk through the sofa must not
    * depend on whether a download finished.
    */
-  const fixture = (name, opts, box = () => {}) =>
-    spawn?.(name, { solid: false, ...opts }) ?? box();
+  /**
+   * Model if the pack has one, the boxes we drew by hand if not.
+   *
+   * Collision is not part of the swap — blockers and solids are pushed by the
+   * caller either way, because whether you can walk through the sofa must not
+   * depend on whether a download finished.
+   *
+   * MUTATES the opts object you pass, writing `top` — the y the placed prop
+   * actually reaches. Author-time y values are guesses against a model whose
+   * height nobody knows until it is loaded and scaled, and every one of those
+   * guesses has been wrong at least once: a radio measured as fully inside a
+   * bookcase, trophies inside the books, a row of monitors floating. Pass a
+   * named object and read opts.top to stack something on top of it for real.
+   */
+  const fixture = (name, opts, box = () => {}) => {
+    opts.solid = false;                 // set ON the caller's object, not a copy,
+    return spawn?.(name, opts) ?? box(); // so opts.top survives back to them
+  };
 
   const { x, z, w, d, h } = CRIB;
   const front = CRIB.front;
@@ -159,16 +175,26 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
 
   // Skirting and a picture rail. Two cheap bands are what stop a flat-shaded
   // wall reading as a backdrop, and the rail gives the art a line to hang on.
-  for (const bz of [back - 0.16, front + 0.16]) solid(w, 0.18, 0.06, TRIM, x, 0.09, bz);
+  solid(w, 0.18, 0.06, TRIM, x, 0.09, back - 0.16);
+  // Split around the doorway. A skirting board that runs across the gap you
+  // walk through is a trip hazard drawn in wood.
+  solid(leftW, 0.18, 0.06, TRIM, left + leftW / 2, 0.09, front + 0.16);
+  solid(rightW, 0.18, 0.06, TRIM, right - rightW / 2, 0.09, front + 0.16);
   for (const sx of [left + 0.16, right - 0.16]) solid(0.06, 0.18, d, TRIM, sx, 0.09, z);
-  for (const bz of [back - 0.16, front + 0.16]) solid(w, 0.06, 0.05, '#3A2A20', x, 2.35, bz);
-  for (const sx of [left + 0.16, right - 0.16]) solid(0.05, 0.06, d, '#3A2A20', sx, 2.35, z);
+  // Picture rail, dropped to 2.22 so it passes UNDER both neon signs rather
+  // than cutting a 6 cm band across the middle of them.
+  solid(w, 0.06, 0.05, '#3A2A20', x, 2.22, back - 0.16);
+  solid(leftW, 0.06, 0.05, '#3A2A20', left + leftW / 2, 2.22, front + 0.16);
+  solid(rightW, 0.06, 0.05, '#3A2A20', right - rightW / 2, 2.22, front + 0.16);
+  for (const sx of [left + 0.16, right - 0.16]) solid(0.05, 0.06, d, '#3A2A20', sx, 2.22, z);
 
   // --- the neon, which is the first thing you see ---------------------------
   // Over the door on the inside, facing the room. A sign facing the street
   // would be a shop; facing in, it is somebody's front room.
-  quad(3.4, 1.06, neonTexture('KEVIN', { fg: '#FF3B4E' }), x, 2.72, front + 0.17);
-  quad(2.2, 0.69, neonTexture('KEK', { fg: '#3FD07A' }), left + 0.18, 2.6, 20.4, Math.PI / 2);
+  // 2.85 puts the bottom edge at 2.32, clear of the 2.22 rail, and the top at
+  // 3.38 just under the 3.4 ceiling.
+  quad(3.4, 1.06, neonTexture('KEVIN', { fg: '#FF3B4E' }), x, 2.85, front + 0.17);
+  quad(2.2, 0.69, neonTexture('KEK', { fg: '#3FD07A' }), left + 0.18, 2.78, 20.4, Math.PI / 2);
 
   // --- the card room, left end ---------------------------------------------
   const t = CRIB.table;
@@ -191,10 +217,15 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
     });
     solids.push({ x: cx, z: cz, r: 0.32 });
   }
-  fixture('chandelier', { x: t.x, z: t.z, width: 1.0, y: 2.25 }, () => {
+  const chan = { x: t.x, z: t.z, width: 1.0, y: 2.25 };
+  fixture('chandelier', chan, () => {
     solid(1.5, 0.30, 1.5, RED, t.x, 2.15, t.z);
-    solid(0.06, 0.8, 0.06, '#1A1A1A', t.x, 2.65, t.z);
   });
+  // A stem up to the ceiling. It hung with a 0.4 m gap above it and nothing
+  // holding it, which reads as a bug rather than a light. chan.top is where the
+  // model actually reaches once placed and scaled, not a guess at it.
+  const chanTop = chan.top ?? 2.95;
+  if (chanTop < h - 0.04) solid(0.05, h - chanTop, 0.05, '#1A1A1A', t.x, (chanTop + h) / 2, t.z);
   // One warm pool of light is the whole mood of a card room, and it survives
   // whether or not the chandelier model loaded.
   const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 3.0), flat(GOLD));
@@ -251,10 +282,15 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   fixture('desk-chair', { x: dk.x + 1.1, z: dk.z, width: 0.6, rotY: Math.PI / 2 }, () => {
     solid(0.5, 0.1, 0.5, '#26262C', dk.x + 1.1, 0.46, dk.z);
   });
+  // The shelf the upper monitors stand on, and the brackets holding it. The
+  // comment above promised a shelf and nobody built one, so three screens hung
+  // in mid-air.
+  solid(0.34, 0.05, 2.0, '#3A2A1C', dk.x + 0.18, 1.26, dk.z);
+  for (const bz of [dk.z - 0.8, dk.z + 0.8]) solid(0.06, 0.5, 0.06, '#3A2A1C', dk.x + 0.03, 1.0, bz);
   fixture('speaker-hifi', { x: dk.x + 0.3, z: dk.z - 1.15, width: 0.3 });
   fixture('laptop', { x: dk.x + 0.55, z: dk.z + 1.1, width: 0.38, y: 0.76, rotY: Math.PI / 2 });
   fixture('soda-cup', { x: dk.x + 0.9, z: dk.z - 0.5, width: 0.14, y: 0.76 });
-  blockers.push({ x0: dk.x - 0.4, x1: dk.x + 0.9, z0: dk.z - 1.3, z1: dk.z + 1.3 });
+  blockers.push({ x0: dk.x - 0.5, x1: dk.x + 0.95, z0: dk.z - 1.1, z1: dk.z + 1.1 });
 
   // --- living, right of the door -------------------------------------------
   fixture('rug', { x: -14.4, z: 17.6, width: 4.0 }, () => {
@@ -300,7 +336,8 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   solids.push({ x: -16.6, z: 20.2, r: 0.3 });
 
   // The shelf, and the trophies that say what he does all day.
-  fixture('bookcase', { x: -11.6, z: 20.9, width: 1.2, rotY: Math.PI }, () => {
+  const bc = { x: -11.6, z: 20.9, width: 1.2, rotY: Math.PI };
+  fixture('bookcase', bc, () => {
     solid(1.1, 1.8, 0.36, '#4A3524', -11.6, 0.9, 20.9);
   });
   fixture('books', { x: -11.6, z: 20.9, width: 0.85, y: 1.18, rotY: Math.PI });
@@ -309,9 +346,12 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   // author-time y cannot know that. It lives on the desk now, where a radio
   // belongs anyway and the surface height is one we set ourselves.
   fixture('radio', { x: dk.x + 0.72, z: dk.z - 0.95, width: 0.34, y: 0.76, rotY: Math.PI / 2 });
+  // ON the bookcase, at whatever height it turned out to be. A hardcoded 1.55
+  // put all four trophies inside the books.
+  const bcTop = bc.top ?? 1.8;
   for (let i = 0; i < 4; i++) {
     solid(0.13, 0.34, 0.13, ['#FFE500', '#E8232B', '#D8D2C4', '#FFE500'][i],
-      -12.0 + i * 0.22, 1.55, 20.85);
+      -12.0 + i * 0.22, bcTop + 0.17, 20.85);
   }
   blockers.push({ x0: -12.3, x1: -10.9, z0: 20.5, z1: 21.2 });
 
@@ -330,9 +370,15 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   // kit's neutral sit at the same value as the wall behind them, so without
   // these two bands the whole kitchen disappears and the microwave looks like
   // it is floating — which is exactly what it did.
-  quad(6.6, 1.1, signTexture([''], { bg: '#8E1F1A', fg: '#8E1F1A' }), -16.1, 1.42, back - 0.17);
-  solid(6.8, 0.09, 0.72, '#CFC6B0', -16.1, 0.92, KZ);              // worktop
-  solid(6.8, 0.1, 0.06, '#8A8272', -16.1, 0.86, KZ - 0.36);        // its front edge
+  // rotY PI, or the splashback faces +z into the back wall and is invisible
+  // from the only side anybody stands on.
+  quad(5.8, 1.1, signTexture([''], { bg: '#8E1F1A', fg: '#8E1F1A' }),
+    -16.7, 1.42, back - 0.17, Math.PI);
+  // Ends before the fridge. At 6.8 m centred on -16.1 the slab ran to -12.70 and
+  // the fridge stands at -13.68..-12.92, so the worktop was drawn straight
+  // through it.
+  solid(5.6, 0.09, 0.72, '#CFC6B0', -16.7, 0.92, KZ);              // worktop
+  solid(5.6, 0.1, 0.06, '#8A8272', -16.7, 0.86, KZ - 0.36);        // its front edge
   for (const [name, ux] of [['kitchen-cabinet', -17.6], ['kitchen-sink', -16.6],
                             ['kitchen-cabinet', -15.6], ['stove', -14.6]]) {
     fixture(name, { x: ux, z: KZ, width: 0.95, rotY: Math.PI }, () => {
@@ -350,8 +396,12 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   }
   // What is left on the counter, which is more characterful than the counter.
   fixture('tray-stack', { x: -18.6, z: KZ, width: 0.4, y: 0.92, rotY: Math.PI });
-  fixture('soda-cup', { x: -18.0, z: KZ - 0.1, width: 0.15, y: 0.92 });
-  fixture('soda-cup', { x: -16.9, z: KZ + 0.06, width: 0.15, y: 0.92, rotY: 0.8 });
+  // In the gaps between the things that already stand on the worktop — box at
+  // -19.3, trays at -18.6, coffee machine at -18.1, sink basin at -16.6,
+  // microwave at -15.6. Two earlier guesses put one cup inside the sink and the
+  // other inside the coffee machine.
+  fixture('soda-cup', { x: -17.3, z: KZ - 0.08, width: 0.15, y: 0.92 });
+  fixture('soda-cup', { x: -16.0, z: KZ + 0.06, width: 0.15, y: 0.92, rotY: 0.8 });
   fixture('box-closed', { x: -19.3, z: KZ, width: 0.5, y: 0.92, rotY: 0.2 });
   blockers.push({ x0: -19.6, x1: -12.9, z0: KZ - 0.42, z1: back });
 
@@ -419,9 +469,15 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   for (const [ax, ay, az, ry, lines, bg] of art) {
     const nx = Math.abs(ry) === Math.PI / 2 ? (ry > 0 ? 0.03 : -0.03) : 0;
     const nz = ry === 0 ? 0.03 : ry === Math.PI ? -0.03 : 0;
-    fixture('picture-frame', { x: ax + nx, z: az + nz, width: 0.98, y: ay, rotY: ry });
+    // opts.y is where the prop's BASE goes — spawnProp stands it on the floor
+    // and then lifts it — so passing the intended centre hung every frame half
+    // its own height too high, with the art quad floating at its bottom edge.
+    // Measure the frame, then centre the art on it.
+    const fr = { x: ax + nx, z: az + nz, width: 0.98, y: ay, rotY: ry };
+    fixture('picture-frame', fr);
+    const artY = fr.top ? (fr.top + ay) / 2 : ay;
     quad(0.82, 0.58, signTexture(lines, { bg, fg: '#FFE500', size: 62 }),
-      ax + nx * 2.6, ay, az + nz * 2.6, ry);
+      ax + nx * 2.6, artY, az + nz * 2.6, ry);
   }
 
   // --- collision -----------------------------------------------------------
