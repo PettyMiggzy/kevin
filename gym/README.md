@@ -66,10 +66,12 @@ in one costs nothing in the others:
   machine down one wall, a six-monitor trading desk running $KEVIN candles, a
   kitchen, a bed, and his own face framed on the walls with the contract
   address over the bed
-- **Kevin's Gym** (32 x 24, 907 meshes) — painted zones (a wooden lifting
+- **Kevin's Gym** (32 x 24, 877 meshes) — painted zones (a wooden lifting
   platform, a turf lane with metre marks, a cardio deck, a changing end), an
-  exposed steel truss with fifteen strip lights and banners, a boxing ring, a
-  reception with a stocked supplement counter, and a water station by the door
+  exposed steel truss with fifteen strip lights and banners, five ceiling lamps
+  that give the room zones you can tell apart across it, and a boxing ring in
+  the corner with the bags. Supplements and water are stalls on the street
+  outside now, not six metres of counter across the near end of the room
 - **McKevin's** (24 x 16, 293 meshes) — a restaurant you work a shift inside:
   kitchen line, counter with three tills, dining room, drive-thru window, and a
   car park with a pylon sign
@@ -84,7 +86,10 @@ in one costs nothing in the others:
   hands read as one
 - Kevin, whose body scales with a single muscle number, and who can be a
   billboard of Todd's hand-drawn walk cycles instead (`?sprite`)
-- Three stations: bench and dumbbells feed strength, treadmill feeds stamina
+- Six stations that work: bench, dumbbells, lat pulldown and squat rack feed
+  strength, treadmill and rower feed stamina — each with its own sweep speed and
+  timing window, so the heavy ones are slow and tight and the warm-up is quick
+  and forgiving
 - Exponential decay with a cap, a streak, and earnable freezes
 - **A shop with eighteen things in it**: three consumables, eight colourways,
   and seven skins cut out of the contract address itself

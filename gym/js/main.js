@@ -520,6 +520,40 @@ const STATIONS = [
     cam: { x: 3.4, y: 2.5, z: 2.6, at: 1.3 },
     lines: ['Cardio. Reluctantly.', 'I walk to work anyway.', 'This is my third shift today.'],
   },
+  // THREE MORE THAT WORK. The room had eighteen pieces of equipment and three
+  // of them did anything — you could walk up to a lat pulldown, a rower, a
+  // squat rack, a leg press or a pull-up rig and nothing happened at all, which
+  // makes the other fifteen read as wallpaper and the gym as a showroom.
+  //
+  // mount() rotates its offset by ry, so ry PI flips dz: a machine against the
+  // BACK wall needs a negative dz or the player is stood inside the wall.
+  {
+    id: 'pulldown', prop: 'lat-pulldown', label: 'Lat pulldown',
+    x: -0.6, z: -10.4, width: 2.0, rotY: 0,
+    stat: 'muscle', gain: 2.6, coin: 9,
+    sweep: 1.05, window: 0.140,
+    mount: { pose: 'pulldown', dx: 0, dz: -1.05, ry: Math.PI, seatY: -0.02 },
+    cam: { x: 2.6, y: 2.2, z: 4.2, at: 1.2 },
+    lines: ['Back day. Nobody sees it. I know it is there.', 'Wide grip. Wider dreams.', 'One more.'],
+  },
+  {
+    id: 'rower', prop: 'rowing-machine', label: 'Rowing machine',
+    x: 8.6, z: -2.6, width: 2.4, rotY: -Math.PI / 2,
+    stat: 'stamina', gain: 3.0, coin: 8,
+    sweep: 1.45, window: 0.150,
+    mount: { pose: 'row', dx: 0.10, dz: 0, ry: -Math.PI / 2, seatY: 0.10 },
+    cam: { x: 0.6, y: 2.2, z: 4.0, at: 1.1 },
+    lines: ['Rowing. To nowhere. Like everything.', 'Two thousand metres of storeroom.', 'Legs, back, arms. In that order.'],
+  },
+  {
+    id: 'squat', prop: 'squat-rack', label: 'Squat rack',
+    x: -9.0, z: -10.0, width: 2.6, rotY: 0,
+    stat: 'muscle', gain: 3.4, coin: 12,
+    sweep: 0.72, window: 0.105,          // the slowest and the tightest
+    mount: { pose: 'squat', dx: 0, dz: -0.78, ry: Math.PI, seatY: 0 },
+    cam: { x: 3.0, y: 2.3, z: 4.4, at: 1.15 },
+    lines: ['Legs. Everybody skips them. Not me.', 'That is the heavy one.', 'Ask me about my legs.'],
+  },
 ];
 
 // The room, laid out in zones the way a real gym is: free weights on the mat,
@@ -528,7 +562,6 @@ const STATIONS = [
 // showroom rather than somewhere people train.
 const SCENERY = [
   // --- free weights, back left on the platform -----------------------------
-  ['squat-rack', { x: -9.0, z: -10.0, width: 2.6, rotY: 0 }],
   ['squat-rack', { x: -4.4, z: -10.0, width: 2.6, rotY: 0 }],
   ['plate-tree', { x: -6.7, z: -10.2, width: 1.1, rotY: 0 }],
   ['plate-tree', { x: -11.4, z: -10.2, width: 1.1, rotY: 0 }],
@@ -543,7 +576,6 @@ const SCENERY = [
   ['medicine-ball', { x: -12.8, z: -0.1, width: 0.42, rotY: 1.1, solid: false }],
 
   // --- machines, along the back wall ---------------------------------------
-  ['lat-pulldown', { x: -0.6, z: -10.4, width: 2.0, rotY: 0 }],
   ['cable-machine', { x: 2.6, z: -10.4, width: 2.6, rotY: 0 }],
   ['leg-press', { x: 6.6, z: -10.0, width: 2.8, rotY: -0.3 }],
   ['lat-pulldown', { x: 10.8, z: -10.4, width: 2.0, rotY: 0.1 }],
@@ -552,10 +584,9 @@ const SCENERY = [
   // --- cardio, right side --------------------------------------------------
   ['treadmill', { x: 12.4, z: -1.6, width: 2.4, rotY: -Math.PI / 2 }],
   ['treadmill', { x: 12.4, z: 1.6, width: 2.4, rotY: -Math.PI / 2 }],
-  ['rowing-machine', { x: 8.6, z: -2.6, width: 2.4, rotY: -Math.PI / 2 }],
   ['rowing-machine', { x: 8.6, z: 0.4, width: 2.4, rotY: -Math.PI / 2 }],
-  ['punching-bag', { x: 14.2, z: 4.6, width: 1.2, rotY: 0 }],
-  ['punching-bag', { x: 14.2, z: 6.6, width: 1.2, rotY: 0 }],
+  ['punching-bag', { x: 15.0, z: 4.6, width: 1.2, rotY: 0 }],
+  ['punching-bag', { x: 15.0, z: 6.6, width: 1.2, rotY: 0 }],
 
   // --- changing end, left wall ---------------------------------------------
   ['locker', { x: -15.2, z: 2.0, width: 1.0, rotY: Math.PI / 2 }],
@@ -569,14 +600,16 @@ const SCENERY = [
   ['bucket', { x: -14.6, z: 9.6, width: 0.6, rotY: -0.3, solid: false }],
 
   // --- the water station, by the door --------------------------------------
-  ['water-cooler', { x: -6.6, z: 8.8, width: 0.85, rotY: 0 }],
-  ['water-cooler', { x: -5.4, z: 8.8, width: 0.85, rotY: 0 }],
+  ['water-cooler', { x: -14.8, z: 9.6, width: 0.85, rotY: Math.PI / 2 }],
   ['bucket', { x: -7.8, z: 9.2, width: 0.55, rotY: 0.4, solid: false }],
 
-  // --- reception and the supplement counter, right of the door -------------
-  ['protein-tub', { x: 7.4, z: 8.5, width: 0.55, rotY: 0.4, solid: false }],
-  ['protein-tub', { x: 8.1, z: 8.6, width: 0.5, rotY: -0.3, solid: false }],
-  ['protein-tub', { x: 8.8, z: 8.4, width: 0.52, rotY: 0.9, solid: false }],
+  // --- what people leave by the door ---------------------------------------
+  // The tubs used to stand on the supplement counter, which is a stall on the
+  // street now. Members bring their own, so they sit by the water cooler at the
+  // changing end instead of floating where the shop was.
+  ['protein-tub', { x: -13.9, z: 10.4, width: 0.55, rotY: 0.4, solid: false }],
+  ['protein-tub', { x: -13.3, z: 10.7, width: 0.5, rotY: -0.3, solid: false }],
+  ['protein-tub', { x: -12.7, z: 10.3, width: 0.52, rotY: 0.9, solid: false }],
   ['speaker', { x: 15.0, z: 9.4, width: 0.7, rotY: 0.7 }],
   ['speaker', { x: -15.2, z: -10.6, width: 0.7, rotY: -0.6 }],
   ['gym-clock', { x: -15.85, z: -6.0, width: 1.2, rotY: Math.PI / 2, y: 3.4, solid: false }],
@@ -587,15 +620,20 @@ const SCENERY = [
   // has none of the machines or the furniture — those stay Tripo's. normalise()
   // flattens both to the same toon material on load, which is the thing that
   // lets two sources read as one hand.
-  // MOVED off the cardio deck. At 9.6/1.6 the six-metre ring spanned x 6.9-12.3
-  // and z -1.4-4.6, which swallowed a rowing machine whole (overlap fraction
-  // 1.0, measured) and cut 1.07 m into a treadmill. It only ever looked right
-  // because place() was displacing it before the rotation-order fix; there is no
-  // "intended" position to restore, so this is chosen rather than reverted.
-  // -5.5/4.0 is bare floor — clear of the wood platform, the turf lane, the
-  // cardio deck and the changing end — and puts the ring where you see it on
-  // the way in, which is where a gym would put it.
-  ['boxing-ring', { x: -5.5, z: 4.0, width: 6.0, rotY: 0 }],
+  // MOVED TWICE. First off the cardio deck, where the six-metre ring swallowed a
+  // rowing machine whole and cut 1.07 m into a treadmill. Then off -5.5/4.0,
+  // which was bare floor and read fine standing still, but is the middle of the
+  // room: a 5.3 x 6.0 m solid parked between the door and the weights, close
+  // enough to the seated-press station that a player stood at the bench is
+  // 0.57 m outside the ring's own footprint. Every camera angle that swung
+  // toward it filled the frame with the inside of a boxing ring, and no
+  // stand-off distance existed that did not.
+  //
+  // 10.2/7.8 is the front-right corner beside the bags, which is the boxing
+  // corner these props came as. It clears the turf lane (x <= 6.9), the cardio
+  // deck (z <= -1), the changing end and the doorway (x -3..3), and it leaves
+  // the middle of the room as floor you can walk and film across.
+  ['boxing-ring', { x: 10.2, z: 7.8, width: 6.0, rotY: 0, solid: 'box' }],
   ['exercise-bike', { x: 14.4, z: 8.4, width: 1.6, rotY: -Math.PI / 2 }],
   ['dip-station', { x: -14.4, z: -6.0, width: 1.8, rotY: Math.PI / 2 }],
   ['incline-bench', { x: -5.0, z: -4.6, width: 1.8, rotY: 0.3 }],
@@ -894,6 +932,22 @@ function spawnPlayer(gridIndex, at) {
   // A new body is born in Classic Red. Dress it before anybody sees it, or a
   // world change or a crew swap silently undoes what the player bought.
   paintBody(body, skinRGB());
+  // A CONTACT SHADOW. There are no shadow maps in this game — a toon ramp
+  // already reads as one light source and shadow maps cost more on a phone than
+  // they add — so nothing anywhere touches the floor, and a character with
+  // nothing under him reads as a sticker on the room rather than someone in it.
+  // One soft disc, drawn under everything, is the whole of the fix.
+  const shade = new THREE.Mesh(
+    new THREE.CircleGeometry(0.46, 22),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.26, depthWrite: false })
+  );
+  shade.material.userData = { outlineParameters: { visible: false } };
+  shade.rotation.x = -Math.PI / 2;
+  shade.position.y = 0.045;
+  shade.renderOrder = -1;
+  body.group.add(shade);
+  body.shade = shade;
+
   // Facing (Y) has to compose with lying back (X), not fight it.
   body.group.rotation.order = 'YXZ';
   body.group.position.copy(at);
@@ -957,10 +1011,10 @@ const SPOTS = [
   { x: 3.6, z: -8.8, ry: 0, mode: 'press', label: 'cable' },
   { x: 3.4, z: 2.0, ry: Math.PI, mode: 'stretch', label: 'turf' },
   { x: 4.4, z: -1.0, ry: Math.PI, mode: 'curl', label: 'turf', gear: 'bells' },
-  { x: -6.0, z: 8.0, ry: Math.PI, mode: 'drink', label: 'water' },
+  { x: -4.8, z: 6.6, ry: Math.PI, mode: 'stretch', label: 'mat' },
   { x: -12.6, z: 6.0, ry: Math.PI / 2, mode: 'idle', label: 'lockers' },
-  { x: 8.6, z: 6.0, ry: 0, mode: 'idle', label: 'reception' },
-  { x: 14.0, z: 5.6, ry: -Math.PI / 2, mode: 'press', label: 'bag' },
+  { x: 5.4, z: 9.0, ry: Math.PI, mode: 'idle', label: 'floor' },
+  { x: 13.9, z: 5.6, ry: -Math.PI / 2, mode: 'punch', label: 'bag' },
 ];
 
 /**
@@ -1006,6 +1060,33 @@ function clearSpots() {
  * No pathfinding: the room is one rectangle and they walk in a straight line.
  * A* here would be engineering for a problem that does not exist.
  */
+/**
+ * How far a limb reaches from its own pivot, measured off the model.
+ *
+ * Every crew body is built from the same grid at the same unit, so this is the
+ * same number for all of them — worked out once, from the first one asked.
+ */
+let armReach = 0;
+function limbReach(limb) {
+  const v = new THREE.Vector3();
+  let far = 0;
+  limb.traverse((m) => {
+    if (!m.isMesh || !m.geometry) return;
+    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+    const bb = m.geometry.boundingBox;
+    for (const cx of [bb.min.x, bb.max.x]) {
+      for (const cy of [bb.min.y, bb.max.y]) {
+        for (const cz of [bb.min.z, bb.max.z]) {
+          v.set(cx, cy, cz);
+          for (let o = m; o && o !== limb; o = o.parent) { o.updateMatrix(); v.applyMatrix4(o.matrix); }
+          far = Math.max(far, v.length());
+        }
+      }
+    }
+  });
+  return far;
+}
+
 function makeNpc(grid, mat, startSpot) {
   const body = buildCrewBody(grid, { material: mat });
   body.group.rotation.order = 'YXZ';
@@ -1041,11 +1122,36 @@ function makeNpc(grid, mat, startSpot) {
     body.group.add(held[k]);
   }
 
+  // WHERE THE HANDS ACTUALLY ARE. Both weights were pinned to numbers typed
+  // next to the animation, and the press one was pinned to a number that RISES
+  // (1.62 -> 2.14) while the arms it is meant to be held by come DOWN (hands
+  // 1.67 -> 1.54). So the bar sailed up past the top of a head that measures
+  // 1.72 — which is exactly what "lifting with their heads" looks like. The
+  // dumbbells were closer but still 7cm low on a 0.42 arc against a 0.55 arm.
+  //
+  // An arm at rotation.x = th points along (0, -cos th, -sin th) from the
+  // shoulder, so the hand is one line of trigonometry and never wrong again.
+  if (!armReach) armReach = limbReach(body.arms[0]);
+  const shoulderY = body.legH + body.torsoH * 0.88;
+  const handAt = (th) => [shoulderY - armReach * Math.cos(th), -armReach * Math.sin(th)];
+
+  // Named, so a test can ask where the weights are rather than guess which of
+  // a body's children is one.
+  body.held = held;
+
+  // ONLY WHILE THEY ARE USING IT. Visibility used to be set the moment a spot
+  // was CLAIMED — which happens before the walk to it — so an NPC carried a
+  // barbell across the gym at a fixed height in front of their chest, at a
+  // position nothing updated until they arrived. Weights appear when the set
+  // starts and go away when it ends.
+  const showGear = (on) => {
+    for (const k of Object.keys(held)) held[k].visible = on && st.spot?.gear === k;
+  };
   const claim = (spot) => {
     if (st.spot) st.spot.taken = false;
     st.spot = spot;
     if (spot) spot.taken = true;
-    for (const k of Object.keys(held)) held[k].visible = spot?.gear === k;
+    showGear(false);
   };
   claim(startSpot);
   if (startSpot) {
@@ -1053,6 +1159,7 @@ function makeNpc(grid, mat, startSpot) {
     body.group.rotation.y = startSpot.ry;
     st.state = 'work';
     st.timer = 4 + Math.random() * 9;
+    showGear(true);
   }
 
   const pickSpot = () => {
@@ -1079,6 +1186,7 @@ function makeNpc(grid, mat, startSpot) {
     body.group.rotation.y = spot.ry;
     st.state = 'work';
     st.timer = 4 + Math.random() * 9;
+    showGear(true);
   };
 
   body.tick = (dt, now) => {
@@ -1104,6 +1212,7 @@ function makeNpc(grid, mat, startSpot) {
         st.state = 'work';
         st.timer = 5 + Math.random() * 11;
         rest();
+        showGear(true);
       } else {
         const step = Math.min(d, st.speed * dt);
         body.group.position.x += (dx / d) * step;
@@ -1122,16 +1231,29 @@ function makeNpc(grid, mat, startSpot) {
       const mode = st.spot?.mode ?? 'idle';
       if (mode === 'curl') {
         const p = Math.sin(t * 2.3) * 0.5 + 0.5;
-        for (const a of body.arms) a.rotation.x = -p * 1.55;
+        const th = -p * 1.55;
+        for (const a of body.arms) a.rotation.x = th;
         body.group.position.y = p * 0.025;
-        // The bells travel the arc the hands travel, or they hang in mid-air
-        // while he curls nothing.
-        held.bells.position.set(0, 1.05 - Math.cos(p * 1.55) * 0.42, 0.16 + Math.sin(p * 1.55) * 0.42);
+        const [hy, hz] = handAt(th);
+        held.bells.position.set(0, hy, hz);
       } else if (mode === 'press') {
+        // Arms come DOWN from vertical as p rises, so the bar comes down with
+        // them. It used to go the other way.
         const p = Math.sin(t * 1.8) * 0.5 + 0.5;
-        for (const a of body.arms) a.rotation.x = -Math.PI + p * 0.7;
+        const th = -Math.PI + p * 0.62;
+        for (const a of body.arms) a.rotation.x = th;
         body.torso.rotation.x = p * 0.07;
-        held.bar.position.set(0, 1.62 + p * 0.52, -0.05);
+        const [hy, hz] = handAt(th);
+        held.bar.position.set(0, hy, hz);
+      } else if (mode === 'punch') {
+        // At a punching bag, which is what is actually in front of this spot.
+        // It used to do an overhead press at it.
+        const p = Math.sin(t * 4.2);
+        const q = Math.sin(t * 4.2 + 1.9);
+        body.arms[0].rotation.x = -1.35 - Math.max(0, p) * 0.5;
+        body.arms[1].rotation.x = -1.35 - Math.max(0, q) * 0.5;
+        body.torso.rotation.y = p * 0.20;
+        body.group.position.y = Math.abs(p) * 0.02;
       } else if (mode === 'run') {
         const r = Math.sin(t * 7.5) * 1.0;
         body.legs[0].rotation.x = r;
@@ -1159,6 +1281,7 @@ function makeNpc(grid, mat, startSpot) {
         body.torso.rotation.set(0, 0, 0);
         body.head.rotation.set(0, 0, 0);
         rest();
+        showGear(false);
         const next = pickSpot();
         if (next) { claim(next); st.state = 'walk'; }
         else st.timer = 3 + Math.random() * 4;
@@ -1213,21 +1336,59 @@ const BODY = 0.34;                    // how wide anybody is, for collision
  * machine forever. Depth lets a move be allowed whenever it makes things
  * better, so there is always a way out of anything you end up in.
  */
-function depthAt(x, z) {
+function depthAt(x, z, m = BODY) {
   let worst = 0;
   for (const s of solids) {
-    const pen = (s.r + BODY) - Math.hypot(x - s.x, z - s.z);
+    const pen = (s.r + m) - Math.hypot(x - s.x, z - s.z);
     if (pen > worst) worst = pen;
   }
   for (const b of blockers) {
-    if (x > b.x0 - BODY && x < b.x1 + BODY && z > b.z0 - BODY && z < b.z1 + BODY) {
+    if (x > b.x0 - m && x < b.x1 + m && z > b.z0 - m && z < b.z1 + m) {
       // Shallowest way out of the box is the smallest of the four overlaps.
-      const pen = Math.min(x - (b.x0 - BODY), (b.x1 + BODY) - x,
-                           z - (b.z0 - BODY), (b.z1 + BODY) - z);
+      const pen = Math.min(x - (b.x0 - m), (b.x1 + m) - x,
+                           z - (b.z0 - m), (b.z1 + m) - z);
       if (pen > worst) worst = pen;
     }
   }
   return worst;
+}
+
+// How far behind the player the shot can actually get.
+//
+// A camera that can be turned is a camera that can be turned into a squat rack,
+// and the inside of a squat rack is an opaque grey wall across the whole frame.
+// Every prop already declares its footprint for the player to walk around, so
+// march the shot out along its own heading and stop it at the first thing it
+// would end up inside. CAM_R is deliberately smaller than BODY: the camera may
+// grate past a barbell the player would have to walk around.
+const CAM_R = 0.26;
+const CAM_MIN = 1.85;                 // closer than this and it is a hat cam
+const camClear = new Uint8Array(64);  // reused: this runs every frame
+function camReach(px, pz, sx, sz, want) {
+  const n = Math.min(63, Math.max(2, Math.ceil(want / 0.22)));
+  let hit = -1, shallow = 1, least = Infinity;
+  for (let i = 1; i <= n; i++) {
+    const t = (want * i) / n;
+    const d = depthAt(px + sx * t, pz + sz * t, CAM_R);
+    camClear[i] = d <= 0 ? 1 : 0;
+    if (!camClear[i] && hit < 0) hit = i;
+    // Keep the shallowest point in case none of them is clear.
+    if (t >= CAM_MIN && d < least) { least = d; shallow = i; }
+  }
+  if (hit < 0) return want;                             // clear all the way out
+  const pulled = (want * hit) / n - 0.28;
+  if (pulled >= CAM_MIN) return pulled;                 // room to duck in front
+  // NO ROOM IN FRONT. Stand off behind the obstacle instead — looking past a
+  // rack is a worse shot than clear air and a far better one than the inside of
+  // a rack, which is an opaque grey frame and the thing this exists to prevent.
+  for (let i = n; i > hit; i--) if (camClear[i]) return (want * i) / n;
+  // Nothing along this heading is clear at any distance. That is the player
+  // stood at a machine with his back to the wall, spinning the camera into it —
+  // there is no good answer, only a least-bad one, and it is NOT to hug his
+  // shoulder: at 0.8 m the back of his cap is the whole frame, which is worse
+  // than the machine. Take the shallowest point in the obstacle instead, the
+  // one nearest to seeing out of it, and never closer than a usable shot.
+  return Math.max(CAM_MIN, (want * shallow) / n);
 }
 
 const input = { f: 0, s: 0, turn: 0, act: false };
@@ -1398,11 +1559,31 @@ async function init() {
     window.__where = () => ({ x: kevin.group.position.x, z: kevin.group.position.z, near: nearest?.kind ?? null });
     window.__warp = (x, z) => kevin.group.position.set(x, 0, z);
     window.__scene = scene;
+    window.__THREE = THREE;          // ?peek only: so tooling can measure boxes
+    window.__solids = () => solids;  // ?peek only: the room's own footprints
+    // ?peek only: only the props that declared a box, not the building's walls,
+    // which the camera is meant to be able to press against.
+    window.__propBoxes = () => blockers.filter((b) => b.x1 - b.x0 < 12 && b.z1 - b.z0 < 12);
+    // ?peek only: the shot the chase camera has decided on this frame, before
+    // the ease. Under software rendering the ease takes seconds of wall clock,
+    // so asking the settled camera measures the lerp, not the decision.
+    window.__camAim = () => ({ x: +chase.ax.toFixed(2), z: +chase.az.toFixed(2), dist: +chase.hold.toFixed(2) });
     window.__state = state;          // ?peek only: lets a test buy something
     window.__kev = () => kevin;      // ?peek only: the real player, not a guess
     // ?peek only: renderer.info.memory is the only honest answer to "did that
     // leak" — mesh counts say nothing about buffers still held on the GPU.
     window.__renderer = renderer;
+    window.__cam = () => ({ x: +camera.position.x.toFixed(2), y: +camera.position.y.toFixed(2), z: +camera.position.z.toFixed(2), yaw: +chase.yaw.toFixed(2) });
+    window.__orbit = (y) => { chase.yaw = y; chase.manual = 9e9; };   // ?peek only
+    // ?peek only: how far inside a prop's footprint the camera is sitting.
+    // Zero for a shot in clear air, positive for one inside a machine. Pass a
+    // distance to ask the same of the shot the camera WOULD have taken, which
+    // is how the occlusion pull-in gets measured rather than asserted.
+    window.__camDepth = (d) => {
+      const px = d == null ? camera.position.x : kevin.group.position.x + Math.sin(chase.yaw) * d;
+      const pz = d == null ? camera.position.z : kevin.group.position.z + Math.cos(chase.yaw) * d;
+      return +depthAt(px, pz, CAM_R).toFixed(3);
+    };
     window.__bar = () => bar;        // ?peek only: the barbell, to check where it went
     // ?peek only: stand somewhere and look at something. __peek moves the chase
     // camera, which the crib does not have — it is first person, so the camera
@@ -1436,6 +1617,20 @@ const tmp = new THREE.Vector3();
 const aim = new THREE.Vector3();
 
 let shake = 0;
+/**
+ * THE CHASE CAMERA, which used to be one shot.
+ *
+ * It sat at the player's position plus a fixed (0, 3.4, 5.6) and looked at
+ * them — so the gym only ever had ONE angle. Everything along the back wall
+ * was seen from the same distance at the same three-quarter tilt for the whole
+ * session, the leaderboard hung across the top of the frame whenever you were
+ * near it, and anything between you and +z was simply in the way with no means
+ * of seeing round it.
+ *
+ * `yaw` is the direction FROM the player TO the camera, so 0 is the old shot.
+ * It trails behind wherever you are walking, and a drag takes it over.
+ */
+const chase = { yaw: 0, target: 0, lift: 0, manual: 0, dist: 4.7, hold: 4.7, ax: 0, az: 0 };
 /**
  * Milliseconds of ACTUAL PLAY, for the one part of the game that runs on a
  * clock rather than on frames.
@@ -1499,11 +1694,56 @@ function frame() {
     // Outside, pull back and up: there is a building to read, and the same
     // shot that frames a room nicely puts your nose against its front wall.
     const out = clamp((kevin.group.position.z - ROOM.d / 2) / 6, 0, 1);
+    // Hand the camera back after a drag, then let it settle behind whatever
+    // direction the player is actually walking. Turning to walk left should
+    // show you what is on your left, which is the whole point.
+    chase.manual = Math.max(0, chase.manual - dt);
+    if (!chase.manual) {
+      let d = ((chase.target - chase.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+      chase.yaw += d * (1 - Math.pow(0.22, dt));
+      chase.lift += (0 - chase.lift) * (1 - Math.pow(0.5, dt));
+    }
+    let want = chase.dist + out * 5.2;
+    const sx = Math.sin(chase.yaw), sz = Math.cos(chase.yaw);
+    // KEEP IT IN THE BUILDING, by shortening the shot rather than by shoving it
+    // sideways afterwards. From outside a room built of single-sided planes you
+    // see nothing at all — the screen simply goes black — but a camera clamped
+    // back to the wall arrives somewhere the heading never pointed, and lands
+    // inside whatever stands against that wall. Cutting the ray at the wall
+    // keeps the shot on its own line, and lets the occlusion march below have
+    // the final word about what is in it.
+    if (kevin.group.position.z <= ROOM.d / 2) {
+      const lim = (p, s, half) => (Math.abs(s) < 1e-4 ? Infinity : ((s > 0 ? half : -half) - p) / s);
+      want = Math.min(want,
+        lim(kevin.group.position.x, sx, ROOM.w / 2 - 0.9),
+        lim(kevin.group.position.z, sz, ROOM.d / 2 - 0.9));
+      // A wall is a hard limit, not a preference: floored at CAM_MIN this would
+      // put the shot back through it, which is the black frame all over again.
+      want = Math.max(want, 0.9);
+    }
+    // Snap in hard, ease back out: you must never be given a frame of the
+    // inside of a machine, but a shot that slams onto the back of his neck
+    // every time he walks past a doorway is worse than the thing it fixes.
+    // camReach's own floors are about a usable shot; `want` is about the room.
+    // The room wins.
+    const clear = Math.min(want, camReach(kevin.group.position.x, kevin.group.position.z, sx, sz, want));
+    chase.hold = clear < chase.hold ? clear : chase.hold + (clear - chase.hold) * (1 - Math.pow(0.05, dt));
+    const dist = chase.hold;
+    // Drop the camera as it comes in. Held at head height a close shot points
+    // down at his cap and shows the floor; coming down with the pull-in keeps
+    // it over the shoulder and keeps the room in frame.
+    const high = 1.42 + 1.43 * clamp(dist / Math.max(want, 0.001), 0, 1);
     tmp.set(
-      kevin.group.position.x,
-      kevin.group.position.y + 3.4 + out * 2.6,
-      kevin.group.position.z + 5.6 + out * 5.2
+      kevin.group.position.x + sx * dist,
+      kevin.group.position.y + high + out * 3.1 + chase.lift,
+      kevin.group.position.z + sz * dist
     );
+    // Only the ceiling is left to duck under; the walls were handled by the ray.
+    if (kevin.group.position.z <= ROOM.d / 2) tmp.y = Math.min(tmp.y, ROOM.h - 0.7);
+    tmp.y = Math.max(tmp.y, 1.15);
+    // Where the shot is heading, as opposed to where it has got to. Tooling has
+    // to be able to ask about the decision without waiting out the ease.
+    chase.ax = tmp.x; chase.az = tmp.z;
     camera.position.lerp(tmp, 1 - Math.pow(0.0015, dt));
     aim.set(kevin.group.position.x, kevin.group.position.y + lookY + out * 1.4, kevin.group.position.z);
   }
@@ -1521,71 +1761,24 @@ function frame() {
 }
 
 
-
 /**
- * The things a gym has that a weights room does not: somewhere to be signed in,
- * somewhere to buy a tub, and somewhere to fill a bottle. All boxes and painted
- * quads — furniture seen from a few metres, where a model costs megabytes to
- * look the same.
+ * What is left of the fittings: a stretching mat, so the middle of the floor is
+ * not dead.
+ *
+ * A reception desk and a water bay used to stand here too, across the whole
+ * near end of the room — 6.4 m of counter with three shelves of stock behind
+ * it, and a 3.6 m drinks bay opposite. Both are stalls on the street now (see
+ * MARKET in city.js), which is where you buy a drink anyway, and which gives
+ * the one world that is meant to be full of equipment back the floor they were
+ * standing on.
  */
 function buildFittings(scene) {
-  const flat = (color, map = null) => {
-    const m = toon(color, map ? { map } : {});
-    m.userData.outlineParameters = { visible: false };
-    return m;
-  };
-  const solid = (w, h, d, colour, x, y, z, map = null, rotY = 0) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), flat(colour, map));
-    m.position.set(x, y, z);
-    m.rotation.y = rotY;
-    scene.add(m);
-    return m;
-  };
-  const quad = (w, h, map, x, y, z, rotY = 0) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), flat('#FFFFFF', map));
-    m.position.set(x, y, z);
-    m.rotation.y = rotY;
-    scene.add(m);
-    return m;
-  };
-
-  // --- reception, right of the door ----------------------------------------
-  solid(6.4, 1.06, 1.0, '#C7382F', 8.6, 0.53, 7.6);              // desk
-  solid(6.6, 0.12, 1.2, '#1C1C1C', 8.6, 1.12, 7.6);              // its top
-  solid(6.0, 2.4, 0.3, '#E8DFD0', 8.6, 1.2, 10.4);               // back board
-  quad(5.0, 1.1, signTexture(['RECEPTION', 'SIGN IN, THEN SUFFER'],
-    { bg: '#0B0B0B', fg: '#FFE500' }), 8.6, 2.55, 10.24);
-  // Shelves of stock behind it, so the counter has something to sell.
-  for (let i = 0; i < 3; i++) {
-    solid(5.2, 0.09, 0.42, '#8A6A4A', 8.6, 1.7 + i * 0.62, 10.0);
-    for (let j = 0; j < 7; j++) {
-      solid(0.34, 0.44, 0.3, ['#E8232B', '#FFE500', '#2F8F45', '#6B4BC4'][(i + j) % 4],
-        6.3 + j * 0.78, 1.96 + i * 0.62, 10.0);
-    }
-  }
-
-  // --- the water station, left of the door ---------------------------------
-  solid(3.4, 0.16, 0.9, '#B9C7D0', -6.0, 0.9, 9.5);              // shelf
-  solid(0.16, 0.9, 0.9, '#B9C7D0', -7.6, 0.45, 9.5);
-  solid(0.16, 0.9, 0.9, '#B9C7D0', -4.4, 0.45, 9.5);
-  solid(3.6, 1.9, 0.24, '#DCE6EC', -6.0, 1.6, 10.15);
-  quad(3.0, 0.72, signTexture(['WATER', 'DRINK IT'],
-    { bg: '#1E4E6B', fg: '#CFEAF7' }), -6.0, 1.9, 10.02);
-  for (let i = 0; i < 5; i++) {
-    solid(0.2, 0.5, 0.2, '#7FD4F0', -7.2 + i * 0.6, 1.24, 9.4);  // bottles
-  }
-
-  // --- a stretching mat, so the middle of the floor is not dead ------------
-  const mat2 = new THREE.Mesh(new THREE.PlaneGeometry(7.0, 5.0), flat('#2F6E4E'));
+  const m = toon('#2F6E4E');
+  m.userData.outlineParameters = { visible: false };
+  const mat2 = new THREE.Mesh(new THREE.PlaneGeometry(7.0, 5.0), m);
   mat2.rotation.x = -Math.PI / 2;
   mat2.position.set(4.0, 0.03, 3.2);
   scene.add(mat2);
-
-  blockers.push(
-    { x0: 5.3, x1: 11.9, z0: 7.0, z1: 8.2 },      // the desk
-    { x0: 5.5, x1: 11.7, z0: 10.1, z1: 10.7 },    // the back board
-    { x0: -7.8, x1: -4.2, z0: 9.1, z1: 10.4 },    // the water station
-  );
 }
 
 /**
@@ -1664,7 +1857,15 @@ function spawnProp(name, opts, tag) {
   place(obj, opts);
   if (opts.y) obj.position.y += opts.y;
   scene.add(obj);
-  if (opts.solid !== false) {
+  if (opts.solid === 'box') {
+    // A circle is a bad fit for anything much wider than it is deep, and a
+    // terrible one for a square: the inscribed circle of the six-metre boxing
+    // ring misses its corners by 1.7 m, so both the player and the camera could
+    // stand inside the ring while the collider said open floor. Props that
+    // declare `solid: 'box'` get their measured footprint instead.
+    const b = new THREE.Box3().setFromObject(obj);
+    blockers.push({ x0: b.min.x, x1: b.max.x, z0: b.min.z, z1: b.max.z });
+  } else if (opts.solid !== false) {
     // A natural-scale prop has no declared width to take a radius from, so ask
     // the model how wide it turned out.
     const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
@@ -1737,6 +1938,7 @@ async function buildGymWorld() {
     supplements: ['Supplement stall', 'spend $KEVIN', 'Shop'],
     crew: ["Kevin's Crew", 'have a look', 'Look'],
     produce: ['Fresh produce', 'closed, obviously', ''],
+    water: ['Water stall', 'spend $KEVIN', 'Shop'],
   };
   for (const st of MARKET) {
     const [label, note, act] = stallLabel[st.id];
@@ -1744,14 +1946,13 @@ async function buildGymWorld() {
     places.push({ kind: st.id === 'crew' ? 'nft' : 'shop', label, note, act,
       x: st.x, z: st.z - 1.2 });
   }
-  places.push({ kind: 'shop', label: 'Reception', note: 'supplements',
-    act: 'Shop', x: 8.6, z: 6.4 });
+
   // Both ways off the forecourt, so the street is walkable rather than a menu.
   places.push({ kind: 'door', to: 'crib', label: 'Home', note: "Kevin's crib",
     act: 'Home', x: -YARD.x + 3.0, z: YARD.z - 4.0 });
   places.push({ kind: 'door', to: 'work', label: "McKevin's", note: 'down the road',
     act: 'Go', x: YARD.x - 3.0, z: YARD.z - 4.0 });
-  return { fp: false, spawn: { x: 0, z: 15.5 } };
+  return { fp: false, spawn: { x: 0, z: 15.5 }, mood: 'gym' };
 }
 
 /**
@@ -1817,6 +2018,24 @@ const MOODS = {
     key: ['#FFF4DA', 1.65],
     fill: ['#FFC98A', 0.55],
     points: [],
+  },
+  // The gym, which is a room AND the street outside it in one world — so the
+  // sky stays the sky and the interior gets lamps of its own instead. A 32 by
+  // 24 hall lit only by a directional sun has no light in it anywhere: every
+  // surface takes the same value, so the equipment along the back wall reads
+  // as a flat frieze and the floor as one grey sheet. Five ceiling lamps give
+  // it zones you can tell apart from across the room.
+  gym: {
+    hemi: ['#EAF2FF', '#6E6354', 1.34],
+    key: ['#FFF4DA', 1.50],
+    fill: ['#FFC98A', 0.55],
+    points: [
+      ['#FFF0D2', 5.20, 15.0, -8.0, 4.30, -7.5, 1],   // the platform
+      ['#FFF0D2', 5.20, 15.0, 4.0, 4.30, -9.0, 1],    // the machine wall
+      ['#EAF4FF', 4.60, 14.0, 11.0, 4.30, -2.0, 1],   // cardio
+      ['#FFF0D2', 4.60, 14.0, 1.0, 4.30, 3.0, 1],     // the mat
+      ['#EAF4FF', 3.60, 12.0, -13.0, 4.30, 5.0, 1],   // the changing end
+    ],
   },
   // The flat. Almost no sky, a weak warm ceiling wash, and then the room is lit
   // by the things in it: the chandelier over the felt, the monitors, the floor
@@ -1884,6 +2103,9 @@ async function setWorld(id, at = null) {
   solids.length = 0;
   blockers.length = 0;
   places.length = 0;
+  // A shot pulled in against a machine in the last room would otherwise arrive
+  // in the next one still pinned to the back of his head.
+  chase.hold = chase.dist;
   for (const n of npcs) n.group.removeFromParent();
   npcs.length = 0;
   // SPOTS outlives the world. Leave the flags set and the next visit finds
@@ -1956,8 +2178,18 @@ async function travel(id, at = null) {
  * to work in a Telegram browser on a phone before it has to feel like Quake.
  */
 function lookBy(dx, dy) {
-  look.yaw -= dx * 0.0042;
-  look.pitch = clamp(look.pitch - dy * 0.0034, -0.9, 0.55);
+  if (firstPerson) {
+    look.yaw -= dx * 0.0042;
+    look.pitch = clamp(look.pitch - dy * 0.0034, -0.9, 0.55);
+    return;
+  }
+  // Outside first person the same drag swings the chase camera round the
+  // player instead. Touching it hands control over for a few seconds — long
+  // enough to look at the thing you turned to look at — after which it drifts
+  // back to trailing whichever way you are walking.
+  chase.yaw -= dx * 0.0060;
+  chase.lift = clamp(chase.lift - dy * 0.0075, -0.7, 1.9);
+  chase.manual = 3.2;
 }
 
 // --- the set ----------------------------------------------------------------
@@ -1989,6 +2221,33 @@ function tickSet(dt, now) {
     kevin.legs[0].rotation.x = run;
     kevin.legs[1].rotation.x = -run;
     for (const a of kevin.arms) a.rotation.x = -0.5 - run * 0.35;
+  } else if (pose === 'pulldown') {
+    // Seated, pulling a bar down from overhead to the collarbone. p 0 is arms
+    // out straight, p 1 is the bar at the chest.
+    for (const l of kevin.legs) l.rotation.x = -Math.PI / 2;
+    for (const a of kevin.arms) a.rotation.x = -Math.PI + p * 0.95;
+    kevin.torso.rotation.x = -p * 0.10;
+    const reach = kevin.legH + kevin.torsoH * 0.94;
+    bar.position.set(0, reach + 0.62 - p * 0.62, 0.10);
+    bar.rotation.set(0, 0, 0);
+  } else if (pose === 'row') {
+    // Seated with the legs out, hauling the handle back to the ribs and
+    // leaning with it. No bar: a rower's handle is part of the machine.
+    for (const l of kevin.legs) l.rotation.x = -Math.PI / 2 - p * 0.30;
+    for (const a of kevin.arms) a.rotation.x = -1.55 + p * 1.20;
+    kevin.torso.rotation.x = -0.18 + p * 0.34;
+  } else if (pose === 'squat') {
+    // Standing under the bar, which sits on the shoulders and travels with the
+    // hips. The legs are single limbs with no knee, so the squat is the whole
+    // body dropping while the thighs swing — which is what a knee looks like
+    // from the outside at this scale.
+    kevin.group.position.y = (st.mount.seatY ?? 0) - p * 0.34;
+    for (const l of kevin.legs) l.rotation.x = p * 0.42;
+    for (const a of kevin.arms) a.rotation.x = -Math.PI + 0.55;
+    kevin.torso.rotation.x = p * 0.20;
+    const reach = kevin.legH + kevin.torsoH * 0.94;
+    bar.position.set(0, reach + 0.10, -0.08);
+    bar.rotation.set(0, 0, 0);
   } else {
     for (const a of kevin.arms) a.rotation.x = -0.15 - p * 1.55;
     kevin.torso.rotation.x = p * 0.06;
@@ -2069,14 +2328,14 @@ function mount(st) {
 
   kevin.group.position.y = m.seatY ?? 0;
 
-  if (m.pose === 'seated') {
+  if (m.pose === 'seated' || m.pose === 'pulldown' || m.pose === 'squat') {
     // Sitting on the end of the bench: thighs forward, bar overhead. The legs
     // are single limbs, so rotating them at the hip is the whole of "seated" —
     // there is no knee to bend and none is needed.
-    for (const l of kevin.legs) l.rotation.x = -Math.PI / 2;
+    if (m.pose !== 'squat') for (const l of kevin.legs) l.rotation.x = -Math.PI / 2;
     bar.visible = true;
     bells.forEach((bl) => { bl.visible = false; });
-  } else if (m.pose === 'run') {
+  } else if (m.pose === 'run' || m.pose === 'row') {
     bar.visible = false;
     bells.forEach((b) => { b.visible = false; });
   } else {
@@ -2172,17 +2431,20 @@ function move(dt, now) {
   if (input.turn) look.yaw += input.turn * 1.9 * dt;
   const len = Math.hypot(input.f, input.s);
   if (len > 0.02) {
-    let nx = (input.s / len) * SPEED * dt;
-    let nz = (-input.f / len) * SPEED * dt;
-    if (firstPerson) {
-      // Forward is where you are facing, not where the world's -z happens to
-      // be. Without this, turning around makes W walk you backwards.
-      const sin = Math.sin(look.yaw), cos = Math.cos(look.yaw);
-      const f = (input.f / len) * SPEED * dt;
-      const r = (input.s / len) * SPEED * dt;
-      nx = f * sin + r * cos;
-      nz = f * cos - r * sin;
-    }
+    let nx, nz;
+    // FORWARD IS AWAY FROM THE CAMERA, in both modes. In first person that is
+    // where you are looking; behind a chase camera that can now turn, it is
+    // whichever way the camera is facing — otherwise swinging the camera round
+    // leaves W walking toward a -z the player can no longer see, which is the
+    // thing that makes an orbit camera feel broken rather than useful.
+    const camYaw = firstPerson ? look.yaw : chase.yaw + Math.PI;
+    const sin = Math.sin(camYaw), cos = Math.cos(camYaw);
+    const f = (input.f / len) * SPEED * dt;
+    const r = (input.s / len) * SPEED * dt;
+    nx = f * sin + r * cos;
+    nz = f * cos - r * sin;
+    // And the camera trails behind wherever that took you.
+    if (!firstPerson) chase.target = Math.atan2(-nx, -nz);
     const p = kevin.group.position;
     // Each world holds you differently, so the crib does not get the street's
     // limits and vice versa.
@@ -2974,7 +3236,7 @@ if (matchMedia('(pointer:coarse)').matches) document.body.classList.add('touch')
 let lookId = null;
 let lookAt = null;
 canvas.addEventListener('pointerdown', (e) => {
-  if (!firstPerson || lookId !== null) return;
+  if (lookId !== null) return;
   lookId = e.pointerId;
   lookAt = { x: e.clientX, y: e.clientY };
   canvas.setPointerCapture(e.pointerId);

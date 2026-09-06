@@ -21,6 +21,12 @@ export const MARKET = [
   { id: 'supplements', x: -10.6, z: 15.4, title: 'SUPPS', sub: 'GAINS, BOTTLED', bg: '#0B0B0B', fg: '#FFE500', awning: ['#E8232B', '#FFF6C8'] },
   { id: 'crew', x: -6.6, z: 15.4, title: "KEVIN'S CREW", sub: '32x32, ON CHAIN', bg: '#1B1030', fg: '#9E7BFF', awning: ['#6B4BC4', '#FFF6C8'] },
   { id: 'produce', x: -2.6, z: 15.4, title: 'FRESH', sub: 'MOSTLY', bg: '#123B1F', fg: '#7BE08A', awning: ['#2F8F45', '#FFF6C8'] },
+  // OUT HERE, NOT IN THERE. Supplements were sold from a reception desk and
+  // water from a shelf, both inside the gym, taking up the whole width of the
+  // room's near end — six metres of counter and a drinks bay standing between
+  // the door and the equipment, in the one world that is meant to be full of
+  // equipment. A stall on the street is where you buy a drink anyway.
+  { id: 'water', x: 1.4, z: 15.4, title: 'WATER', sub: 'DRINK IT', bg: '#1E4E6B', fg: '#CFEAF7', awning: ['#4AA3FF', '#FFF6C8'] },
 ];
 
 /** The fry house, and the counter you clock in at. */
@@ -153,11 +159,18 @@ export function buildLeaderboard(scene, { flat }) {
     new THREE.PlaneGeometry(5.0, 3.33),
     flat('#FFFFFF', leaderTexture([], { note: '' }))
   );
-  m.position.set(0, 3.15, -6.86);
+  // ON THE BACK WALL, which is what main.js has called it since it was written.
+  // It hung at z -6.86 — five metres out into the room, a 5.3m panel floating
+  // in mid air at head height with a gap behind it — so it cut across the top
+  // of the frame from half the floor, and the moment the chase camera could
+  // turn, orbiting behind the player put the camera behind the BOARD and the
+  // screen went black. The wall is at -12; the machines in front of it top out
+  // around 1.8, so 3.15 clears them.
+  m.position.set(0, 3.15, -11.78);
   scene.add(m);
   // A frame, so it is mounted rather than floating.
   const frame = new THREE.Mesh(new THREE.BoxGeometry(5.3, 3.63, 0.12), flat('#2A2A32'));
-  frame.position.set(0, 3.15, -6.94);
+  frame.position.set(0, 3.15, -11.86);
   scene.add(frame);
   return m;
 }

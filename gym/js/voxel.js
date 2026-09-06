@@ -140,6 +140,22 @@ export function buildCrewBody(grid, { unit = 0.027, material } = {}) {
   const traits = grid.traits || {};
   const hood = traits.hood || '#E8232B';
   const shirt = traits.shirtColor || '#E8232B';
+  // SKIN IS NOT THE CREW COLOUR. It was, and the result is a person who reads
+  // as one solid lozenge from more than three metres: the head is extruded from
+  // the grid and filled with the hood colour, and the torso, shoulders, lats,
+  // neck and both arms were the same hood colour again, so head and body ran
+  // together into a single coloured block on black legs. Every bit of muscle
+  // built underneath was invisible because nothing had an edge.
+  //
+  // Kevin's own cream is what separates his arms from his hoodie, and it does
+  // the same job here: arms and neck in skin, the torso shell left in the crew
+  // colour so you can still tell a Green from a Grey across the room, and its
+  // pecs, delts and lats lifted further off it so the muscle has an edge of its
+  // own. The colour is looked up in the character's own palette first — most
+  // crews carry the muzzle cream — and only falls back to the brand tone.
+  const CREAM = '#F2E4C4';
+  const pal = grid.palette || [];
+  const skin = pal.find((c) => /^#(fff6c8|ded6ae|f2e4c4)$/i.test(c)) || CREAM;
 
   // Rows 0-23 are head and hair; 24-31 are the shoulders the avatar draws,
   // which the 3D body replaces with something that can actually move.
@@ -203,7 +219,7 @@ export function buildCrewBody(grid, { unit = 0.027, material } = {}) {
   // geometry there is nothing on the body for growth to show up ON.
   const pecs = [];
   for (const sx of [-1, 1]) {
-    const pec = box(unit * 6.4, torsoH * 0.26, unit * 1.1, light(hood, 0.07), mat);
+    const pec = box(unit * 6.4, torsoH * 0.26, unit * 1.1, light(hood, 0.14), mat);
     pec.position.set(sx * unit * 3.5, torsoH * 0.80, unit * 4.0);
     torso.add(pec);
     pecs.push(pec);
@@ -227,7 +243,7 @@ export function buildCrewBody(grid, { unit = 0.027, material } = {}) {
 
   const delts = [];
   for (const sx of [-1, 1]) {
-    const d = box(unit * 4.6, unit * 4.6, unit * 7.4, hood, mat);
+    const d = box(unit * 4.6, unit * 4.6, unit * 7.4, light(hood, 0.10), mat);
     d.position.set(sx * unit * 7.4, torsoH * 0.94, 0);
     torso.add(d);
     delts.push(d);
@@ -242,7 +258,7 @@ export function buildCrewBody(grid, { unit = 0.027, material } = {}) {
     lats.push(l);
   }
 
-  const neck = box(unit * 5.2, unit * 2.6, unit * 5.2, hood, mat);
+  const neck = box(unit * 5.2, unit * 2.6, unit * 5.2, skin, mat);
   neck.position.y = torsoH * 1.02;
   torso.add(neck);
 
@@ -255,14 +271,14 @@ export function buildCrewBody(grid, { unit = 0.027, material } = {}) {
     const arm = new THREE.Group();
     arm.position.set(sx * unit * 9.4, legH + torsoH * 0.94, 0);
     // Bare, and split at the elbow so the upper arm can outgrow the forearm.
-    const bicep = box(unit * 4.4, armH * 0.56, unit * 5.2, hood, mat);
+    const bicep = box(unit * 4.4, armH * 0.56, unit * 5.2, skin, mat);
     bicep.position.y = -armH * 0.28;
     arm.add(bicep);
     // A peak on top of the bicep — the bit people actually flex.
-    const peak = box(unit * 3.6, armH * 0.16, unit * 4.2, light(hood, 0.16), mat);
+    const peak = box(unit * 3.6, armH * 0.16, unit * 4.2, light(skin, 0.20), mat);
     peak.position.y = -armH * 0.16;
     arm.add(peak);
-    const fore = box(unit * 3.6, armH * 0.44, unit * 4.4, hood, mat);
+    const fore = box(unit * 3.6, armH * 0.44, unit * 4.4, skin, mat);
     fore.position.y = -armH * 0.78;
     arm.add(fore);
     const hand = box(unit * 4.8, unit * 3.6, unit * 4.8, '#FFFFFF', mat);
