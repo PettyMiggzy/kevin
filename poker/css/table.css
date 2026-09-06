@@ -14,7 +14,17 @@ body{background:#12100E;color:var(--cream);font-family:var(--body);min-height:10
 h1{font-family:var(--display);font-size:26px;letter-spacing:1px;color:var(--brand)}
 h1 span{color:var(--red)}
 
-#room{position:relative;width:min(96vw,980px);aspect-ratio:16/10}
+/* ONE UNIT IS ONE PERCENT OF THE TABLE'S OWN WIDTH.
+   Everything on the felt used to be sized in fixed pixels — a 132px seat, a
+   58x82 card — while the table itself was min(96vw,980px). On a 390px phone
+   that is a 374px table trying to hold six 132px seats: the left and right
+   pairs hung off both edges of the screen (measured at -7px and +367px on a
+   360px viewport, with horizontal scroll), every seat's cards covered the
+   board, and your own hand sat on top of the FOLD button. The floor keeps it
+   legible rather than letting it shrink to nothing; the cap is the size it has
+   always been on a desktop, so nothing above 1020px moves at all. */
+#room{position:relative;width:min(96vw,980px);aspect-ratio:16/10;
+  --u:max(5.4px,min(0.96vw,9.8px))}
 #felt{position:absolute;inset:0;border-radius:48% / 42%;
   background:radial-gradient(ellipse at 50% 40%,var(--felt) 0%,var(--felt-dark) 78%);
   border:14px solid var(--rail);box-shadow:0 0 0 3px var(--ink),inset 0 0 60px rgba(0,0,0,.45),0 18px 40px rgba(0,0,0,.5)}
@@ -23,18 +33,19 @@ h1 span{color:var(--red)}
 #pot{position:absolute;left:50%;top:64%;transform:translateX(-50%);font-weight:700;
   background:rgba(0,0,0,.42);border:2px solid var(--ink);border-radius:999px;padding:5px 16px;white-space:nowrap}
 
-.card{width:58px;height:82px;border-radius:7px;background:#FFF;color:#111;border:2px solid var(--ink);
+.card{width:calc(var(--u)*5.92);height:calc(var(--u)*8.37);border-radius:7px;background:#FFF;color:#111;
+  border:2px solid var(--ink);
   display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;line-height:1;
-  font-size:20px;box-shadow:0 3px 0 rgba(0,0,0,.35)}
-.card.small{width:40px;height:57px;font-size:15px;border-radius:5px}
-.card .suit{font-size:19px;margin-top:2px}
+  font-size:calc(var(--u)*2.04);box-shadow:0 3px 0 rgba(0,0,0,.35)}
+.card.small{width:calc(var(--u)*4.08);height:calc(var(--u)*5.82);font-size:calc(var(--u)*1.53);border-radius:5px}
+.card .suit{font-size:calc(var(--u)*1.94);margin-top:2px}
 .card.small .suit{font-size:14px}
 .card.red{color:#C4162B}
 .card.back{background:repeating-linear-gradient(45deg,var(--red) 0 7px,#B0141B 7px 14px);color:transparent}
 .card.muck{opacity:.32;filter:grayscale(1)}
 
-.seat{position:absolute;width:132px;transform:translate(-50%,-50%);text-align:center}
-.seat .pic{width:78px;height:78px;margin:0 auto;border-radius:50%;background:rgba(0,0,0,.3);
+.seat{position:absolute;width:calc(var(--u)*13.5);transform:translate(-50%,-50%);text-align:center}
+.seat .pic{width:calc(var(--u)*7.96);height:calc(var(--u)*7.96);margin:0 auto;border-radius:50%;background:rgba(0,0,0,.3);
   border:3px solid var(--ink);overflow:hidden;display:flex;align-items:flex-end;justify-content:center}
 .seat .pic canvas,.seat .pic img,.seat .pic video{width:100%;height:100%;object-fit:contain;object-position:bottom}
 /* The live clip sits over the still, so there is no gap while it buffers and
@@ -42,13 +53,13 @@ h1 span{color:var(--red)}
 .seat .pic video{position:absolute;inset:0}
 .seat .pic{position:relative;overflow:hidden}
 .seat .pic.live img{visibility:hidden}
-.seat .name{font-size:12px;font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.seat .chips{font-size:12px;color:var(--brand)}
+.seat .name{font-size:calc(var(--u)*1.23);font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seat .chips{font-size:calc(var(--u)*1.23);color:var(--brand)}
 .seat .hole{display:flex;gap:4px;justify-content:center;margin-top:4px}
 .seat.turn .pic{border-color:var(--brand);box-shadow:0 0 0 4px rgba(255,229,0,.28)}
 .seat.folded{opacity:.4}
-.seat .tag{font-size:10px;letter-spacing:.5px;color:#9FE3BE;min-height:13px}
-.seat .bet{position:absolute;left:50%;transform:translateX(-50%);top:-16px;font-size:11px;font-weight:700;
+.seat .tag{font-size:calc(var(--u)*1.02);letter-spacing:.5px;color:#9FE3BE;min-height:13px}
+.seat .bet{position:absolute;left:50%;transform:translateX(-50%);top:-16px;font-size:calc(var(--u)*1.12);font-weight:700;
   background:var(--brand);color:var(--ink);border:2px solid var(--ink);border-radius:999px;padding:1px 8px}
 .dealer{position:absolute;right:-4px;top:-4px;width:22px;height:22px;border-radius:50%;background:#FFF;color:#111;
   border:2px solid var(--ink);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
@@ -70,3 +81,16 @@ input[type=range]{width:190px;accent-color:var(--brand)}
 #log div:last-child{color:var(--brand)}
 .hint{font-size:12px;opacity:.65;text-align:center;max-width:640px}
 a{color:var(--brand)}
+
+/* --- narrow screens --------------------------------------------------------
+   Six seats round an oval need height more than width once the width is gone,
+   and a square table brings the bottom seat 75px from the pot instead of 122 —
+   a seat is 110px tall, so the readout ended up under your own portrait. These
+   are the same selectors as above at the same specificity, so they have to sit
+   at the END of the file: written next to #room they lost to the base rules
+   further down and nothing moved. */
+@media (max-width:620px){
+  #room{aspect-ratio:1/1}
+  #pot{top:57%}
+  #board{top:40%}
+}

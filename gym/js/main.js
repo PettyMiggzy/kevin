@@ -2624,6 +2624,17 @@ function openCards() {
     $('#cardsBody').append(cardsFrame);
   }
   $('#cards').classList.add('on');
+  // Six seats are six looping videos. They keep decoding while the panel is
+  // hidden — the frame is deliberately kept alive so sitting down again is
+  // instant — so they are stopped on the way out and started again here.
+  frameVideos((v) => v.play().catch(() => {}));
+}
+
+/** Do something to every video inside the card room, if it has loaded one. */
+function frameVideos(fn) {
+  try {
+    for (const v of cardsFrame?.contentDocument?.querySelectorAll('video') ?? []) fn(v);
+  } catch { /* not same-origin, or not loaded yet: nothing to do */ }
 }
 
 function openMap() {
@@ -3168,7 +3179,16 @@ $('#shopBtn').onclick = () => {
 };
 $('#closeShop').onclick = () => { play('ui'); $('#shop').classList.remove('on'); };
 $('#closeNft').onclick = () => { play('ui'); $('#nft').classList.remove('on'); };
-$('#closeCards').onclick = () => { play('ui'); $('#cards').classList.remove('on'); };
+$('#closeCards').onclick = () => {
+  play('ui');
+  $('#cards').classList.remove('on');
+  // The frame stays loaded on purpose — reloading /poker would cost the hand
+  // you were in the middle of — but a hidden page is not a stopped one, and
+  // six looping character videos decoding behind a 3D scene is the kind of
+  // thing that turns a phone warm and halves the frame rate of the room you
+  // just walked back into.
+  frameVideos((v) => v.pause());
+};
 $('#closeMap').onclick = () => { play('ui'); $('#map').classList.remove('on'); };
 $('#worldBtn').onclick = () => openMap();
 for (const b of document.querySelectorAll('#map .worlds button')) {
