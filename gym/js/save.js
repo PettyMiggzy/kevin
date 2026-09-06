@@ -81,10 +81,39 @@ export function load() {
   } catch {
     s = fresh();
   }
+  // EVERY number, not just lastSeen. localStorage is editable by the person
+  // playing, and a save written by any earlier build can carry anything — so
+  // this is the boundary where an untrusted blob becomes state the rest of the
+  // game may assume is numeric.
+  //
+  // The failure this prevents is permanent, which is why it is worth the loop.
+  // settle() does arithmetic on muscle, stamina and lastSeen; one NaN anywhere
+  // in that chain makes muscle, stamina, lost and days ALL NaN, and save() then
+  // writes the NaN back. Measured before this existed:
+  //
+  //     muscle = NaN            -> muscle NaN, lost NaN
+  //     lastSeen = 'yesterday'  -> muscle, stamina, lost, days ALL NaN
+  //
+  // and `if (!s.lastSeen)` does not catch the second, because 'yesterday' is
+  // truthy. Once it is written back there is no way out of it from inside the
+  // game: every subsequent settle() starts from NaN. The player has to clear
+  // site data, which means losing everything, for a value they never touched.
+  for (const k of Object.keys(FRESH)) {
+    if (typeof FRESH[k] !== 'number') continue;
+    const raw = s[k];
+    // Numbers and numeric strings only. Number(null) and Number([]) are both 0,
+    // so a plain Number() would quietly turn a null muscle into zero — the
+    // player loses everything rather than getting the default back, for a value
+    // they never touched.
+    const v = typeof raw === 'number' || (typeof raw === 'string' && raw.trim() !== '')
+      ? Number(raw) : NaN;
+    s[k] = Number.isFinite(v) ? v : FRESH[k];
+  }
   if (!s.lastSeen) s.lastSeen = Date.now();
   // A save written before skins existed, or one somebody hand-edited, can carry
   // a non-array here. The shop pushes onto it without checking.
   if (!Array.isArray(s.skins)) s.skins = [...FRESH.skins];
+  else s.skins = s.skins.filter((n) => typeof n === 'string');
   if (typeof s.skin !== 'string') s.skin = FRESH.skin;
   return s;
 }

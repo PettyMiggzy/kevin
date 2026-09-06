@@ -37,8 +37,11 @@
       // every visitor west of Greenwich without it.
       ? new Date(K.contractLiveAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })
       : null;
+    // The chain is already the middle segment, so "live on " + K.chain read
+    // "Fry cook · Robinhood Chain · live on Robinhood Chain" from the moment
+    // contractLiveAt passed. Said once.
     var state = live
-      ? (K.contract ? 'live on ' + K.chain : 'launching soon')
+      ? (K.contract ? 'live now' : 'launching soon')
       : (when ? 'launches ' + when + ' \u00b7 not trading yet' : 'not trading yet');
     heroState.textContent = 'Fry cook \u00b7 ' + K.chain + ' \u00b7 ' + state;
   }
