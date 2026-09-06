@@ -41,7 +41,11 @@ export const CRIB = {
   get front() { return this.z - this.d / 2; },       // z of the front wall
   door: { x0: -19.2, x1: -16.8 },                    // the gap you walk through
   table: { x: -22.4, z: 18.4 },                      // the card table
-  tv: { x: -11.2, z: 17.2 },                         // the set, and the world map
+  // Against the wall. At -11.2 the stand's back was 0.80m clear of it, so there
+  // was a strip of dead floor behind the television that the player could see
+  // straight down — and every extra centimetre of that gap also lengthened the
+  // throw from the sofa, which was already 4.2m for a 1.35m set.
+  tv: { x: -10.48, z: 17.4 },                        // the set, and the world map
   desk: { x: -22.6, z: 13.4 },                       // where the charts are
   spawn: { x: -18.0, z: 12.6 },                      // inside the door, facing in
   /**
@@ -268,6 +272,23 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
 
   // The machines along the left wall. A slot machine in a memecoin's flat is
   // the joke telling itself, so it stands where you pass it on the way in.
+  /**
+   * Take a model down a stop, artwork and all.
+   *
+   * These cabinets carry their colour in a TEXTURE. brand.js reads material
+   * colours, so what it actually repaints is their default white base — which
+   * warms the atlas but cannot quieten it. The result was primary-coloured
+   * boxes in a charcoal flat: the loudest things in the room, and a large part
+   * of why it read as a toybox. Scaling the material colour multiplies through
+   * the map, and through vertex colours too, which is the only handle there is.
+   */
+  const knock = (obj, k) => obj?.traverse?.((o) => {
+    if (!o.isMesh) return;
+    for (const mm of Array.isArray(o.material) ? o.material : [o.material]) {
+      mm?.color?.multiplyScalar(k);
+    }
+  });
+
   // SIZED LIKE MACHINES, not like toys. `width` rescales a model so its larger
   // horizontal footprint is that many metres, and a cabinet's footprint is much
   // smaller than its height — so asking for 0.95 across gave four machines
@@ -284,27 +305,18 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
       solid(0.7, 1.75, mw, '#3A3A48', mx, 0.875, mz);
       solid(0.1, 0.5, mw * 0.7, '#101018', mx + 0.35, 1.3, mz);
     });
-    // KNOCKED BACK A STOP. These four come from a different pack to the
-    // furniture and carry their colour in a TEXTURE, not a material colour —
-    // so brand.js never sees it and cannot repaint it, which is correct: it is
-    // artwork, not a flat fill. The result was four primary-coloured cabinets
-    // in a charcoal room, the loudest thing in the flat and a large part of why
-    // the whole room read as a toybox. Dimming the whole model keeps the art
-    // and loses the shout.
-    cab?.traverse?.((o) => {
-      if (!o.isMesh) return;
-      for (const mm of Array.isArray(o.material) ? o.material : [o.material]) {
-        mm?.color?.multiplyScalar(0.52);
-      }
-    });
+    knock(cab, 0.52);
     solids.push({ x: mx, z: mz, r: mw * 0.5 });
   }
   // A card room wants a jukebox more than it wants another lamp, and this one
   // was already in the repo unplaced — ingested with the diner kit and never
   // given a home.
-  fixture('jukebox', { x: -23.4, z: 21.3, width: 1.1, rotY: Math.PI / 4 }, () => {
+  // Knocked back with its neighbours. It stood 1.7m from four cabinets at 52%
+  // and was left at full brightness — and at 1.99m it is the tallest thing in
+  // the corner, so the eye went straight to the one object nobody had touched.
+  knock(fixture('jukebox', { x: -23.4, z: 21.3, width: 1.1, rotY: Math.PI / 4 }, () => {
     solid(0.9, 1.5, 0.6, '#7A2A24', -23.4, 0.75, 21.3);
-  });
+  }), 0.52);
   solids.push({ x: -23.4, z: 21.3, r: 0.6 });
   // A roulette wheel needs a table under it, and it had a console 0.27m deep
   // with a 0.70m wheel balanced on it — at a hardcoded y that missed the
@@ -314,7 +326,12 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   plinth.position.set(-21.0, 0.36, 21.4);
   scene.add(plinth);
   const rw = { x: -21.0, z: 21.4, width: 0.78, y: 0.72 };
-  fixture('roulette-wheel', rw);
+  // Exempt from BOTH the palette and the dim: it is vertex-coloured with no
+  // material of its own, so normalise() gives it a white base and lets its own
+  // colours through untouched. Next to cabinets at 52% it was the most
+  // saturated thing in the corner. Less of a knock than they get — it is the
+  // hero of this end of the room — but not none.
+  knock(fixture('roulette-wheel', rw), 0.78);
   solids.push({ x: -21.0, z: 21.4, r: 0.5 });
 
   // Two on the long wall, above the picture rail height, so the card end is not
@@ -431,7 +448,12 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   // return. That is the clip you can see from the door and the reason this
   // rebuild happened. The blocker below grew with it, or you could walk through
   // the chair to reach a desk you cannot walk through.
-  fixture('desk-chair', { x: dk.x + 1.45, z: dk.z + 0.18, width: 0.6, rotY: Math.PI / 2 + 0.34 }, () => {
+  // AND FACING THE SCREENS. Measured off the placed model — split its vertices
+  // about its own centre and the backrest is whichever half is taller — the
+  // chair's back was at -x with the six monitors also at -x, so it was turned
+  // away from the only thing it exists to sit in front of. Negating the half
+  // turn puts the back to the room and the seat to the desk.
+  fixture('desk-chair', { x: dk.x + 1.45, z: dk.z + 0.18, width: 0.6, rotY: -Math.PI / 2 + 0.34 }, () => {
     solid(0.5, 0.1, 0.5, '#26262C', dk.x + 1.45, 0.46, dk.z + 0.18);
   });
   fixture('speaker-hifi', { x: dk.x + 0.3, z: dk.z - 1.15, width: 0.3 });
@@ -442,10 +464,14 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   blockers.push({ x0: dk.x - 0.5, x1: dk.x + 1.9, z0: dk.z - 1.1, z1: dk.z + 1.1 });
 
   // --- living, right of the door -------------------------------------------
-  fixture('rug', { x: -14.4, z: 17.6, width: 4.0 }, () => {
-    paint(4.0, 2.8, '#6B1F24', -14.4, 17.6, 0.026);
+  // THE SEATING GROUP, moved east as one. The sofa sat 4.24m from the screen
+  // with 2.4m of bare floor between the coffee table and the set, spread across
+  // the full width of the room — which is why the sofa, the table and the
+  // television read as three separate things rather than one arrangement.
+  fixture('rug', { x: -13.4, z: 17.4, width: 4.0 }, () => {
+    paint(4.0, 2.8, '#6B1F24', -13.4, 17.4, 0.026);
   });
-  const s = { x: -16.2, z: 17.6 };
+  const s = { x: -14.7, z: 17.4 };
   fixture('crib-sofa', { x: s.x, z: s.z, width: 2.3, rotY: Math.PI / 2 }, () => {
     solid(1.1, 0.5, 2.4, RED, s.x, 0.32, s.z);
     solid(0.35, 0.8, 2.4, RED, s.x - 0.5, 0.68, s.z);
@@ -459,48 +485,67 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   // objects — three things touching that have nothing to do with each other,
   // which is what a room looks like when the furniture was placed one at a time
   // rather than arranged. It sits across the coffee table from the sofa now.
-  fixture('crib-armchair', { x: -14.55, z: 19.55, width: 0.95, rotY: -2.4 }, () => {
-    solid(0.85, 0.6, 0.85, '#A82B24', -14.55, 0.34, 19.55);
+  // Same measurement, same fault: at rotY -2.4 the armchair's backrest was on
+  // its +x/+z side, so it faced back down the room at the front door rather
+  // than at the television or the table it shares with the sofa. 2.16 points it
+  // at the set.
+  fixture('crib-armchair', { x: -13.0, z: 19.25, width: 0.95, rotY: 2.16 }, () => {
+    solid(0.85, 0.6, 0.85, '#A82B24', -13.0, 0.34, 19.25);
   });
-  solids.push({ x: -14.55, z: 19.55, r: 0.52 });
+  solids.push({ x: -13.0, z: 19.25, r: 0.52 });
   // The side table, which used to be under the roulette wheel and 0.27m deep —
   // far too small for a 0.70m wheel. Next to a chair it is exactly right, and
   // a chair with nowhere to put a drink is a chair nobody has ever sat in.
-  const st = { x: -15.72, z: 20.28, width: 0.62 };
+  const st = { x: -14.2, z: 19.7, width: 0.62 };
   fixture('side-table', st, () => {
     solid(0.56, 0.1, 0.56, '#5A3A24', st.x, 0.52, st.z);
   });
   fixture('soda-cup', { x: st.x, z: st.z, width: 0.15, y: st.top ?? 0.55 });
   solids.push({ x: st.x, z: st.z, r: 0.34 });
 
-  const ct = { x: -14.4, z: 17.6, width: 1.15 };
+  const ct = { x: -13.0, z: 17.4, width: 1.15 };
   fixture('coffee-table', ct, () => {
-    solid(1.0, 0.1, 0.7, '#4A3524', -14.4, 0.42, 17.6);
+    solid(1.0, 0.1, 0.7, '#4A3524', ct.x, 0.42, ct.z);
   });
   // What is actually on his coffee table — ON it. The hardcoded 0.46 was six
   // centimetres above the model's real top, so the cup and the pizza box both
   // floated over the table in the middle of the room you look straight at.
   const ctTop = ct.top ?? 0.47;
-  fixture('soda-cup', { x: -14.1, z: 17.35, width: 0.15, y: ctTop });
-  fixture('box-open', { x: -14.7, z: 17.85, width: 0.42, y: ctTop, rotY: 0.5 });
-  solids.push({ x: -14.4, z: 17.6, r: 0.62 });
+  fixture('soda-cup', { x: -12.72, z: 17.18, width: 0.15, y: ctTop });
+  // The old z put 27% of it over air: the table's back edge is 0.35 from its
+  // centre and the box reaches 0.21 either side of its own once turned.
+  fixture('box-open', { x: -13.22, z: 17.42, width: 0.42, y: ctTop, rotY: 0.5 });
+  solids.push({ x: ct.x, z: ct.z, r: 0.62 });
 
   const tv = CRIB.tv;
-  fixture('tv-stand', { x: tv.x, z: tv.z, width: 1.6, rotY: -Math.PI / 2 }, () => {
+  const tvs = { x: tv.x, z: tv.z, width: 1.6, rotY: -Math.PI / 2 };
+  fixture('tv-stand', tvs, () => {
     solid(0.5, 0.06, 1.6, '#26262C', tv.x, 0.62, tv.z);
   });
-  fixture('tv', { x: tv.x, z: tv.z, width: 1.35, rotY: -Math.PI / 2, y: 0.62 }, () => {
+  const tvo = { x: tv.x, z: tv.z, width: 1.35, rotY: -Math.PI / 2, y: tvs.top ?? 0.62 };
+  fixture('tv', tvo, () => {
     solid(0.22, 1.2, 1.9, '#101014', tv.x, 1.32, tv.z);
   });
-  quad(1.6, 0.95, signTexture(['WORLDS', 'gym · fry house'],
-    { bg: '#101014', fg: '#7BE08A' }), tv.x - 0.34, 1.3, tv.z, -Math.PI / 2);
+  // THE PICTURE, INSET INTO THE SET. It was a 1.60 x 0.95 quad hung 21cm in
+  // front of a television measuring 1.35 by 0.90 — bigger than the set it was
+  // supposed to be the screen of, overhanging the top by 25cm and each end by
+  // 12cm, and floating clear of it in mid-air. It is the brightest object in
+  // the room and the one the world map lives on, so it was also the most
+  // obvious. Measured off the model that was actually placed.
+  const tvBase = tvo.y;
+  const tvTop = tvo.top ?? tvBase + 0.9;
+  quad(1.16, (tvTop - tvBase) * 0.69, signTexture(['WORLDS', 'gym · fry house'],
+    { bg: '#101014', fg: '#7BE08A' }),
+    tv.x - 0.14, tvBase + (tvTop - tvBase) * 0.55, tv.z, -Math.PI / 2);
   blockers.push({ x0: tv.x - 0.4, x1: tv.x + 0.4, z0: tv.z - 1.0, z1: tv.z + 1.0 });
 
-  fixture('floor-lamp', { x: -16.6, z: 20.2, width: 0.44 }, () => {
-    solid(0.1, 1.5, 0.1, '#8A8F98', -16.6, 0.75, 20.2);
-    solid(0.5, 0.34, 0.5, GOLD, -16.6, 1.65, 20.2);
+  // It stood 1.45m past the end of the sofa with nothing near it, lighting
+  // empty floor. It caps the group now.
+  fixture('floor-lamp', { x: -15.7, z: 19.4, width: 0.44 }, () => {
+    solid(0.1, 1.5, 0.1, '#8A8F98', -15.7, 0.75, 19.4);
+    solid(0.5, 0.34, 0.5, GOLD, -15.7, 1.65, 19.4);
   });
-  solids.push({ x: -16.6, z: 20.2, r: 0.3 });
+  solids.push({ x: -15.7, z: 19.4, r: 0.3 });
 
   // The shelf, and the trophies that say what he does all day.
   // AGAINST THE WALL. It stood at z 20.9 with its back 0.87m clear of the back
@@ -510,7 +555,10 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   fixture('bookcase', bc, () => {
     solid(1.1, 1.8, 0.36, '#4A3524', -11.6, 0.9, 20.9);
   });
-  fixture('books', { x: bc.x, z: bc.z, width: 0.85, y: 1.18, rotY: Math.PI });
+  // 0.62, not 0.85. At 0.85 the block measured 0.85 by 0.53 inside a case
+  // 1.20 by 0.75 and pierced the shelf, both side panels and the back — the
+  // books were not on a shelf, they were inside the furniture.
+  fixture('books', { x: bc.x, z: bc.z - 0.06, width: 0.62, y: 1.18, rotY: Math.PI });
   // The radio used to sit at y 1.84 "on" the bookcase and measured as fully
   // inside it — the fallback box is 1.8 tall but the MODEL is not, and an
   // author-time y cannot know that. It lives on the desk now, where a radio
@@ -518,14 +566,26 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   fixture('radio', { x: dk.x + 0.70, z: dk.z - 0.70, width: 0.34, y: deskTop, rotY: Math.PI / 2 });
   // ON the bookcase, at whatever height it turned out to be. A hardcoded 1.55
   // put all four trophies inside the books.
-  const bcTop = bc.top ?? 1.8;
+  // ON A SHELF, not on the roof. bc.top is 2.64 and the trophies sat on top of
+  // that at 2.64-2.98 — a quarter of a metre above the 2.4 line where a
+  // first-person camera at 1.62 stops seeing anything at all. Four objects
+  // whose entire job is to say what he does all day, placed where nobody would
+  // ever look at them. The colours were #FFE500 and #E8232B, out of the gym's
+  // signage rather than this room's palette, and were the loudest thing in the
+  // living half.
+  // 1.85, on the shelf ABOVE the books. At 1.35 they were inside them: the
+  // books span 1.18 to 1.77, so four trophies 0.34 tall starting at 1.35 stood
+  // straight through the spines.
   for (let i = 0; i < 4; i++) {
-    solid(0.13, 0.34, 0.13, ['#FFE500', '#E8232B', '#D8D2C4', '#FFE500'][i],
-      -12.0 + i * 0.22, bcTop + 0.17, bc.z - 0.05);
+    solid(0.13, 0.34, 0.13, [GOLD, RED, '#C6BEAC', GOLD][i],
+      -12.0 + i * 0.22, 1.85, bc.z - 0.12);
   }
   blockers.push({ x0: -12.3, x1: -10.9, z0: 21.3, z1: 22.2 });
 
-  for (const [px, pz, name, pw] of [[-11.4, 18.9, 'potted-plant', 0.62]]) {
+  // Into the corner it was nearly in. At (-11.4, 18.9) it stood 98cm out from
+  // the right wall, in the middle of the floor, on the line you walk from the
+  // telly to the kitchen.
+  for (const [px, pz, name, pw] of [[-10.75, 20.55, 'potted-plant', 0.62]]) {
     fixture(name, { x: px, z: pz, width: pw }, () => {
       solid(pw * 0.7, 0.3, pw * 0.7, '#B06A3A', px, 0.15, pz);
       solid(pw * 0.9, 0.7, pw * 0.9, '#2F8F45', px, 0.62, pz);
@@ -635,15 +695,15 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
     solid(0.5, 0.08, 0.08, '#4A3524', -16.6, 1.6, 12.5);
   });
   solids.push({ x: -16.6, z: 12.5, r: 0.3 });
-  fixture('trashcan', { x: -19.9, z: 21.4, width: 0.45 }, () => {
-    solid(0.4, 0.6, 0.4, '#26262C', -19.9, 0.3, 21.4);
+  fixture('trashcan', { x: -19.9, z: 21.82, width: 0.45 }, () => {
+    solid(0.4, 0.6, 0.4, '#26262C', -19.9, 0.3, 21.82);
   });
   // Labelled, because in the lore it is: the bin marked BEARS & FUD is where he
   // puts the things he has decided not to think about. A bin is set dressing;
   // a bin with that written on it is a joke somebody left in their own kitchen.
   quad(0.36, 0.10, signTexture(['BEARS & FUD'], { bg: '#26262C', fg: '#FFE500', size: 132 }),
-    -19.9, 0.56, 21.16, Math.PI);
-  solids.push({ x: -19.9, z: 21.4, r: 0.3 });
+    -19.9, 0.56, 21.58, Math.PI);
+  solids.push({ x: -19.9, z: 21.82, r: 0.3 });
 
   /**
    * His own face on the walls, and the contract address over the bed.
@@ -655,16 +715,27 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
    * whole point of the rebuild is that a stranger's furniture is not a
    * character.
    */
+  // UNDER THE PICTURE RAIL, not through it. Every frame hung with its base at
+  // 1.90-1.95, so it spanned 1.90 to 2.67 — and the rail is a 6cm wooden band
+  // at 2.19-2.25 standing 1cm proud of the wall. It cut straight across the
+  // bottom third of all six pictures. A base of 1.44 puts each top at 2.16,
+  // three centimetres under the rail, and its art at 1.80: eye height for a
+  // camera at 1.62, which is also where a picture belongs.
+  //
+  // WAGMI moved off the kitchen wall as well. At 1.44 the fridge in front of it
+  // would have covered its bottom 19cm; the back wall between the card room and
+  // the kitchen is 2.8m of bare charcoal and had nothing on it at all.
+  const ART_Y = 1.44;
   const art = [
-    [-15.0, 1.9, front + 0.17, 0, ['GM', 'no thoughts'], '#1C2E3F'],
-    [-12.6, 1.95, front + 0.17, 0, ['0x63D7fa…', '9e284A'], '#0B0B0B'],
-    [-13.6, 1.9, back - 0.17, Math.PI, ['WAGMI', 'probably'], '#1C2E3F'],
-    [right - 0.17, 1.95, 15.6, -Math.PI / 2, ['NO PAIN', 'ONLY KEVIN'], '#8E1F1A'],
-    [right - 0.17, 1.95, 19.4, -Math.PI / 2, ["McKEVIN'S", 'employee of the month'], '#8E1F1A'],
+    [-15.0, ART_Y, front + 0.17, 0, ['GM', 'no thoughts'], '#1C2E3F'],
+    [-12.6, ART_Y, front + 0.17, 0, ['0x63D7fa…', '9e284A'], '#0B0B0B'],
+    [-20.6, ART_Y, back - 0.17, Math.PI, ['WAGMI', 'probably'], '#1C2E3F'],
+    [right - 0.17, ART_Y, 15.6, -Math.PI / 2, ['NO PAIN', 'ONLY KEVIN'], '#8E1F1A'],
+    [right - 0.17, ART_Y, 19.4, -Math.PI / 2, ["McKEVIN'S", 'employee of the month'], '#8E1F1A'],
     // Moved from z 13.2 to make room for the whiteboard, and a second frame
     // added on the same wall — it is 11 metres of it and it had one picture.
-    [left + 0.18, 1.95, 11.95, Math.PI / 2, ['KEK', 'to the moon'], '#1C2E3F'],
-    [left + 0.18, 1.95, 16.95, Math.PI / 2, ['CEO OF', 'CHAOS'], '#8E1F1A'],
+    [left + 0.18, ART_Y, 11.95, Math.PI / 2, ['KEK', 'to the moon'], '#1C2E3F'],
+    [left + 0.18, ART_Y, 16.95, Math.PI / 2, ['CEO OF', 'CHAOS'], '#8E1F1A'],
   ];
   for (const [ax, ay, az, ry, lines, bg] of art) {
     const nx = Math.abs(ry) === Math.PI / 2 ? (ry > 0 ? 0.03 : -0.03) : 0;

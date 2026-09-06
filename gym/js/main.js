@@ -133,6 +133,16 @@ function normalise(root, { outline = true, palette = null } = {}) {
     }
     const m = toon(base, painted ? { vertexColors: true } : undefined);
     m.map = src?.map ?? null;                       // keep the texture, drop the shading
+    // AND KEEP TRANSPARENCY. Rebuilding every material from scratch threw away
+    // alphaMode BLEND along with the metalness and the normal maps, so any
+    // glass a model was authored with came back solid — the claw machine's
+    // prize window, which is 30% opaque in the file, rendered as an opaque dark
+    // slab with the prizes sealed inside it. Only carried when the source
+    // actually asked for it, so nothing that was opaque becomes see-through.
+    if (src?.transparent && src.opacity < 1) {
+      m.transparent = true;
+      m.opacity = src.opacity;
+    }
     m.userData.outlineParameters = outline
       ? { thickness: 0.008, color: [0, 0, 0], alpha: 1 }
       : { visible: false };
@@ -1825,7 +1835,7 @@ const MOODS = {
       ['#8894B2', 2.60, 18.0, -18.0, 2.60, 16.8, 1],
       ['#FFD07A', 2.60, 7.5, -22.4, 2.15, 18.4],   // the chandelier over the cards
       ['#8FD0FF', 1.35, 4.2, -22.1, 1.45, 13.4],   // six monitors, on his face
-      ['#FFC98A', 2.00, 6.0, -16.6, 1.95, 20.2],   // the floor lamp
+      ['#FFC98A', 2.00, 6.0, -15.7, 1.95, 19.4],   // the floor lamp
       ['#FFF0D0', 1.30, 5.5, -16.6, 2.35, 21.4],   // under the kitchen cupboards
       ['#FF5064', 1.10, 5.0, -18.0, 2.70, 11.9],   // the neon over the door
       ['#FFB4A0', 0.90, 4.0, -12.6, 1.15, 15.2],   // the lamp on the bedside
