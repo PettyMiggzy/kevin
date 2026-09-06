@@ -594,64 +594,121 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   }
 
   // --- the kitchen along the back wall -------------------------------------
-  const KZ = back - 0.55;
-  // Splashback and worktop first, and in a colour the wall is not. Units in the
-  // kit's neutral sit at the same value as the wall behind them, so without
-  // these two bands the whole kitchen disappears and the microwave looks like
-  // it is floating — which is exactly what it did.
+  //
+  // Rebuilt, because a single unbroken slab is not a kitchen worktop.
+  //
+  // It was one 5.6m plane of #CFC6B0 at a fixed height, laid across everything:
+  // it PAVED OVER THE SINK — the basin filled in, 6cm of tap erupting out of a
+  // solid counter, no visible sink anywhere in the room — and it paved over the
+  // hob too, so the frying pan sat half buried in worktop and the cook pot 2cm
+  // into it. Its separate "front edge" band was 9cm inside the cupboard doors,
+  // invisible, and cutting through the slab it belonged to. And 1.45m of its
+  // left-hand end had no base unit under it at all: a floating shelf carrying a
+  // box, a stack of trays and a coffee machine, with a bar stool parked at it
+  // facing 0.95m of cupboard door with no knee room.
+  //
+  // Now: units on a 0.92 pitch so there are 2cm reveals rather than 10cm holes,
+  // worktop in RUNS that stop either side of the sink and the hob so both are
+  // things you can see, and the open left end is a real breakfast bar on a real
+  // end panel with two stools tucked under 0.40m of overhang.
+  const KZ = back - 0.63;                     // units flush to the wall, not 8cm inside it
+  const WORKTOP = 0.99;                       // 4cm proud of the units' own 0.95 tops
+  const KX = [-18.28, -17.36, -16.44, -15.52, -14.60];   // cabinet, cabinet, SINK, cabinet, HOB
   // rotY PI, or the splashback faces +z into the back wall and is invisible
   // from the only side anybody stands on.
-  quad(5.8, 1.1, signTexture([''], { bg: '#8E1F1A', fg: '#8E1F1A' }),
-    -16.7, 1.42, back - 0.17, Math.PI);
-  // Ends before the fridge. At 6.8 m centred on -16.1 the slab ran to -12.70 and
-  // the fridge stands at -13.68..-12.92, so the worktop was drawn straight
-  // through it.
-  solid(5.6, 0.09, 0.72, '#CFC6B0', -16.7, 0.92, KZ);              // worktop
-  solid(5.6, 0.1, 0.06, '#8A8272', -16.7, 0.86, KZ - 0.36);        // its front edge
-  // The SURFACE of the worktop, not its centre. Everything standing on it was
-  // given y 0.92 — the box's centre — so the kettle, the trays, the cups, the
-  // microwave and the coffee machine all sat 4.5cm sunk into the counter.
-  const WORKTOP = 0.92 + 0.045;
+  quad(6.1, 1.1, signTexture([''], { bg: '#8E1F1A', fg: '#8E1F1A' }),
+    -16.75, 1.45, back - 0.17, Math.PI);
+
   let stoveTop = 0.95;
-  for (const [name, ux] of [['kitchen-cabinet', -17.6], ['kitchen-sink', -16.6],
-                            ['kitchen-cabinet', -15.6], ['stove', -14.6]]) {
-    const unit = { x: ux, z: KZ, width: 0.95, rotY: Math.PI };
+  for (const [name, ux] of [['kitchen-cabinet', KX[0]], ['kitchen-cabinet', KX[1]],
+                            ['kitchen-sink', KX[2]], ['kitchen-cabinet', KX[3]],
+                            ['stove', KX[4]]]) {
+    const unit = { x: ux, z: KZ, width: 0.90, rotY: Math.PI };
     fixture(name, unit, () => {
-      solid(0.95, 0.86, 0.62, '#4A4A55', ux, 0.43, KZ);
+      solid(0.90, 0.86, 0.62, '#4A4A55', ux, 0.43, KZ);
     });
     if (name === 'stove') stoveTop = unit.top ?? 0.95;
   }
-  fixture('fridge', { x: -13.3, z: KZ, width: 0.76, rotY: Math.PI }, () => {
-    solid(0.75, 1.8, 0.68, '#4A4A55', -13.3, 0.9, KZ);
-  });
-  fixture('microwave', { x: -15.6, z: KZ, width: 0.52, y: WORKTOP, rotY: Math.PI });
-  fixture('coffee-machine', { x: -18.1, z: KZ, width: 0.32, y: WORKTOP, rotY: Math.PI });
-  fixture('extractor', { x: -14.6, z: KZ, width: 0.85, y: 1.6, rotY: Math.PI });
-  // On the hob under the extractor, which is the only place either of these
-  // makes sense and is why they were ingested in the first place.
-  fixture('cook-pot', { x: -14.85, z: KZ - 0.06, width: 0.3, y: stoveTop });
-  fixture('frying-pan', { x: -14.3, z: KZ + 0.08, width: 0.34, y: stoveTop, rotY: 0.6 });
-  for (const ux of [-17.6, -16.6]) {
-    fixture('kitchen-upper', { x: ux, z: back - 0.32, width: 0.92, y: 1.55, rotY: Math.PI });
-  }
-  // What is left on the counter, which is more characterful than the counter.
-  fixture('tray-stack', { x: -18.6, z: KZ, width: 0.4, y: WORKTOP, rotY: Math.PI });
-  // In the gaps between the things that already stand on the worktop — box at
-  // -19.3, trays at -18.6, coffee machine at -18.1, sink basin at -16.6,
-  // microwave at -15.6. Two earlier guesses put one cup inside the sink and the
-  // other inside the coffee machine.
-  fixture('soda-cup', { x: -17.3, z: KZ - 0.08, width: 0.15, y: WORKTOP });
-  fixture('soda-cup', { x: -16.0, z: KZ + 0.06, width: 0.15, y: WORKTOP, rotY: 0.8 });
-  fixture('box-closed', { x: -19.3, z: KZ, width: 0.5, y: WORKTOP, rotY: 0.2 });
-  blockers.push({ x0: -19.6, x1: -12.9, z0: KZ - 0.42, z1: back });
 
-  // A stool AT THE COUNTER. It stood at z 20.1, a metre and a half out into
-  // open floor with nothing to sit at — one lonely object in the middle of a
-  // room, which is the single easiest way to make a space look unfinished.
-  fixture('bar-stool', { x: -19.25, z: 20.86, width: 0.42 }, () => {
-    solid(0.36, 0.1, 0.36, '#33333B', -19.25, 0.68, 20.86);
+  // The runs. Gaps at the sink (-16.89..-15.99) and the hob (-15.05..-14.15).
+  const worktop = (x0, x1, z, dep) =>
+    solid(x1 - x0, 0.05, dep, '#CFC6B0', (x0 + x1) / 2, WORKTOP - 0.025, z);
+  worktop(-19.70, -18.73, 21.42, 1.36);        // the bar: deep, for knees
+  worktop(-18.75, -16.91, 21.60, 1.02);        // the run, over the two left cabinets
+  worktop(-15.97, -15.07, 21.60, 1.02);        // between the sink and the hob
+  // What holds the bar up where there is no cupboard: an end panel and a leg.
+  solid(0.06, 0.94, 1.32, WOOD, -19.67, 0.47, 21.42);
+  solid(0.08, 0.94, 0.08, WOOD, -18.80, 0.47, 20.86);
+
+  fixture('microwave', { x: -17.45, z: 21.66, width: 0.52, y: WORKTOP, rotY: Math.PI });
+  fixture('coffee-machine', { x: -18.10, z: 21.66, width: 0.32, y: WORKTOP, rotY: Math.PI });
+  // The hood, back against the wall with a duct to the ceiling. It hung 12cm
+  // clear of the wall with the picture rail showing in the gap behind it, and
+  // stopped dead at 2.39 with a metre of bare wall above it and nothing
+  // carrying it anywhere — the same "what is holding that up" the chandelier
+  // had. 1.60 over a 0.95 hob is 65cm of clearance, which is right.
+  fixture('extractor', { x: KX[4], z: 21.83, width: 0.85, y: 1.60, rotY: Math.PI });
+  solid(0.34, 0.98, 0.32, '#8A8F98', KX[4], 2.88, 21.97);
+  // On the hob under it, which is now a hob you can see.
+  fixture('cook-pot', { x: -14.82, z: 21.60, width: 0.30, y: stoveTop });
+  fixture('frying-pan', { x: -14.38, z: 21.72, width: 0.34, y: stoveTop, rotY: 0.6 });
+
+  // Three uppers, bay for bay with the base units, hard against the wall — they
+  // were 7cm INSIDE it, with the picture rail running through their insides,
+  // and they stopped 1.11m short of the hood leaving a hole in the run at
+  // exactly the height everything is looked at.
+  for (const ux of KX.slice(0, 3)) {
+    fixture('kitchen-upper', { x: ux, z: 21.90, width: 0.90, y: 1.55, rotY: Math.PI });
+  }
+  // A strip under them. The kitchen had no light of its own at all — the card
+  // table gets a chandelier and a pool on the floor, and this end got a flat
+  // red plane and four grey boxes.
+  solid(2.74, 0.03, 0.07, GOLD, -17.36, 1.535, 21.70);
+  // Open shelves in the bay between the uppers and the hood, which is the one
+  // stretch of this wall at eye height and was bare.
+  for (const sy of [1.62, 2.00]) solid(0.92, 0.04, 0.28, WOOD, -15.51, sy, 21.99);
+  for (const bx of [-15.94, -15.08]) solid(0.04, 0.34, 0.26, TRIM, bx, 1.81, 22.00);
+
+  // Handles. Two lines of geometry are the whole difference between "cabinets"
+  // and "boxes", and the doors were unbroken charcoal within 5% of the wall.
+  for (const ux of [KX[0], KX[1], KX[3]]) solid(0.34, 0.03, 0.03, GOLD, ux, 0.86, 21.16);
+  for (const ux of KX.slice(0, 3)) solid(0.34, 0.03, 0.03, GOLD, ux, 1.62, 21.66);
+
+  // The fridge, against the wall and in line with the cupboard fronts. It stood
+  // 14cm off the wall and 22cm behind the run, with a 47cm hole beside the hob.
+  const frg = { x: -13.72, z: 21.80, width: 0.76, rotY: Math.PI };
+  fixture('fridge', frg, () => {
+    solid(0.75, 1.8, 0.68, '#4A4A55', -13.72, 0.9, 21.80);
   });
-  solids.push({ x: -19.25, z: 20.86, r: 0.3 });
+
+  // What is left on the counter, which is more characterful than the counter.
+  fixture('tray-stack', { x: -18.60, z: 21.60, width: 0.40, y: WORKTOP, rotY: Math.PI });
+  fixture('soda-cup', { x: -17.02, z: 21.52, width: 0.15, y: WORKTOP });
+  fixture('soda-cup', { x: -15.52, z: 21.68, width: 0.15, y: WORKTOP, rotY: 0.8 });
+  fixture('box-closed', { x: -19.15, z: 21.66, width: 0.50, y: WORKTOP, rotY: 0.2 });
+  // Two blockers, because the bar sticks out further than the run does.
+  blockers.push({ x0: -19.75, x1: -18.70, z0: 20.72, z1: back });
+  blockers.push({ x0: -18.70, x1: -13.30, z0: 21.10, z1: back });
+
+  // A pool of light on the floor in front of it, the same trick the card table
+  // uses. Without it the whole run sits in the dark below worktop height.
+  const kglow = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 1.6), flat(GOLD));
+  kglow.rotation.x = -Math.PI / 2;
+  kglow.position.set(-17.1, 0.026, 20.85);
+  kglow.material.transparent = true;
+  kglow.material.opacity = 0.10;
+  scene.add(kglow);
+
+  // STOOLS AT A BAR. There was one, at a stretch of counter with no unit under
+  // it, no overhang and no knee room — facing 0.95m of cupboard door. The bar
+  // above gives 0.40m of overhang past the fronts, so now there are two and
+  // they are tucked under it.
+  for (const [sx, sz] of [[-19.30, 20.55], [-18.55, 20.55]]) {
+    fixture('bar-stool', { x: sx, z: sz, width: 0.42 }, () => {
+      solid(0.36, 0.1, 0.36, '#33333B', sx, 0.68, sz);
+    });
+    solids.push({ x: sx, z: sz, r: 0.30 });
+  }
   // The plant goes ON the fridge rather than 6cm inside the side of it, which
   // is where it was and is also what actually happens to a plant in a flat with
   // a beer fridge in it.
