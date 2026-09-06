@@ -55,11 +55,18 @@ export function startHand(g) {
   // Move the button to the next player still holding chips.
   do { g.button = (g.button + 1) % g.seats.length; } while (g.seats[g.button].out);
 
+  // seatOrder starts AFTER the button, so order[0] IS the small blind, order[1]
+  // the big blind and order[2] the first to act. This read order[1] and
+  // order[2] and opened on order[3] — every blind posted by the wrong player
+  // and the whole table acting one seat out of position, at every seat count.
+  //
+  // Heads-up is the exception the rest of poker is written around: the button
+  // posts the small blind and acts first before the flop. seatOrder puts the
+  // button LAST in a two-handed order, so heads-up reads from the other end.
   const order = seatOrder(g, g.button);
-  // Heads-up, the button posts the small blind and acts first before the flop.
-  // Get this wrong and every two-handed pot is played out of position.
-  const sbSeat = order.length === 2 ? order[0] : order[1];
-  const bbSeat = order.length === 2 ? order[1] : order[2 % order.length];
+  const heads = order.length === 2;
+  const sbSeat = heads ? order[1] : order[0];
+  const bbSeat = heads ? order[0] : order[1];
   post(g, sbSeat, g.smallBlind);
   post(g, bbSeat, g.bigBlind);
   say(g, `${sbSeat.name} posts ${g.smallBlind}, ${bbSeat.name} posts ${g.bigBlind}`);
@@ -67,8 +74,17 @@ export function startHand(g) {
   for (let r = 0; r < 2; r++) for (const s of order) s.hole.push(g.deck.pop());
 
   g.lastRaise = g.bigBlind;
-  const startIdx = order.length === 2 ? 0 : 3 % order.length;
-  g.turn = order[startIdx % order.length].seat;
+  // A BLIND CAN BE ALL-IN. Posting it was their last chip, and an all-in
+  // player cannot act — so handing them the turn froze the hand where it
+  // stood: act() correctly refused, nothing advanced, and the pot sat on the
+  // table forever. Heads-up against a short stack it happened on the deal.
+  //
+  // The turn walks on to the first seat that can actually act. If nobody can,
+  // the hand has already bet itself and just needs dealing out.
+  const first = heads ? 1 : 2 % order.length;
+  const opener = order.slice(first).concat(order.slice(0, first)).find((s) => !s.allIn);
+  if (!opener) return nextStreet(g);
+  g.turn = opener.seat;
   return g;
 }
 
@@ -120,8 +136,12 @@ export function act(g, seatIndex, action, amount = 0) {
     if (need > 0) return g;
     say(g, `${s.name} checks`);
   } else if (action === 'call') {
+    // What they could actually put in, not what was asked of them. A player
+    // calling 200 with 50 left is all-in for 50, and the hand history said 200.
+    const had = s.chips;
     post(g, s, need);
-    say(g, `${s.name} calls ${Math.min(need, need)}`);
+    const put = had - s.chips;
+    say(g, `${s.name} calls ${put}${s.allIn ? ' and is all in' : ''}`);
   } else {
     // A raise must be to at least the last raise size more than the current
     // high bet — unless the player is putting their last chip in, which is
