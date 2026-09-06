@@ -4,14 +4,22 @@ out = "out"
 libs = ["lib"]
 test = "test"
 script = "script"
-solc_version = "0.8.24"
+# WAS 0.8.24. Uniswap v4-core pins `=0.8.26` in PoolManager, and KevinFloorV4's
+# tests deploy a real PoolManager rather than a mock — the only guarantee that
+# contract makes is one the pool enforces, so the pool has to be the real one.
+# Everything here is written against ^0.8.24 and does not use anything newer;
+# the bump is to let v4-core into the build, and the 117 pre-existing tests are
+# the check that it changed nothing.
+solc_version = "0.8.26"
 optimizer = true
 optimizer_runs = 1_000
 via_ir = false
-# Deliberately conservative. Robinhood Chain (4663) is new and this repo has
-# not confirmed which fork it is on; `paris` emits no PUSH0 and no MCOPY, so the
-# bytecode runs on anything post-Merge. Raise it only after checking the chain.
-evm_version = "paris"
+# WAS `paris`, chosen when nobody here had confirmed which fork Robinhood Chain
+# (4663) was on. It is confirmed now, and by the strongest kind of evidence:
+# Uniswap v4 is deployed on 4663, and v4's PoolManager cannot function without
+# transient storage. TSTORE/TLOAD are Cancun. So the chain is at least Cancun,
+# and KevinFloor — which talks to that PoolManager — needs the same.
+evm_version = "cancun"
 bytecode_hash = "none"
 fs_permissions = [{ access = "read", path = "./" }]
 
