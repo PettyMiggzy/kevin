@@ -39,3 +39,7 @@ assets/pfp/*.png
 
 # Rig scratch frames from tools/rig.mjs
 .sticker-frames/rig/
+
+# forge run from the repo root instead of contracts/ leaves these here
+cache/
+out/
