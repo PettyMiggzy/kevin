@@ -165,11 +165,6 @@
     }
   }
 
-  // The sticker section said "fifteen moods" over a grid that renders twenty
-  // of them from the same config this reads. Another hand-typed count.
-  var stickerCount = $('#stickerCount');
-  if (stickerCount && K.animated) stickerCount.textContent = inWords(K.animated.length);
-
   var order = $('#chain-order');
   if (order && K.pools) {
     order.innerHTML = K.pools
@@ -277,29 +272,6 @@
 
   tick();
   if (auction.startsAt) setInterval(tick, 1000);
-
-  // --- stickers -----------------------------------------------------------
-  // One grid. The webm autoplays inline as its own preview; png / webm / gif
-  // are the three things anybody actually wants to download.
-  var anim = $('#animated-grid');
-  if (anim && K.animated) {
-    anim.innerHTML = K.animated
-      .map(function (a) {
-        var base = 'assets/stickers/animated/' + a.slug;
-        return (
-          '<div class="sticker sticker--anim">' +
-          '<video src="' + base + '.webm" autoplay loop muted playsinline ' +
-          'aria-label="' + a.name + ' Kevin, animated"></video>' +
-          '<b>' + a.name + '</b>' +
-          '<span class="sticker__dl">' +
-          '<a href="assets/stickers/png/' + a.slug + '.png" download>png</a>' +
-          '<a href="' + base + '.webm" download>webm</a>' +
-          '<a href="' + base + '.gif" download>gif</a>' +
-          '</span></div>'
-        );
-      })
-      .join('');
-  }
 
   // --- footer links -------------------------------------------------------
   var footer = $('#footer-links');
