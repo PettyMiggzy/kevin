@@ -82,6 +82,62 @@ rise first and sells into what is left.
 That was also found by driving it: the first version sold into a 30 ETH pump and
 left the floor exactly where it started.
 
+## What this does NOT protect you from
+
+**Other people's selling.** Read that again before relying on any of this.
+
+`KevinFloorV4` is a rule about *its own* trading. It cannot stop anyone else
+hitting the bid, and its floor is not a wall — it is a limit on where this
+contract will sell, not a promise to buy everything offered below it. The only
+thing that absorbs somebody else's sell is money sitting on the bid, and on day
+one that is 0.35 ETH.
+
+So, honestly ranked, what actually helps:
+
+**1. Remove the reason people sell you: the overhang.** A 20% holder with a
+30-day vest is the most bearish fact about this token, and it works on the
+chart *before* you sell anything, because the rational move for everybody else
+is to front-run your unlocks. `KevinLock` — see [LOCK.md](./LOCK.md) — makes
+the drip a contract instead of a promise: at most `ratePerDay` out, only ever
+into the floor keeper, and any real withdrawal announces itself two weeks in
+advance. **This costs nothing, needs no money, and is worth more than any bid
+you could afford to put up.** Do this one.
+
+**2. Bids funded by fees, not by your wallet.** If the treasury owns the LP
+position, trading fees accrue in both tokens, and the ETH side of them can be
+collected and pushed into `fundWarChest()`. That is a bid that grows with
+volume instead of with your bank balance, and it is the only sustainable
+buy-side any of this can have. **Whether it is available depends on whether
+kekfun leaves you the LP position or burns it — find out in the morning,
+because if you do own it this is the second thing to build and if you do not,
+it is not buildable at all.**
+
+**3. `fundWarChest()` is payable and permissionless.** Anyone can put ETH
+behind the bid — you, the treasury, anyone who wants the floor defended. It is
+already there and it costs nothing to publish.
+
+**4. A visible buy wall.** A single-sided ETH concentrated-liquidity range just
+under spot is a public limit bid that earns fees while it waits. **Place it by
+hand in the Uniswap interface. Do not let me build it** — it is one position
+you will adjust a handful of times, and a contract to manage it would be more
+risk than the thing it manages.
+
+What none of these do is create demand. Nothing does. They remove reasons to
+sell and put a bid under the ones that remain.
+
+## Three pools split your liquidity three ways
+
+If it launches into WETH, KEK and GME pools, each of them is separately thin
+and separately drainable, and 0.35 ETH divided three ways is not depth in any
+of them.
+
+**Run the floor keeper against the deepest pool and let arbitrage carry the
+others.** The contract holds one `PoolKey` and defends one pool by design;
+pointing three instances at three pools would have them selling into each
+other. Arbitrageurs will keep the thin pools in line with the deep one as long
+as the deep one holds, which is exactly where you want the defence
+concentrated.
+
 ## What if the price never comes back?
 
 It sells anyway, eventually, and this is the part worth reading twice.

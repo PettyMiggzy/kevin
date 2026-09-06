@@ -4,6 +4,8 @@ pragma solidity ^0.8.24;
 import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 import {KevinFloorV4} from "../src/KevinFloorV4.sol";
+import {KevinLock} from "../src/KevinLock.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {PoolManager} from "v4-core/src/PoolManager.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
@@ -64,6 +66,12 @@ contract LocalFloor is Script {
         floor.setPatience(vm.envOr("PATIENCE", uint256(120)), 150, 3_000);
         floor.setFloorFromSpot(1500);
         kevin.mint(address(floor), 3_000_000 ether);
+
+        // The lockbox, holding the bag, dripping into the floor keeper.
+        KevinLock lock = new KevinLock(
+            IERC20(address(kevin)), address(floor), me, 2_000_000 ether, vm.envOr("EXIT_DELAY", uint256(1 days))
+        );
+        kevin.mint(address(lock), 40_000_000 ether);
         vm.stopBroadcast();
 
         console2.log("");
@@ -71,6 +79,7 @@ contract LocalFloor is Script {
         console2.log("KEVIN=%s", address(kevin));
         console2.log("POOL_MANAGER=%s", address(manager));
         console2.log("SWAPPER=%s", address(swapper));
+        console2.log("LOCK_ADDRESS=%s", address(lock));
         console2.log("upIsUp=%s (false is correct for an ETH pool)", floor.upIsUp());
         console2.log("patience=%ss decay=%s bps/day cap=%s bps",
             floor.patience(), floor.decayBpsPerDay(), floor.maxDecayBps());

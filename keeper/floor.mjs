@@ -51,6 +51,11 @@ const cfg = {
   rpc: process.env.ROBINHOOD_RPC_URL || 'https://rpc.robinhood.com',
   chainId: Number(process.env.CHAIN_ID || 4663),
   floor: process.env.FLOOR_ADDRESS,
+  // Optional. The lockbox holding the treasury bag, if there is one. The keeper
+  // pushes its daily allowance into the floor keeper so the floor always has
+  // inventory to work with. release() is permissionless and can only ever send
+  // to the floor, so driving it needs no privilege and risks nothing.
+  lock: process.env.LOCK_ADDRESS,
   live: process.env.LIVE === '1',
   // How often to look. The contract has its own cooldown; this only decides how
   // often we ask, and asking is a free eth_call.
@@ -94,6 +99,21 @@ const ABI = [
   { type: 'function', name: 'dailyTokenCap', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'quoteSpentInWindow', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'dailyQuoteCap', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+];
+
+const LOCK_ABI = [
+  { type: 'function', name: 'releasable', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'release', stateMutability: 'nonpayable', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'ratePerDay', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'locked', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'exitCountdown', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'floor', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'token', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+];
+
+const ERC20_ABI = [
+  { type: 'function', name: 'balanceOf', stateMutability: 'view',
+    inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] },
 ];
 
 // --- logging ----------------------------------------------------------------
@@ -152,6 +172,7 @@ async function main() {
 
   say('floor keeper starting');
   say('  contract ', cfg.floor);
+  say('  lockbox  ', cfg.lock || '(none)');
   say('  chain    ', cfg.chainId, cfg.rpc);
   say('  operator ', account ? account.address : '(none — dry run)');
   say('  mode     ', cfg.live ? 'LIVE, it will send transactions' : 'DRY RUN, it will send nothing');
@@ -160,12 +181,35 @@ async function main() {
   const read = (name, args = []) =>
     pub.readContract({ address: cfg.floor, abi: ABI, functionName: name, args });
 
+  // $KEVIN, read off the lockbox at startup. Declared here because the startup
+  // block below assigns it, and a `let` further down would be in its temporal
+  // dead zone by then — a ReferenceError on the first tick, not at parse time.
+  let token = null;
+
   // Sanity, once, loudly. Getting the orientation wrong is the one mistake that
   // turns this from a floor into a dumper, so it is stated at startup rather
   // than left in a storage slot nobody reads.
   try {
     const up = await read('upIsUp');
     say('  upIsUp   ', up, up ? '(a rising $KEVIN is a RISING sqrtPrice)' : '(a rising $KEVIN is a FALLING sqrtPrice)');
+    if (cfg.lock) {
+      // If this points at the wrong floor, the keeper would be pushing the
+      // treasury's bag into a contract that is not the one it is driving.
+      const target = await pub.readContract({
+        address: cfg.lock, abi: LOCK_ABI, functionName: 'floor',
+      });
+      if (target.toLowerCase() !== cfg.floor.toLowerCase()) {
+        warn(`the lockbox at ${cfg.lock} releases to ${target}, not to ${cfg.floor}.`);
+        warn('one of the two addresses is wrong. Refusing to start.');
+        process.exit(1);
+      }
+      const [rate, held] = await Promise.all([
+        pub.readContract({ address: cfg.lock, abi: LOCK_ABI, functionName: 'ratePerDay' }),
+        pub.readContract({ address: cfg.lock, abi: LOCK_ABI, functionName: 'locked' }),
+      ]);
+      token = await pub.readContract({ address: cfg.lock, abi: LOCK_ABI, functionName: 'token' });
+      say('  locked   ', `${formatUnits(held, 18)} $KEVIN, dripping ${formatUnits(rate, 18)}/day`);
+    }
     const [pat, perDay, maxD] = await Promise.all([
       read('patience'), read('decayBpsPerDay'), read('maxDecayBps'),
     ]);
@@ -200,6 +244,13 @@ async function main() {
         read('floorSqrtPriceX96'), read('floorDecayBps'),
         read('floorGapBps'), read('upIsUp'), pub.getBlock(),
       ]);
+    const [lockReady, lockRate, floorHas] = cfg.lock
+      ? await Promise.all([
+        pub.readContract({ address: cfg.lock, abi: LOCK_ABI, functionName: 'releasable' }),
+        pub.readContract({ address: cfg.lock, abi: LOCK_ABI, functionName: 'ratePerDay' }),
+        pub.readContract({ address: token, abi: ERC20_ABI, functionName: 'balanceOf', args: [cfg.floor] }),
+      ])
+      : [0n, 0n, 0n];
     // `floorAt` is the EFFECTIVE floor — the high-water mark eased by whatever
     // the waiting has cost it. `mark` is the mark itself. They are the same
     // number in a healthy market and the difference is the whole of the
@@ -242,6 +293,33 @@ async function main() {
     // the market has just proved it will pay.
     if (decay > 0n && !worse(spot, mark, up)) {
       return act('ratchet', [], `RESET the yielding — the market came back · ${state}`);
+    }
+
+    // Top the floor keeper up out of the lockbox. After the two ratchet
+    // branches, which are the time-critical ones, and before selling, so the
+    // floor always has inventory when a fill is there to be taken.
+    //
+    // NOT every tick. The lockbox accrues continuously, so `releasable()` is
+    // essentially always above zero and a keeper that released whenever it
+    // could would send a transaction every tick for a few seconds' worth of
+    // dust — about nineteen hundred of them a day, all gas, no purpose. Found
+    // by driving it: three seconds after a clean two-million release it went
+    // back for sixty-nine tokens.
+    //
+    // So: only when a quarter of a day has piled up, OR when the floor keeper
+    // is nearly out of inventory and a sale would otherwise stall for want of
+    // tokens. Four or five transactions a day instead of two thousand.
+    if (lockRate > 0n) {
+      const enough = lockReady >= lockRate / 4n;
+      const starving = floorHas < lockRate / 24n && lockReady > 0n;
+      if (enough || starving) {
+        return act(
+          'release', [],
+          `RELEASE ${formatUnits(lockReady, 18)} $KEVIN from the lockbox`
+            + (starving && !enough ? ' (the floor keeper is out of inventory)' : ''),
+          cfg.lock, LOCK_ABI,
+        );
+      }
     }
 
     // The cooldown is checked HERE and not before the two branches above,
@@ -308,7 +386,7 @@ async function main() {
     lastSaid = why;
   }
 
-  async function act(fn, args, why) {
+  async function act(fn, args, why, to = cfg.floor, abi = ABI) {
     quiet = 0;
     lastSaid = '';
     if (!cfg.live) return say('WOULD', fn.toUpperCase(), '·', why);
@@ -324,7 +402,7 @@ async function main() {
       // room above the floor — reverts cleanly, and a simulated revert costs
       // nothing while a sent one costs gas and fills the journal with noise.
       const { request } = await pub.simulateContract({
-        address: cfg.floor, abi: ABI, functionName: fn, args, account,
+        address: to, abi, functionName: fn, args, account,
       });
       const hash = await wallet.writeContract(request);
       say('  sent', hash);
@@ -333,7 +411,7 @@ async function main() {
     } catch (e) {
       const m = e.shortMessage || e.message || String(e);
       // These are the contract saying no, which is the system working.
-      if (/NothingToDo|TooSoon|OverDailyCap/.test(m)) return say('  declined by the contract:', m.split('\n')[0]);
+      if (/NothingToDo|TooSoon|OverDailyCap|NothingToRelease/.test(m)) return say('  declined by the contract:', m.split('\n')[0]);
       warn('  send failed:', m.split('\n')[0]);
     }
   }
