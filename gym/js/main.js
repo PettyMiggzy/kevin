@@ -109,12 +109,28 @@ function normalise(root, { outline = true, palette = null } = {}) {
     // A world can ask for a bought kit in its own colours. Only the crib does,
     // because the gym and the fry house were furnished from a pack whose look
     // already suits them — see brand.js for why eleven colours is the whole job.
-    if (palette && !painted) base = palette(base) ?? base;
+    const rebranded = palette && !painted ? palette(base) : null;
+    if (rebranded) base = rebranded;
     // Tripo's albedo often bakes in lighting, which fights a flat ramp. Push
     // the colour up and desaturate slightly so the bands stay readable.
-    const hsl = { h: 0, s: 0, l: 0 };
-    base.getHSL(hsl);
-    base.setHSL(hsl.h, Math.min(0.85, hsl.s * 0.9), clamp(hsl.l * 1.15 + 0.06, 0.16, 0.92));
+    //
+    // NOT applied to a colour the palette chose. This correction is for albedo
+    // that arrived wrong; a brand colour arrived right, and pushing it does
+    // real damage — three's ColorManagement means getHSL works in LINEAR space,
+    // where the 0.16 floor is already a mid tone, so every dark in the palette
+    // was landing as mid-grey:
+    //
+    //     #33333B charcoal   -> #696976
+    //     #26262C near-black -> #696975
+    //     #C7382F brand red  -> #df544d
+    //
+    // The crib was authored dark and rendering grey, which is most of why it
+    // still did not look like the room it was meant to be.
+    if (!rebranded) {
+      const hsl = { h: 0, s: 0, l: 0 };
+      base.getHSL(hsl);
+      base.setHSL(hsl.h, Math.min(0.85, hsl.s * 0.9), clamp(hsl.l * 1.15 + 0.06, 0.16, 0.92));
+    }
     const m = toon(base, painted ? { vertexColors: true } : undefined);
     m.map = src?.map ?? null;                       // keep the texture, drop the shading
     m.userData.outlineParameters = outline
@@ -2595,6 +2611,12 @@ function renderShop() {
   // sprite look, which meant nobody in the default build ever saw it.
   if (!atlasPalette) { $('#shopItems').innerHTML = consumables; return; }
 
+  // Playing as a crew token is playing as somebody else. Their colours are
+  // theirs — the README is explicit that Kevin is the character and the crew are
+  // the collection — so a skin cannot show while you are one of them. Selling it
+  // anyway would take the coins and change nothing on screen, which is the exact
+  // complaint that made skins worth building.
+  const asCrew = Boolean(state.crewId);
   const owned = new Set(state.skins ?? [DEFAULT_SKIN]);
   const rows = [{ name: DEFAULT_SKIN, cost: 0, blurb: 'What you already are.' }, ...SKINS]
     .map((sk) => {
@@ -2602,11 +2624,13 @@ function renderShop() {
       const worn = state.skin === sk.name;
       const rgb = atlasPalette.colourways?.[sk.name] ?? [216, 28, 36];
       const swatch = `<i class="swatch" style="background:rgb(${rgb.join(',')})"></i>`;
-      const btn = worn
-        ? '<button class="buy" disabled>Worn</button>'
-        : have
-          ? `<button class="buy wear" data-skin="${sk.name}">Wear</button>`
-          : `<button class="buy skin" data-skin="${sk.name}"${state.coin >= sk.cost ? '' : ' disabled'}>${sk.cost} $KEVIN</button>`;
+      const btn = asCrew
+        ? '<button class="buy" disabled>Kevin only</button>'
+        : worn
+          ? '<button class="buy" disabled>Worn</button>'
+          : have
+            ? `<button class="buy wear" data-skin="${sk.name}">Wear</button>`
+            : `<button class="buy skin" data-skin="${sk.name}"${state.coin >= sk.cost ? '' : ' disabled'}>${sk.cost} $KEVIN</button>`;
       return `<div class="item"><div><h3>${swatch}${sk.name}</h3><small>${sk.blurb}</small></div>${btn}</div>`;
     }).join('');
 
@@ -2618,21 +2642,25 @@ function renderShop() {
     const worn = state.skin === sk.name;
     const locked = sk.tail && !sixOwned;
     const swatch = `<i class="swatch" style="background:rgb(${sk.rgb.join(',')})"></i>`;
-    const btn = worn
-      ? '<button class="buy" disabled>Worn</button>'
-      : locked
-        ? '<button class="buy" disabled>Locked</button>'
-        : have
-          ? `<button class="buy wear" data-skin="${sk.name}">Wear</button>`
-          : sk.tail
-            ? `<button class="buy skin" data-skin="${sk.name}">Claim</button>`
-            : `<button class="buy skin" data-skin="${sk.name}"${state.coin >= sk.cost ? '' : ' disabled'}>${sk.cost} $KEVIN</button>`;
+    const btn = asCrew
+      ? '<button class="buy" disabled>Kevin only</button>'
+      : worn
+        ? '<button class="buy" disabled>Worn</button>'
+        : locked
+          ? '<button class="buy" disabled>Locked</button>'
+          : have
+            ? `<button class="buy wear" data-skin="${sk.name}">Wear</button>`
+            : sk.tail
+              ? `<button class="buy skin" data-skin="${sk.name}">Claim</button>`
+              : `<button class="buy skin" data-skin="${sk.name}"${state.coin >= sk.cost ? '' : ' disabled'}>${sk.cost} $KEVIN</button>`;
     return `<div class="item"><div><h3>${swatch}<code>${sk.name}</code></h3><small>${sk.blurb}</small></div>${btn}</div>`;
   }).join('');
 
   $('#shopItems').innerHTML =
     `${consumables}<h3 class="shelf">Skins</h3>
-     <p class="note">Yours for good once bought. Changes how Kevin looks to you — no wallet, no chain.</p>
+     <p class="note">${asCrew
+       ? 'You are playing as a crew token. Their colours are theirs — switch back to Kevin at the crew stall to wear one.'
+       : 'Yours for good once bought. Changes how Kevin looks to you — no wallet, no chain.'}</p>
      ${rows}
      <h3 class="shelf">The contract</h3>
      <p class="note">Six colours cut straight out of the contract address, in order.
@@ -2690,6 +2718,7 @@ $('#shopItems').onclick = (e) => {
   const btn = e.target.closest('.buy');
   const skin = btn?.dataset.skin;
   if (skin) {
+    if (state.crewId) { play('deny'); return; }   // see renderShop: crew wear their own colours
     const owned = state.skins ?? (state.skins = [DEFAULT_SKIN]);
     if (!owned.includes(skin)) {
       const ca = CONTRACT_SKINS.find((s) => s.name === skin);
