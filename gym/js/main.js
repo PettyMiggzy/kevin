@@ -881,7 +881,10 @@ function swapPlayer(gridIndex) {
   if (set) abortSet();
   const at = kevin.group.position.clone();
   const facing = kevin.group.rotation.y;
-  scene.remove(kevin.group);
+  // Same reason as the queue: a swapped-out body is built per spawn and nothing
+  // else references it. Somebody trying on all the crew faces would otherwise
+  // leave one full body on the GPU per click.
+  disposeWorld(kevin.group);
   state.crewId = gridIndex;
   save(state);
   kevin = spawnPlayer(gridIndex, at);
@@ -1367,6 +1370,9 @@ async function init() {
     window.__scene = scene;
     window.__state = state;          // ?peek only: lets a test buy something
     window.__kev = () => kevin;      // ?peek only: the real player, not a guess
+    // ?peek only: renderer.info.memory is the only honest answer to "did that
+    // leak" — mesh counts say nothing about buffers still held on the GPU.
+    window.__renderer = renderer;
     window.__customers = customers;
     window.__npcs = npcs;
   }
@@ -2523,7 +2529,11 @@ function makeCustomer(crew, i) {
 /** Somebody left the front of the queue. Everyone steps up. */
 function shuffleQueue() {
   const gone = customers.shift();
-  if (gone) scene.remove(gone.group);
+  // dispose, not just remove. Each customer builds its OWN geometry from a
+  // voxel grid and its OWN material, so nothing else is holding either — and a
+  // shift discards six of them. Removing from the scene only drops the draw
+  // call; the buffers stay on the GPU for the life of the tab.
+  if (gone) disposeWorld(gone.group);
   customers.forEach((c, i) => {
     if (QUEUE[i]) c.group.position.set(QUEUE[i].x, 0, QUEUE[i].z);
   });
@@ -2536,7 +2546,7 @@ function shuffleQueue() {
 }
 
 function clearCustomers() {
-  for (const c of customers) scene.remove(c.group);
+  for (const c of customers) disposeWorld(c.group);
   customers.length = 0;
 }
 
