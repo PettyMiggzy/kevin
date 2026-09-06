@@ -76,6 +76,7 @@ export const CRIB_PROPS = [
   // the card room
   'card-table', 'card-chair', 'chandelier', 'poker-chips', 'playing-cards',
   'roulette-wheel', 'slot-machine', 'prize-wheel', 'claw-machine', 'arcade-machine',
+  'jukebox', 'wall-lamp',
   // the desk he actually makes the money at
   'desk', 'desk-chair', 'monitor', 'keyboard', 'mouse', 'laptop', 'speaker-hifi',
   // living
@@ -84,6 +85,7 @@ export const CRIB_PROPS = [
   // kitchen
   'kitchen-cabinet', 'kitchen-upper', 'kitchen-sink', 'stove', 'fridge',
   'mini-fridge', 'microwave', 'coffee-machine', 'extractor', 'bar-stool',
+  'cook-pot', 'frying-pan',
   // sleeping, clutter and the hallway
   'bed', 'pillow', 'bedside', 'table-lamp', 'side-table', 'soda-cup', 'tray-stack',
   'box-open', 'box-closed', 'doormat', 'coat-rack', 'trashcan', 'picture-frame',
@@ -250,11 +252,24 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
     });
     solids.push({ x: mx, z: mz, r: 0.55 });
   }
+  // A card room wants a jukebox more than it wants another lamp, and this one
+  // was already in the repo unplaced — ingested with the diner kit and never
+  // given a home.
+  fixture('jukebox', { x: -23.4, z: 21.3, width: 1.1, rotY: Math.PI / 4 }, () => {
+    solid(0.9, 1.5, 0.6, '#7A2A24', -23.4, 0.75, 21.3);
+  });
+  solids.push({ x: -23.4, z: 21.3, r: 0.6 });
   fixture('side-table', { x: -21.0, z: 21.4, width: 0.66 }, () => {
     solid(0.6, 0.1, 0.6, '#5A3A24', -21.0, 0.62, 21.4);
   });
   fixture('roulette-wheel', { x: -21.0, z: 21.4, width: 0.7, y: 0.66 });
   solids.push({ x: -21.0, z: 21.4, r: 0.45 });
+
+  // Two on the long wall, above the picture rail height, so the card end is not
+  // lit only from directly over the table.
+  for (const wz of [15.4, 19.8]) {
+    fixture('wall-lamp', { x: left + 0.3, z: wz, width: 0.3, y: 1.95, rotY: Math.PI / 2 });
+  }
 
   // --- the desk, which is where the money actually comes from ---------------
   // Six monitors of green candles. Three seeds, so three different markets:
@@ -391,6 +406,10 @@ export function buildCrib(scene, { flat, solids, blockers, spawn = null }) {
   fixture('microwave', { x: -15.6, z: KZ, width: 0.52, y: 0.92, rotY: Math.PI });
   fixture('coffee-machine', { x: -18.1, z: KZ, width: 0.32, y: 0.92, rotY: Math.PI });
   fixture('extractor', { x: -14.6, z: KZ, width: 0.85, y: 1.6, rotY: Math.PI });
+  // On the hob under the extractor, which is the only place either of these
+  // makes sense and is why they were ingested in the first place.
+  fixture('cook-pot', { x: -14.85, z: KZ - 0.06, width: 0.3, y: 0.97 });
+  fixture('frying-pan', { x: -14.3, z: KZ + 0.08, width: 0.34, y: 0.97, rotY: 0.6 });
   for (const ux of [-17.6, -16.6]) {
     fixture('kitchen-upper', { x: ux, z: back - 0.32, width: 0.92, y: 1.55, rotY: Math.PI });
   }

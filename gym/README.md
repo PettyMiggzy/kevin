@@ -189,9 +189,10 @@ a pylon sign, and it will stay one. The name is fine; the mark is the line, and
 - **Only the head extrudes from the NFT grid.** The body is procedural boxes
   coloured by the shirt trait, because the avatar is a portrait and stops at
   the shoulders.
-- **Fourteen props ship without being placed** (~977KB of the repo, not of any
+- **Seven props ship without being placed** (~510KB of the repo, not of any
   player's download — props are fetched by name on demand). They are ingested
-  spares waiting for a home, not dead code, but they are not free either.
+  spares waiting for a home, not dead code, but they are not free either. Two
+  byte-identical duplicates were deleted rather than kept as spares.
 - `raw/` is 294MB and gitignored. `state.json` beside it is the paid-work cache
   and IS committed — a cached task id is the difference between re-downloading
   a model and buying it a second time. Never delete `raw/` without checking it.
