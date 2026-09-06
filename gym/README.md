@@ -73,9 +73,11 @@ in one costs nothing in the others:
   that give the room zones you can tell apart across it, and a boxing ring in
   the corner with the bags. Supplements and water are stalls on the street
   outside now, not six metres of counter across the near end of the room
-- **McKevin's** (24 x 16, 293 meshes) — a restaurant you work a shift inside:
-  kitchen line, counter with three tills, dining room, drive-thru window, and a
-  car park with a pylon sign
+- **McKevin's** (24 x 16, 297 meshes) — a restaurant you work a shift inside:
+  kitchen line, counter with three tills and three different menu boards, dining
+  room, drive-thru window, and a car park with a pylon sign. Lit by its own
+  lamps — cold over the dining room, warm over the line, and heat lamps over the
+  pass, which is the only orange light in the building
 
 **And in them:**
 

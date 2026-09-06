@@ -1707,10 +1707,29 @@ function frame() {
     camera.position.copy(peek.pos);
     aim.copy(peek.at);
   } else if (shift && shiftCam) {
-    // Locked off at the window. A chase camera here would follow a player who
-    // is standing still and frame the inside of a wall.
-    camera.position.lerp(shiftCam.pos, 1 - Math.pow(0.004, dt));
-    aim.copy(shiftCam.at);
+    // Orbits its pivot, which is the thing you are actually looking at — the
+    // gap between the till you are standing behind and whoever is next. A
+    // player standing still does not want a chase camera, but they do want to
+    // be able to look down the queue and back along the line, and that is what
+    // the drag is for. It is CLAMPED rather than free: past about a radian
+    // either way the shot is inside the kitchen wall or out in the car park,
+    // and there is nothing to see in either.
+    const sc = shiftCam;
+    chase.manual = Math.max(0, chase.manual - dt);
+    if (!chase.manual) {
+      // Hand it back after a drag, the same way the walking camera does.
+      const d = ((sc.home - chase.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+      chase.yaw += d * (1 - Math.pow(0.45, dt));
+      chase.lift += (0 - chase.lift) * (1 - Math.pow(0.5, dt));
+    }
+    chase.yaw = clamp(chase.yaw, sc.home - sc.swing, sc.home + sc.swing);
+    tmp.set(
+      sc.pivot.x + Math.sin(chase.yaw) * sc.dist,
+      sc.high + clamp(chase.lift, -0.55, 1.10),
+      sc.pivot.z + Math.cos(chase.yaw) * sc.dist
+    );
+    camera.position.lerp(tmp, 1 - Math.pow(0.004, dt));
+    aim.copy(sc.at);
   } else if (set?.station.cam) {
     const c = set.station.cam;
     tmp.set(set.station.x + c.x, c.y, set.station.z + c.z);
@@ -2092,6 +2111,35 @@ const MOODS = {
       ['#EAF4FF', 4.60, 14.0, 11.0, 4.30, -2.0, 1],   // cardio
       ['#FFF0D2', 4.60, 14.0, 1.0, 4.30, 3.0, 1],     // the mat
       ['#EAF4FF', 3.60, 12.0, -13.0, 4.30, 5.0, 1],   // the changing end
+    ],
+  },
+  // McKevin's, which is a building you go inside and had no light of its own at
+  // all — buildWorkWorld asked for a 'work' mood and there was no such key, so
+  // applyMood fell through to `MOODS[name] ?? MOODS.outdoor` and a fast food
+  // interior was lit by a midday sun and nothing else. Traversing the live
+  // scene found three lights and zero point lights.
+  //
+  // A fry house is lit by three different things, and that difference is most
+  // of why the inside of one looks like the inside of one: cold strips over the
+  // dining room, warm ones over the line, and heat lamps over the pass, which
+  // are the only orange light in the building and sit exactly where the food
+  // waits. The sun stays, weaker than outdoors: the whole front is a 1.5 m knee
+  // wall with glazing over it and a daylit car park beyond, so the light coming
+  // in through the front is real.
+  work: {
+    hemi: ['#EAF2FF', '#6E6354', 1.30],
+    key: ['#FFF4DA', 1.40],
+    fill: ['#FFC98A', 0.55],
+    points: [
+      ['#FFF3DC', 4.40, 15.0, -8.4, 3.60, -7.4, 1],  // over the grills
+      ['#FFF3DC', 4.00, 14.0, -2.4, 3.60, -7.4, 1],  // over the prep end
+      ['#FFA23A', 3.00, 6.5, -6.0, 2.45, -1.4, 1],   // heat lamps, staff side
+      ['#FFA23A', 3.00, 6.5, -1.0, 2.45, -1.4, 1],
+      ['#EAF4FF', 4.20, 15.0, -6.0, 3.60, 3.6, 1],   // the dining room
+      ['#EAF4FF', 4.20, 15.0, 1.0, 3.60, 3.6, 1],
+      // The back right corner is shelving and two walk-ins and nothing else,
+      // eleven metres from any other lamp, so it fell to black.
+      ['#DCE6F2', 3.00, 12.0, 8.0, 3.60, -7.0, 1],
     ],
   },
   // The flat. Almost no sky, a weak warm ceiling wash, and then the room is lit
@@ -2861,20 +2909,40 @@ function clockIn() {
   kevin.group.position.set(-2.5, 0, FRY.counterZ - 1.5);
   kevin.group.rotation.y = Math.PI;
 
-  // Three-quarters from the front left: the queue leads away to the window, so
-  // you can see who is next as well as who you are serving. Straight over the
-  // shoulder shows four backs, and side-on from far enough to fit them all in
-  // frames most of the forecourt instead.
-  // Aimed low on purpose. The order panel owns the bottom third of the screen,
-  // and anything at eye level ends up behind it — aiming at the queue's feet
-  // lifts their heads into the clear half.
+  // A PIVOT AND A HEADING, not a welded pair of points.
+  //
+  // This was two fixed vectors, and frame() lerped to them and ignored
+  // chase.yaw entirely — so a drag during a shift was read, stored, and thrown
+  // away, and the minigame you spend most of your time in had exactly one
+  // angle. It also framed badly from that angle: the shot sat 3.4 m up and
+  // 6.2 m back on the customers' side, which put a fifth of the screen out
+  // through a 1.5 m shopfront into the car park, and put the player himself
+  // dead centre at the bottom — where the order panel is, 520 px of it. He was
+  // a pair of eyes over the top edge of his own UI.
+  //
+  // So: orbit a pivot between the counter and the head of the queue, start
+  // behind the player's right shoulder, and let a drag swing it. `home` is
+  // where it returns to when nobody is dragging.
+  // ON THE STAFF SIDE, because that is the side that shows you faces. The
+  // customers face the counter, so a camera in the dining room films four backs
+  // and you cannot tell who is next — which is the whole information the
+  // minigame runs on. Behind and to the left of the player, close enough that
+  // the frame is counter, customer and queue with no shopfront in it.
   shiftCam = {
-    // On the customer's side of the counter, which moved when the building
-    // was turned round to face the camera.
-    // Over the player's shoulder from behind the counter, looking at the queue.
-    pos: new THREE.Vector3(-2.5, 3.4, FRY.counterZ - 6.2),
-    at: new THREE.Vector3(-2.2, 1.1, FRY.counterZ + 1.4),
+    pivot: new THREE.Vector3(-2.5, 0, FRY.counterZ - 1.5),
+    at: new THREE.Vector3(-1.9, 1.20, FRY.counterZ + 2.2),
+    // Three-quarters from HIS left, which puts him in the right third of the
+    // frame and the queue in the middle. Square-on (yaw PI) puts him dead
+    // centre at the bottom, which is exactly where the 520 px order panel is:
+    // he was a pair of eyes over the top edge of his own UI.
+    home: Math.PI - 0.50,
+    swing: 0.95,            // past this the shot is in the kitchen wall
+    dist: 4.4,              // at 3.9 he was half off the right-hand edge
+    high: 2.05,
   };
+  chase.yaw = shiftCam.home;
+  chase.manual = 0;
+  chase.lift = 0;
 
   shift = new Shift(playClock);
   spawnCustomers();
@@ -3011,10 +3079,16 @@ function makeCustomer(crew, i) {
   applyCrewMuscle(body, 0.1 + Math.random() * 0.75);
   const spot = QUEUE[Math.min(i, QUEUE.length - 1)];
   body.group.position.set(spot.x, 0, spot.z);
-  // Turned toward the counter, but angled off it so the camera gets a face
-  // rather than four backs. Squarely facing the window is more correct and
-  // makes the queue anonymous, which defeats the point of having people in it.
-  body.group.rotation.y = -0.8 + (Math.random() - 0.5) * 0.4;
+  // FACING THE COUNTER, which is also facing the camera, because the shot is
+  // taken from the staff side. A crew body's forward is its local +z, so PI is
+  // the counter; -0.8 turned them 46 degrees off it, side-on to both the till
+  // they are queueing at and the player serving them. Four featureless slabs at
+  // the same scale and colour as the booths behind them — measured at 190 to
+  // 317 pixels tall in the middle of the frame and still unreadable as people,
+  // because a crew head only carries a face on its front.
+  //
+  // Off-square by a little, so it is a queue of people rather than a row.
+  body.group.rotation.y = Math.PI + (Math.random() - 0.5) * 0.7;
   scene.add(body.group);
   return body;
 }

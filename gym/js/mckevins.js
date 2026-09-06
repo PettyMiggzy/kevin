@@ -146,12 +146,18 @@ export function buildShop(scene, { flat, solids, blockers, spawn = null }) {
   // not merely blank but ABSENT. That is where the player stands for the whole
   // shift: the only signage in the building was invisible from the one position
   // the game puts you in.
+  //
+  // AND HUNG HIGH, the way a real one is. At 2.9 they were level with the shift
+  // camera four metres away, so the backs of them were a black band across the
+  // top half of the frame for the entire minigame — the boards fixed one
+  // problem and created a worse one. At 3.3 the board bottom is 2.55, which is
+  // still readable from the queue and above everything the shot cares about.
   for (let i = 0; i < 3; i++) {
     const mx = CL + 2.4 + i * 4.6;
-    solid(3.6, 1.7, 0.12, '#141418', mx, 2.9, counterZ - 0.66);
-    quad(3.4, 1.5, menuTexture(i), mx, 2.9, counterZ - 0.59);
+    solid(3.6, 1.7, 0.12, '#141418', mx, 3.30, counterZ - 0.66);
+    quad(3.4, 1.5, menuTexture(i), mx, 3.30, counterZ - 0.59);
   }
-  solid(CR - CL + 0.4, 0.3, 0.3, '#2A2A2E', (CL + CR) / 2, 3.75, counterZ - 0.6);
+  solid(CR - CL + 0.4, 0.3, 0.3, '#2A2A2E', (CL + CR) / 2, 4.05, counterZ - 0.6);
   blockers.push({ x0: CL - 0.2, x1: CR + 0.2, z0: counterZ - 0.6, z1: counterZ + 0.6 });
 
   // --- kitchen, behind the counter ------------------------------------------

@@ -58,7 +58,14 @@ export const QUEUE = [
   // is 0.34 wide, so those two customers stood a metre inside a booth for the
   // whole shift. The lane between the booths at x -4.2 and the sauce stand
   // blocker at x 2.5 is what is actually free, so the queue snakes down that.
-  { x: -2.0, z: 1.4 }, { x: -1.1, z: 2.7 }, { x: -2.3, z: 3.9 }, { x: -1.3, z: 5.1 },
+  //
+  // AND UP AGAINST IT. The counter's front face is at z -0.05 and the first
+  // mark was at 1.4 — a metre and a half of empty tile between the person you
+  // are serving and the till you are serving them at, with the other three
+  // strung out to z 5.1, which is ten metres from the shift camera. At that
+  // range four people read as more furniture. The head of the queue is at the
+  // counter now and the tail is inside the room.
+  { x: -2.0, z: 0.55 }, { x: -1.15, z: 1.75 }, { x: -2.3, z: 2.95 }, { x: -1.25, z: 4.15 },
 ];
 
 /**
