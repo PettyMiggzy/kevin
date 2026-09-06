@@ -1376,7 +1376,14 @@ async function init() {
   refreshBoard();
   if (gone.days >= 1) {
     if (gone.frozen) {
-      toast('Protein shake used.<br><small>One missed day covered. That was the last spare.</small>', 4200);
+      // What is actually left, not an assumption. The player can hold two, and
+      // this line used to say "that was the last spare" either way — a flat
+      // untruth half the time it appeared, about the one resource the shop
+      // charges 200 coins for.
+      const left = state.freezes === 0
+        ? 'That was your last spare.'
+        : `${state.freezes} spare left.`;
+      toast(`Protein shake used.<br><small>One missed day covered. ${left}</small>`, 4200);
     } else if (gone.lost > 0.4) {
       toast(
         `You were gone ${gone.days < 2 ? 'a day' : Math.floor(gone.days) + ' days'}.` +

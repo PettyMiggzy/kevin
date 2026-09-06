@@ -147,9 +147,29 @@ export function settle(s, now = Date.now()) {
     return { days, lost: 0, staminaLost: 0, frozen: false, before };
   }
 
+  // A MISSED DAY IS A CALENDAR DAY NOBODY WORKED OUT ON, not 24 elapsed hours.
+  // Both rules below used to be keyed on hours, and both were wrong for it:
+  //
+  //   played Mon 09:00, back Tue 10:00  -> 25h. Nothing was missed, and it
+  //                                        burned a protein shake anyway. Two
+  //                                        days of ordinary play emptied both.
+  //   played Mon 09:00, back Wed 09:00  -> 48h. Exactly one day (Tuesday) was
+  //                                        missed — the case this file, the shop
+  //                                        and the HUD all promise is forgiven —
+  //                                        and the streak was reset regardless.
+  //
+  // Counting days instead of hours makes both behave the way they are sold, and
+  // takes the clock time of day out of it entirely.
+  //
+  // lastWorkoutDay 0 means they have never worked out, so there is no day to
+  // have missed, nothing to cover and no streak to lose.
+  const missedDays = s.lastWorkoutDay ? dayOf(now) - s.lastWorkoutDay - 1 : 0;
+
   let frozen = false;
-  if (s.freezes > 0 && days < 2.5) {
-    // A freeze covers one missed day rather than an indefinite absence.
+  // "A spare day. Miss one and this covers it instead of your muscle." One is
+  // one: a shake is not spent on a gap that missed nothing, and it is not
+  // thrown away on a gap it could never have covered.
+  if (s.freezes > 0 && missedDays === 1) {
     s.freezes -= 1;
     frozen = true;
   } else {
@@ -159,7 +179,7 @@ export function settle(s, now = Date.now()) {
     s.stamina = Math.max(0, s.stamina * factor);
     // The streak survives one missed day, then it is gone. Two days is a
     // decision; one day is a bus being late.
-    if (days >= 2) s.streak = 0;
+    if (missedDays >= 2) s.streak = 0;
   }
 
   s.lastSeen = now;
@@ -206,7 +226,15 @@ export function workout(s, station, now = Date.now(), quality = 1) {
   s.goalSets = (s.goalSets || 0) + 1;
 
   if (s.lastWorkoutDay !== today) {
-    s.streak = s.lastWorkoutDay === today - 1 || s.lastWorkoutDay === 0 ? s.streak + 1 : 1;
+    // ONE MISSED DAY IS FORGIVEN. settle() has always said so — "the streak
+    // survives one missed day, then it is gone. Two days is a decision; one day
+    // is a bus being late" — and the shop and the HUD both sell it. This line
+    // did not implement it: only `today - 1` continued a streak, so a single
+    // missed day reset it to 1 no matter what settle() had decided, and a
+    // freeze spent to protect it protected nothing.
+    const cont = s.lastWorkoutDay === today - 1 || s.lastWorkoutDay === today - 2
+      || s.lastWorkoutDay === 0;
+    s.streak = cont ? s.streak + 1 : 1;
     s.lastWorkoutDay = today;
     s.coin += 15;                      // showing up is worth more than the set
     if (s.streak > 0 && s.streak % 5 === 0) s.freezes = Math.min(2, s.freezes + 1);
