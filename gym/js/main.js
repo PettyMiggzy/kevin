@@ -1413,6 +1413,18 @@ let board = null;                     // the leaderboard mesh on the back wall
 const customers = [];                 // bodies in the queue at the window
 let shiftCam = null;                  // where the camera sits while working
 /**
+ * The room the chase camera has to stay inside, or null out of doors.
+ *
+ * This was the gym's ROOM, unconditionally, in every world — so McKevin's, a
+ * different building sixteen metres wide at different coordinates, had the
+ * GYM's walls cutting its camera ray. At the work world's spawn (5.8, 10.5)
+ * that put an imaginary wall 0.6 m behind the player and collapsed the shot to
+ * the minimum: you arrived at your job looking straight down at the top of
+ * your own hat. Set from the world's own meta now, and applied only while the
+ * player is actually inside it.
+ */
+let camRoom = null;
+/**
  * Dev only, and only when asked for: ?peek lets a screenshot harness park the
  * camera anywhere so scene composition can be checked without walking there.
  * Camera position and aim, nothing else — it cannot touch state or progress.
@@ -1727,11 +1739,18 @@ function frame() {
     // inside whatever stands against that wall. Cutting the ray at the wall
     // keeps the shot on its own line, and lets the occlusion march below have
     // the final word about what is in it.
-    if (kevin.group.position.z <= ROOM.d / 2) {
-      const lim = (p, s, half) => (Math.abs(s) < 1e-4 ? Infinity : ((s > 0 ? half : -half) - p) / s);
+    //
+    // Only while the player is INSIDE that building, and only in a world that
+    // declared one. Out on a forecourt there is no roof to hit and no wall to
+    // see through, so the shot is free.
+    const kp = kevin.group.position;
+    const indoors = camRoom
+      && kp.x > camRoom.x0 && kp.x < camRoom.x1 && kp.z > camRoom.z0 && kp.z < camRoom.z1;
+    if (indoors) {
+      const lim = (p, s, at) => (Math.abs(s) < 1e-4 ? Infinity : (at - p) / s);
       want = Math.min(want,
-        lim(kevin.group.position.x, sx, ROOM.w / 2 - 0.9),
-        lim(kevin.group.position.z, sz, ROOM.d / 2 - 0.9));
+        lim(kp.x, sx, sx > 0 ? camRoom.x1 - 0.9 : camRoom.x0 + 0.9),
+        lim(kp.z, sz, sz > 0 ? camRoom.z1 - 0.9 : camRoom.z0 + 0.9));
       // A wall is a hard limit, not a preference: floored at CAM_MIN this would
       // put the shot back through it, which is the black frame all over again.
       want = Math.max(want, 0.9);
@@ -1754,7 +1773,7 @@ function frame() {
       kevin.group.position.z + sz * dist
     );
     // Only the ceiling is left to duck under; the walls were handled by the ray.
-    if (kevin.group.position.z <= ROOM.d / 2) tmp.y = Math.min(tmp.y, ROOM.h - 0.7);
+    if (indoors) tmp.y = Math.min(tmp.y, camRoom.h - 0.7);
     tmp.y = Math.max(tmp.y, 1.15);
     // Where the shot is heading, as opposed to where it has got to. Tooling has
     // to be able to ask about the decision without waiting out the ease.
@@ -1967,7 +1986,8 @@ async function buildGymWorld() {
     act: 'Home', x: -YARD.x + 3.0, z: YARD.z - 4.0 });
   places.push({ kind: 'door', to: 'work', label: "McKevin's", note: 'down the road',
     act: 'Go', x: YARD.x - 3.0, z: YARD.z - 4.0 });
-  return { fp: false, spawn: { x: 0, z: 15.5 }, mood: 'gym' };
+  return { fp: false, spawn: { x: 0, z: 15.5 }, mood: 'gym',
+    room: { x0: -ROOM.w / 2, x1: ROOM.w / 2, z0: -ROOM.d / 2, z1: ROOM.d / 2, h: ROOM.h } };
 }
 
 /**
@@ -1988,7 +2008,9 @@ async function buildWorkWorld() {
     act: 'Work', x: -2.5, z: FRY.counterZ - 1.5 });
   places.push({ kind: 'door', to: 'gym', label: 'Back to the gym', note: 'up the road',
     act: 'Go', x: 5.8, z: 12.0 });
-  return { fp: false, spawn: { x: 5.8, z: 10.5 } };
+  return { fp: false, spawn: { x: 5.8, z: 10.5 }, mood: 'work',
+    room: { x0: FRY.x - FRY.w / 2, x1: FRY.x + FRY.w / 2,
+            z0: FRY.z - FRY.d / 2, z1: FRY.z + FRY.d / 2, h: FRY.h } };
 }
 
 async function buildCribWorld() {
@@ -2127,6 +2149,7 @@ async function setWorld(id, at = null) {
   // A shot pulled in against a machine in the last room would otherwise arrive
   // in the next one still pinned to the back of his head.
   chase.hold = chase.dist;
+  camRoom = null;                 // each world declares its own, or has none
   for (const n of npcs) n.group.removeFromParent();
   npcs.length = 0;
   // SPOTS outlives the world. Leave the flags set and the next visit finds
@@ -2148,6 +2171,7 @@ async function setWorld(id, at = null) {
       worldGroup.add(child);
     }
   }
+  camRoom = meta.room ?? null;
   applyMood(meta.mood ?? 'outdoor', worldGroup);
   worldId = id;
   state.world = id;
@@ -3309,7 +3333,20 @@ function dragStick(e) {
   input.s = dx / R;
   input.f = -dy / R;
 }
-$('#act').onclick = () => { input.act = true; };
+// ON THE PRESS, NOT ON THE RELEASE.
+//
+// This was `onclick`, which fires when the finger LIFTS. Every rep played on a
+// phone was therefore graded at the end of the tap rather than at the moment
+// the player was aiming with — 60 to 120 ms late, on a green band that is
+// 75 ms wide at the squat rack and 190 ms at its widest. The keyboard has
+// always fired on keydown, so touch and keys were being graded on two
+// different moments of the same gesture, and the touch one could not land a
+// perfect rep at the tight stations at all. Most of a Telegram audience is on
+// a phone.
+//
+// preventDefault stops the synthetic click that would otherwise follow and
+// fire a second rep, and stops the press being taken as a scroll.
+$('#act').addEventListener('pointerdown', (e) => { e.preventDefault(); input.act = true; });
 
 $('#start').onclick = () => {
   $('#start').disabled = true;
