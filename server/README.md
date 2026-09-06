@@ -29,11 +29,28 @@ cd /opt/kevin && ./setup.sh
 ```
 
 That is the whole thing. It generates the admin key if there is not one,
-installs both service files, wires the bot to the scores service over
-localhost, starts them, and tells you whether they came up.
+installs all three service files, installs the keeper's one npm dependency,
+wires the bot to the scores service over localhost, starts what is ready, and
+tells you whether it came up.
 
 Safe to run again after every `git pull` — it keeps every key it finds and only
-creates one that does not exist.
+creates one that does not exist. **Run it after every pull**; a droplet that has
+only pulled is running the old code with the old unit files.
+
+The three services:
+
+| | what it does | starts by default |
+|---|---|---|
+| `kevin-scores` | the game's score API on localhost:8787 | yes |
+| `kevin-bot` | the Telegram bot | yes |
+| `kevin-floor` | the floor keeper — [contracts/FLOOR.md](../contracts/FLOOR.md) | **only once configured** |
+
+`kevin-floor` is the one service here that can spend money, so it does not come
+up by accident. `setup.sh` installs it and then refuses to start it until
+`/etc/systemd/system/kevin-floor.service.d/local.conf` exists with a
+`FLOOR_ADDRESS` in it, and it prints the block to write. Even then it starts in
+**dry run** — it reads, decides, and sends nothing — until `LIVE=1` is added,
+which `setup.sh` will warn you about on every run so it is never a surprise.
 
 The bot gets its settings from a systemd **drop-in**
 (`/etc/systemd/system/kevin-bot.service.d/local.conf`) rather than from the unit

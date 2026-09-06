@@ -251,8 +251,14 @@ The operator is a hot key on a server. Assume it leaks.
 `test_dailyCapBoundsALeakedKey` pokes twenty times with the operator key and
 asserts what left is at most one day's allowance.
 
-**What the owner can still do to you:** `sweep()` takes everything. Stated here
-rather than hidden behind a timelock nobody would wait out. Use a multisig.
+**What the owner can still do to you:** `sweep()` takes everything in this
+contract, instantly, with one key. Stated here rather than hidden behind a
+timelock nobody would wait out.
+
+That is the reason to keep this contract's balance to a few days' worth of drip
+and hold the rest in [`KevinLock`](./LOCK.md), where the same key cannot do the
+same thing — a withdrawal there announces itself two weeks in advance and cannot
+be hurried. Small working balance here, the bag over there.
 
 ## Suggested settings
 
@@ -286,7 +292,7 @@ export QUOTE=0x0000000000000000000000000000000000000000   # native ETH
 export POOL_FEE=3000        # must match the pool exactly
 export TICK_SPACING=60      # must match the pool exactly
 export POOL_HOOKS=0x0000000000000000000000000000000000000000
-export FLOOR_OWNER=0x...    # multisig
+export FLOOR_OWNER=0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf   # the owner wallet
 export FLOOR_OPERATOR=0x...
 
 forge script script/DeployFloorV4.s.sol --rpc-url robinhood --broadcast

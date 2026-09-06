@@ -19,7 +19,8 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  *   FLOOR_ADDRESS   the deployed KevinFloorV4. THE ONLY PLACE THE FAST PATH
  *                   CAN EVER SEND, and it is immutable, so check it twice.
  *   BENEFICIARY     the treasury. The only address a slow exit can send to,
- *                   also immutable. Use the multisig.
+ *                   also immutable. Defaults to the owner's wallet:
+ *                   0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf
  *   RATE_PER_DAY    tokens released to the floor keeper per day, 18 decimals.
  *                   Can be lowered later, never raised. Set it at or below the
  *                   floor keeper's own dailyTokenCap or the difference just
@@ -38,7 +39,7 @@ contract DeployLock is Script {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address token = vm.envAddress("KEVIN_TOKEN");
         address floor = vm.envAddress("FLOOR_ADDRESS");
-        address beneficiary = vm.envAddress("BENEFICIARY");
+        address beneficiary = vm.envOr("BENEFICIARY", address(0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf));
         uint256 rate = vm.envUint("RATE_PER_DAY");
         uint256 delay = vm.envOr("EXIT_DELAY", uint256(14 days));
 

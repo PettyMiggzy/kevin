@@ -27,7 +27,10 @@ import {Currency} from "v4-core/src/types/Currency.sol";
  *   POOL_FEE        the fee tier the pool was created with, e.g. 3000
  *   TICK_SPACING    the pool's tick spacing, e.g. 60
  *   POOL_HOOKS      the pool's hooks address, or address(0)
- *   FLOOR_OWNER     can sweep and re-tune. A multisig.
+ *   FLOOR_OWNER     can sweep and re-tune. Defaults to the owner's wallet:
+ *                   0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf
+ *                   It is one key, deliberately. See LOCK.md for what that
+ *                   does and does not put at risk.
  *   FLOOR_OPERATOR  the hot key that pokes it. Assume it leaks.
  *
  *   Rails, optional:
@@ -62,7 +65,7 @@ contract DeployFloorV4 is Script {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address token = vm.envAddress("KEVIN_TOKEN");
         address quote = vm.envAddress("QUOTE");
-        address owner = vm.envAddress("FLOOR_OWNER");
+        address owner = vm.envOr("FLOOR_OWNER", address(0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf));
 
         // v4 sorts the two currencies by address; native ETH is address(0) and
         // therefore always currency0.

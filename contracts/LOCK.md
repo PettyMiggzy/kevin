@@ -43,6 +43,28 @@ to shorten it by being impatient.
 `beneficiary` and `exitDelay` are immutable. `ratePerDay` can only ever be
 *lowered*. Every lever on the contract points the same direction: slower.
 
+## One key holds it, and the notice period is why that is survivable
+
+The beneficiary is `0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf` — one
+wallet, not a multisig, deliberately, because it is the owner's money.
+
+The thing worth understanding about that choice: **the fourteen-day notice
+protects the bag even against that key being stolen.** Someone who takes the
+wallet cannot take the tokens. They can call `requestExit()`, which emits a
+public event and starts a countdown that cannot be shortened, and then they have
+to wait two weeks in full view. The owner has two weeks to notice, to say so
+publicly, and — since `cancelExit()` is also theirs — to cancel it if they can
+recover the key or move first.
+
+That is a genuinely better property than most multisigs have, and it comes for
+free from the design. It is worth knowing so the single key is a considered
+choice rather than an unexamined one.
+
+What one key **does** still put fully at risk: everything in `KevinFloorV4`,
+which the same wallet owns and can `sweep()` instantly. That is the argument for
+keeping the floor keeper's working balance small — a few days' drip, not a
+reserve — and letting the lockbox hold the rest.
+
 ## What it costs you
 
 The honest version: **if the floor keeper turns out to have a bug, you wait out
@@ -69,7 +91,7 @@ to.
 export PRIVATE_KEY=...
 export KEVIN_TOKEN=0x...
 export FLOOR_ADDRESS=0x...     # the deployed KevinFloorV4. IMMUTABLE.
-export BENEFICIARY=0x...       # the treasury multisig. IMMUTABLE.
+export BENEFICIARY=0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf   # IMMUTABLE
 export RATE_PER_DAY=2000000000000000000000000   # 2m/day, 18 decimals
 export EXIT_DELAY=1209600      # 14 days. IMMUTABLE.
 

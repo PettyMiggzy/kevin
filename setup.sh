@@ -54,6 +54,50 @@ EOF
 chmod 600 /etc/systemd/system/kevin-bot.service.d/local.conf
 ok "unit + drop-in installed (bot talks to scores over localhost)"
 
+# --- the floor keeper --------------------------------------------------------
+# Installed always, started only when it has been told what to drive. It is the
+# one service here that can spend money, so it does not come up by accident.
+say "Floor keeper"
+
+KEEPER_DROPIN=/etc/systemd/system/kevin-floor.service.d/local.conf
+install -m 644 keeper/kevin-floor.service /etc/systemd/system/kevin-floor.service
+ok "unit installed"
+
+# viem is the keeper's only dependency and the first one this repo has ever had
+# at runtime, so a droplet that has only ever pulled will not have it.
+if [ ! -d node_modules/viem ]; then
+  say "  installing node dependencies (viem)"
+  npm install --omit=dev --no-audit --no-fund >/dev/null 2>&1 \
+    && ok "viem installed" || bad "npm install failed — the keeper will not start"
+else
+  ok "viem present"
+fi
+
+if [ -s keeper/.operator.key ]; then
+  chmod 600 keeper/.operator.key
+  ok "keeper/.operator.key (kept)"
+else
+  bad "keeper/.operator.key is missing — the keeper can only dry-run"
+fi
+
+KEEPER_READY=0
+if [ -s "$KEEPER_DROPIN" ] && grep -q FLOOR_ADDRESS "$KEEPER_DROPIN"; then
+  KEEPER_READY=1
+  ok "configured: $KEEPER_DROPIN"
+  grep -q "LIVE=1" "$KEEPER_DROPIN" \
+    && bad "LIVE=1 is set — this keeper SENDS TRANSACTIONS" \
+    || ok "dry run (no LIVE=1)"
+else
+  bad "not configured, so not starting. Write $KEEPER_DROPIN:"
+  cat >&2 <<'EOF'
+        [Service]
+        Environment=FLOOR_ADDRESS=0x...
+        Environment=ROBINHOOD_RPC_URL=https://...
+        Environment=LOCK_ADDRESS=0x...        # optional, the treasury lockbox
+        # Environment=LIVE=1                  # ONLY after a day of dry run
+EOF
+fi
+
 # --- start them --------------------------------------------------------------
 say "Starting"
 systemctl daemon-reload
@@ -61,12 +105,18 @@ systemctl enable --now kevin-scores >/dev/null 2>&1 || true
 systemctl restart kevin-scores
 systemctl enable --now kevin-bot >/dev/null 2>&1 || true
 systemctl restart kevin-bot
+if [ "$KEEPER_READY" = "1" ]; then
+  systemctl enable --now kevin-floor >/dev/null 2>&1 || true
+  systemctl restart kevin-floor
+fi
 
 sleep 2
 
 # --- did it work -------------------------------------------------------------
 say "State"
-for unit in kevin-scores kevin-bot; do
+UNITS="kevin-scores kevin-bot"
+[ "$KEEPER_READY" = "1" ] && UNITS="$UNITS kevin-floor"
+for unit in $UNITS; do
   if systemctl is-active --quiet "$unit"; then ok "$unit running"; else
     bad "$unit is NOT running — journalctl -u $unit -n 30 --no-pager"
   fi
@@ -82,6 +132,7 @@ say "Done"
 cat <<'EOF'
   journalctl -u kevin-bot -f        watch the bot
   journalctl -u kevin-scores -f     watch the scores service
+  journalctl -u kevin-floor -f      watch the floor keeper
 
   In Telegram: /link  -> the bot DMs you a code
   Then: /top and /shifts read the board.
