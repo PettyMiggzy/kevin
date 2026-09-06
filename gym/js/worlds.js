@@ -31,7 +31,11 @@ export function disposeWorld(group) {
       if (o.geometry && !o.userData.sharedGeometry) o.geometry.dispose();
       for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
         if (!m) continue;
-        for (const k of ['map', 'alphaMap', 'emissiveMap', 'normalMap', 'gradientMap']) {
+        // gradientMap is NOT in this list on purpose. It is the toon ramp —
+        // one texture created once at module load and shared by every material
+        // in the game — so disposing it here frees something this world does not
+        // own, on behalf of every other world too.
+        for (const k of ['map', 'alphaMap', 'emissiveMap', 'normalMap']) {
           if (m[k]?.isTexture) textures.add(m[k]);
         }
         m.dispose();

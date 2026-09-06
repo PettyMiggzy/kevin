@@ -64,14 +64,28 @@ export const DAILY_GOAL = 3;
 
 const dayOf = (t) => Math.floor(t / DAY);
 
+/**
+ * A save that shares nothing with FRESH.
+ *
+ * Spreading an object copies array REFERENCES, so state.skins WAS FRESH.skins
+ * for any new player — and the shop pushes onto it. One purchase permanently
+ * added that skin to the defaults, so the next new save, and every reset(),
+ * started already owning it. Cheap to prove and easy to miss.
+ */
+const fresh = () => ({ ...FRESH, skins: [...FRESH.skins] });
+
 export function load() {
   let s;
   try {
-    s = { ...FRESH, ...JSON.parse(localStorage.getItem(KEY) || '{}') };
+    s = { ...fresh(), ...JSON.parse(localStorage.getItem(KEY) || '{}') };
   } catch {
-    s = { ...FRESH };
+    s = fresh();
   }
   if (!s.lastSeen) s.lastSeen = Date.now();
+  // A save written before skins existed, or one somebody hand-edited, can carry
+  // a non-array here. The shop pushes onto it without checking.
+  if (!Array.isArray(s.skins)) s.skins = [...FRESH.skins];
+  if (typeof s.skin !== 'string') s.skin = FRESH.skin;
   return s;
 }
 
@@ -85,7 +99,7 @@ export function save(s) {
 
 export function reset() {
   try { localStorage.removeItem(KEY); } catch { /* nothing to remove */ }
-  return { ...FRESH, lastSeen: Date.now() };
+  return { ...fresh(), lastSeen: Date.now() };
 }
 
 /**

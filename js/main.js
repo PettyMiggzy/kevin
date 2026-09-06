@@ -88,7 +88,16 @@
         ta.style.opacity = '0';
         document.body.appendChild(ta);
         ta.select();
-        try { document.execCommand('copy'); done(); } catch (e) { /* nothing to do */ }
+        // execCommand returns false rather than throwing, so calling done()
+        // unconditionally told people "Copied" when nothing had been. For a
+        // contract address that is worse than no button: they paste whatever
+        // was already on the clipboard and send funds to it.
+        try {
+          if (document.execCommand('copy')) done();
+          else caCopy.textContent = 'Press Ctrl+C';
+        } catch (e) {
+          caCopy.textContent = 'Press Ctrl+C';
+        }
         document.body.removeChild(ta);
       }
     });

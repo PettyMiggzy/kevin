@@ -1785,13 +1785,19 @@ async function travel(id, at = null) {
   travelling = true;
   const veil = $('#veil');
   veil.classList.add('on');
-  await new Promise((r) => setTimeout(r, 260));
-  await setWorld(id, at);
-  // A frame with the new world already drawn, so the fade lifts on the room
-  // rather than on the last one.
-  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  veil.classList.remove('on');
-  travelling = false;
+  // try/finally, because a builder that throws must not leave the game behind a
+  // black screen forever with travelling stuck true — every door in the game
+  // stops working and the only way out is a reload.
+  try {
+    await new Promise((r) => setTimeout(r, 260));
+    await setWorld(id, at);
+    // A frame with the new world already drawn, so the fade lifts on the room
+    // rather than on the last one.
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  } finally {
+    veil.classList.remove('on');
+    travelling = false;
+  }
 }
 
 /**

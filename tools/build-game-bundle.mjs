@@ -147,8 +147,29 @@ async function collectPropNames() {
  */
 const safe = (s) => s.replace(/<\/script>/gi, '<\\/script>');
 
+/**
+ * The contract address exists in two files and must not drift.
+ *
+ * js/config.js is the site's source of truth; gym/js/skins.js derives seven
+ * skins from the same address and cannot import it, because the game is a
+ * separate app that never loads the site's config. Two copies of an address is
+ * two chances to publish a wrong one, so the build refuses rather than shipping
+ * a game whose "contract skins" are cut from a different contract.
+ */
+async function assertAddressesAgree() {
+  const site = (await readFile(join(ROOT, 'js/config.js'), 'utf8'))
+    .match(/contract:\s*'(0x[0-9a-fA-F]{40})'/)?.[1];
+  const game = (await readFile(join(ROOT, 'gym/js/skins.js'), 'utf8'))
+    .match(/CONTRACT\s*=\s*'(0x[0-9a-fA-F]{40})'/)?.[1];
+  if (site && game && site !== game) {
+    throw new Error(`contract address drift:\n  js/config.js   ${site}\n  gym/js/skins.js ${game}`);
+  }
+  if (site && game) console.log(`  contract       ${game} (matches js/config.js)`);
+}
+
 async function main() {
   await mkdir(OUT, { recursive: true });
+  await assertAddressesAgree();
 
   const sources = {};
   for (const [spec, path] of Object.entries(MODULES)) {
