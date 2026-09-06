@@ -22,7 +22,7 @@ import { load, save, settle, workout, projectedLoss, payShift, leaderboard,
 import { buildCrewBody, applyCrewMuscle } from './voxel.js';
 import { buildKitKevin } from './kevin.js';
 import { buildSpriteKevin } from './sprite.js';
-import { skinTexture, SKINS, DEFAULT_SKIN, CONTRACT, CONTRACT_SKINS } from './skins.js';
+import { skinTexture, recolour, SKINS, DEFAULT_SKIN, CONTRACT, CONTRACT_SKINS } from './skins.js';
 import { rebrand } from './brand.js';
 import { Set as RepSet, REPS_PER_SET, rankOf } from './reps.js';
 import { makeBarbell, makeDumbbell, floorTexture, platformTexture, signTexture, mirrorPanel, stripLight,
@@ -2636,20 +2636,25 @@ function wearSkin(name) {
   save(state);
   // The built body is the common case: repaint it and we are done.
   if (kevin && !kevin.sprite) { paintBody(kevin, skinRGB()); return; }
-  const tex = skinnedAtlas();
-  if (!tex || !kevin?.sprite || !kevin.mesh?.material) return;
-  const old = kevin.mesh.material.map;
-  // sprite.js clones and sets repeat/offset for the atlas cell it shows, so
-  // carry those over or he snaps back to frame 0 facing the wrong way.
-  tex.wrapS = old.wrapS; tex.wrapT = old.wrapT;
-  tex.magFilter = old.magFilter; tex.minFilter = old.minFilter;
-  tex.generateMipmaps = old.generateMipmaps;
-  tex.repeat.copy(old.repeat);
-  tex.offset.copy(old.offset);
-  tex.needsUpdate = true;
-  kevin.mesh.material.map = tex;
-  kevin.mesh.material.needsUpdate = true;
-  old.dispose();
+  // The sprite is one plane showing one cell of a 9x5 atlas, and it animates by
+  // moving that cell: buildSpriteKevin CLOSES OVER its own clone of the texture
+  // and writes repeat/offset to it every frame. It never reads material.map
+  // again.
+  //
+  // So hanging a new texture on the material left the walk cycle writing to an
+  // orphan — Kevin froze on whichever frame he happened to be on, facing
+  // whichever way he happened to face, for the rest of the session — and then
+  // disposed the texture the animation was still using. Copying repeat and
+  // offset across only made the freeze land on the right frame.
+  //
+  // Repaint the picture INSIDE the map he is already animating. Same texture
+  // object, same closure, new pixels; the next step() moves the cell as usual.
+  const map = kevin?.sprite ? kevin.mesh?.material?.map : null;
+  if (!map || !atlasImage || !atlasPalette) return;
+  const rgb = skinRGB() ?? atlasPalette.colourways?.[DEFAULT_SKIN];
+  if (!rgb) return;
+  map.image = recolour(atlasImage, atlasPalette.palette, rgb);
+  map.needsUpdate = true;
 }
 
 function renderShop() {
