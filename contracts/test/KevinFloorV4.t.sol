@@ -304,8 +304,13 @@ contract KevinFloorV4Test is Test {
     ///      token cap would never be the thing that bit.
     function test_perTradeCapClamps() public {
         _arm(1_500);
-        vm.prank(owner);
+        vm.startPrank(owner);
+        // Widen the sell stop right out, so the CAP is the binding constraint
+        // and not the stop — with the default 2.5% stop this pool fills 2.5
+        // tokens and the cap never bites, which is the stop working.
+        floor.setPolicy(1_500, 500, 800, 3_000, 9_000);
         floor.setRails(5 ether, 50 ether, 2_000_000 ether, 200 ether, 5 minutes);
+        vm.stopPrank();
         uint256 before = kevin.balanceOf(address(floor));
         vm.prank(operator);
         floor.poke(type(uint256).max);
@@ -373,6 +378,48 @@ contract KevinFloorV4Test is Test {
         vm.prank(owner);
         floor.sweep(address(kevin), owner, 200_000 ether);
         assertEq(kevin.balanceOf(owner), 200_000 ether, "the treasury can always get it back");
+    }
+
+    // --- the sell stop, which is not the floor ------------------------------
+
+    /// @dev One sale may walk the price by sellStopBps and no further, even when
+    ///      the floor is miles away and the contract is holding millions.
+    function test_oneSaleCannotWalkThePriceFurtherThanTheStop() public {
+        _arm(1_500); // a floor 15% down: plenty of room
+        vm.prank(owner);
+        floor.setPolicy(1_500, 500, 800, 3_000, 250); // but a 2.5% stop
+        kevin.mint(address(floor), 5_000_000 ether);
+        vm.prank(owner);
+        floor.setRails(5_000_000 ether, 50 ether, 50_000_000 ether, 200 ether, 5 minutes);
+
+        uint160 before = _spot();
+        vm.prank(operator);
+        floor.poke(type(uint256).max);
+        uint160 after_ = _spot();
+        // upIsUp is false, so a worse KEVIN price is a HIGHER sqrtPrice.
+        uint256 movedBps = ((uint256(after_) - uint256(before)) * 10_000) / uint256(before);
+        assertLe(movedBps, 251, "one sale moved the price no further than the stop");
+        assertGt(movedBps, 0, "and it did sell something");
+    }
+
+    /// @dev And the floor still wins when it is the tighter of the two.
+    function test_theFloorStillBindsWhenItIsTighterThanTheStop() public {
+        _arm(100); // a floor 1% down
+        vm.prank(owner);
+        floor.setPolicy(1_500, 500, 800, 3_000, 2_000); // a 20% stop, far looser
+        uint160 floorAt = floor.floorSqrtPriceX96();
+        vm.prank(operator);
+        floor.poke(type(uint256).max);
+        assertLe(_spot(), floorAt, "the floor, not the stop, was the limit");
+    }
+
+    function test_setPolicy_refusesAStopThatIsNotAStop() public {
+        vm.startPrank(owner);
+        vm.expectRevert(KevinFloorV4.BadParam.selector);
+        floor.setPolicy(1_500, 500, 800, 3_000, 0);
+        vm.expectRevert(KevinFloorV4.BadParam.selector);
+        floor.setPolicy(1_500, 500, 800, 3_000, 10_000);
+        vm.stopPrank();
     }
 
     // --- fuzz ---------------------------------------------------------------

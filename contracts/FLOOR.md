@@ -51,6 +51,37 @@ today. It is the difference between "the treasury runs a disclosed rebalancer"
 and someone finding an unexplained sell wallet on the explorer in week three,
 which is a much worse day and always arrives at the worst possible moment.
 
+## The floor and the sell stop are not the same level
+
+The first version used one number for both, and driving it against a live pool
+made the mistake obvious: with the floor 15% under spot, every sale walked the
+price 15% down to reach it. That is precisely the chart-wrecking this exists to
+prevent.
+
+They are different jobs and they want opposite values:
+
+| | wants to be | because |
+|---|---|---|
+| `floorGapBps` — the level you **defend** | **wide** | a floor 1% under spot is not a floor, it is a rounding error |
+| `sellStopBps` — how far one sale may **walk the price** | **narrow** | this is the "never wreck my chart" dial, and it is the only one |
+
+Every sale takes the tighter of the two as its price limit. So the floor can sit
+a long way down and still be worth something, while no individual sale moves the
+chart more than a couple of percent. `test_oneSaleCannotWalkThePriceFurtherThan-
+TheStop` offers it five million tokens against a 15% floor and asserts the price
+moved 2.5% and not a basis point more.
+
+## The keeper ratchets before it sells, and the order is the whole point
+
+A sale stops exactly at the limit, so after every sale spot and floor are within
+`sellStopBps` of each other. Sell first and the floor can never climb — the
+price is dragged back down to it every time and "a floor that rises with the
+market cap" quietly becomes "a floor pinned to launch day". The keeper takes the
+rise first and sells into what is left.
+
+That was also found by driving it: the first version sold into a 30 ETH pump and
+left the floor exactly where it started.
+
 ## What it does not do
 
 **Selling into buy pressure is still selling.** The floor stops wicks; it does
@@ -113,6 +144,7 @@ floorGapBps    1500    the floor sits 15% under spot
 ratchetBps      500    and climbs at most 5% per call
 buyBandBps      800    bid once spot is 8% under the floor
 buybackBps     3000    30% of every sale is kept to bid with
+sellStopBps     250    no single sale may walk the price more than 2.5%
 
 MAX_TOKENS_PER_TRADE  250_000e18
 DAILY_TOKEN_CAP     2_000_000e18   under one day's allocation, on purpose
@@ -153,6 +185,36 @@ Then, from the owner:
 
 Send a fraction of one day's allocation first and watch a fill land before the
 rest.
+
+## The keeper
+
+`keeper/floor.mjs` is the loop that drives it. Zero risk by design: it holds no
+money and decides nothing that matters, because every limit that protects the
+treasury is enforced on-chain. The worst a compromised keeper can do is waste one
+day's allowance on badly-timed but legal trades.
+
+```bash
+node keeper/floor.mjs             # dry run: reads, decides, sends nothing
+LIVE=1 node keeper/floor.mjs      # actually sends
+```
+
+**Dry run is the default and it has to be told to send.** Run it that way for a
+day first — it prints the decision it would have made on every tick, so you can
+watch it think before it has any money.
+
+  FLOOR_ADDRESS       the contract
+  ROBINHOOD_RPC_URL   your RPC
+  TICK_MS             how often to look, default 45s
+  MIN_GAS_WEI         stop sending under this operator balance, default 0.002 ETH
+  keeper/.operator.key    the hot key, chmod 600, gitignored
+
+`keeper/kevin-floor.service` is the systemd unit, and it starts in dry run.
+
+It has been driven end to end against a local anvil with a real v4 PoolManager,
+a real pool and real liquidity: it read the contract, sold into the room above
+the floor, stopped at the floor to the wei, honoured the cooldown, and ratcheted
+the floor up under a rising price. `contracts/script/LocalFloor.s.sol` builds
+that world in one command if you want to rehearse it yourself.
 
 ## Other v4 addresses on Robinhood Chain (4663)
 

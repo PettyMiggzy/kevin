@@ -43,3 +43,6 @@ assets/pfp/*.png
 # forge run from the repo root instead of contracts/ leaves these here
 cache/
 out/
+
+# Keeper operator key — never commit this
+keeper/.operator.key

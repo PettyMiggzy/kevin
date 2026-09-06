@@ -113,6 +113,16 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
     uint256 public ratchetBps;
     /// @notice How far under the floor spot must fall before this contract bids.
     uint256 public buyBandBps;
+    /// @notice The most one sale may move the price, in bps off spot.
+    ///
+    /// THE FLOOR AND THE SELL STOP ARE NOT THE SAME LEVEL, and conflating them
+    /// was the first version's real mistake. The floor is the level you DEFEND —
+    /// it wants to be a long way under spot to be worth anything. The sell stop
+    /// is how far one sale may walk the price DOWN — it wants to be small. With
+    /// one number doing both jobs at 15%, every poke sold the price 15% lower,
+    /// which is precisely the chart-wrecking this exists to prevent. Driving it
+    /// against a live pool is what made that obvious.
+    uint256 public sellStopBps;
     /// @notice The share of each sale's proceeds reserved for buying back.
     uint256 public buybackBps;
     /// @notice Proceeds set aside by `buybackBps` and not yet spent.
@@ -140,7 +150,11 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
     event OperatorSet(address indexed operator);
     event FloorMoved(uint160 from, uint160 to, uint160 spot);
     event PolicySet(
-        uint256 floorGapBps, uint256 ratchetBps, uint256 buyBandBps, uint256 buybackBps
+        uint256 floorGapBps,
+        uint256 ratchetBps,
+        uint256 buyBandBps,
+        uint256 buybackBps,
+        uint256 sellStopBps
     );
     event RailsSet(
         uint256 maxTokensPerTrade,
@@ -197,6 +211,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         ratchetBps = 500; // and moves at most 5% at a time
         buyBandBps = 800; // bid once spot is 8% under the floor
         buybackBps = 3_000; // 30% of every sale is kept to bid with
+        sellStopBps = 250; // no sale may walk the price more than 2.5%
         cooldown = 5 minutes;
         windowStart = block.timestamp;
     }
@@ -290,10 +305,17 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         if (amountIn == 0) revert NothingToDo();
         if (tokensSoldInWindow + amountIn > dailyTokenCap) revert OverDailyCap();
 
-        // THE WHOLE MECHANISM. The limit is the floor; the pool fills what fits
-        // above it and stops. Overshooting `amountIn` is free — the unfilled
-        // remainder never leaves this contract.
-        (uint256 spent, uint256 got) = _swap(true, amountIn, floorSqrtPriceX96);
+        // THE WHOLE MECHANISM. The pool fills what fits above the limit and
+        // stops, so overshooting `amountIn` is free — the unfilled remainder
+        // never leaves this contract.
+        //
+        // The limit is the TIGHTER of two levels: the floor, which must never be
+        // crossed, and a stop `sellStopBps` under the current price, which caps
+        // how far this one sale may walk the chart. Without the second, a floor
+        // sitting 15% down means every sale sells 15% down.
+        uint160 stop = _worseBy(spotSqrtPriceX96(), sellStopBps);
+        uint160 limit = _isBetter(stop, floorSqrtPriceX96) ? stop : floorSqrtPriceX96;
+        (uint256 spent, uint256 got) = _swap(true, amountIn, limit);
         if (spent == 0) revert NothingToDo();
 
         uint256 reserved = (got * buybackBps) / BPS;
@@ -431,16 +453,21 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         uint256 floorGapBps_,
         uint256 ratchetBps_,
         uint256 buyBandBps_,
-        uint256 buybackBps_
+        uint256 buybackBps_,
+        uint256 sellStopBps_
     ) external onlyOwner {
         if (floorGapBps_ == 0 || floorGapBps_ >= BPS) revert BadParam();
         if (ratchetBps_ > BPS) revert BadParam();
         if (buybackBps_ > BPS) revert BadParam();
+        // A stop of zero would mean no sale can move the price at all, which is
+        // no sale; a stop at 100% is no stop.
+        if (sellStopBps_ == 0 || sellStopBps_ >= BPS) revert BadParam();
         floorGapBps = floorGapBps_;
         ratchetBps = ratchetBps_;
         buyBandBps = buyBandBps_;
         buybackBps = buybackBps_;
-        emit PolicySet(floorGapBps_, ratchetBps_, buyBandBps_, buybackBps_);
+        sellStopBps = sellStopBps_;
+        emit PolicySet(floorGapBps_, ratchetBps_, buyBandBps_, buybackBps_, sellStopBps_);
     }
 
     function setRails(

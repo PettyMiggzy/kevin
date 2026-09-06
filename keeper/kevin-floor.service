@@ -1,0 +1,34 @@
+# The floor keeper, as a service.
+#   cp keeper/kevin-floor.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now kevin-floor
+#
+# The operator key is NOT in here. It lives in /opt/kevin/keeper/.operator.key,
+# chmod 600, gitignored — this repo is public.
+#
+# STARTS IN DRY RUN. To make it send, add LIVE=1 to the drop-in:
+#   systemctl edit kevin-floor
+#   [Service]
+#   Environment=LIVE=1
+[Unit]
+Description=Kevin floor keeper
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/kevin
+ExecStart=/usr/bin/env node keeper/floor.mjs
+Environment=CHAIN_ID=4663
+# Set these in a drop-in rather than here, so a git pull cannot wipe them:
+#   Environment=FLOOR_ADDRESS=0x...
+#   Environment=ROBINHOOD_RPC_URL=https://...
+Restart=always
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kevin-floor
+
+[Install]
+WantedBy=multi-user.target

@@ -12,5 +12,8 @@
   "devDependencies": {
     "@gltf-transform/cli": "^4.5.0",
     "three": "0.169.0"
+  },
+  "dependencies": {
+    "viem": "^2.56.3"
   }
 }
