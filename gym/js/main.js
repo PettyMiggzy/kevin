@@ -599,7 +599,13 @@ const SCENERY = [
   ['weight-plate', { x: -4.0, z: -6.4, width: 0.55, rotY: 0.7, solid: false }],
 
   // --- out on the forecourt ------------------------------------------------
-  ['plate-tree', { x: -9.4, z: 15.6, width: 1.1, rotY: 0.3 }],
+  // MOVED clear of the supplements stall. plate-tree.glb's geometry sits a long
+  // way from its own origin, so under the old place() it rendered ~6.6 m out in
+  // open yard and this coordinate never meant what it said. Now that it does,
+  // -9.4/15.6 puts the prop 69% inside the stall counter (x -12.2..-9.0, z
+  // 14.85..15.95) with its top through the worktop. Expressed as a coordinate
+  // that is actually clear, not as another compensating offset.
+  ['plate-tree', { x: -8.2, z: 17.4, width: 1.1, rotY: 0.3 }],
   ['dumbbell', { x: 5.6, z: 16.4, width: 0.6, rotY: 0.9, solid: false }],
   ['kettlebell', { x: 6.4, z: 17.0, width: 0.5, rotY: -0.4, solid: false }],
   ['protein-tub', { x: 4.4, z: 18.2, width: 0.62, rotY: 0.2, solid: false }],
