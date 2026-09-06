@@ -622,6 +622,17 @@ const SCENERY = [
 // can never blend — not "will look bad", cannot be loaded. Scaling limbs on one
 // rig has no such constraint, and it is one number.
 
+/**
+ * Where the hips and the shoulders are, named once.
+ *
+ * These were the literals 0.74 and 1.30 inline, and the body returned neither —
+ * so anything that needed them (the bench press reach, the dumbbell hang) got
+ * undefined and positioned at NaN. Same relation buildKitKevin uses, so the two
+ * bodies stay comparable: shoulderY = legH + torsoH * 0.88.
+ */
+const LEG_H = 0.74;
+const TORSO_H = 0.636;
+
 function buildKevin() {
   const g = new THREE.Group();
   const skin = toon(PALETTE.skin);
@@ -679,21 +690,26 @@ function buildKevin() {
   const legs = [];
   for (const sx of [-1, 1]) {
     const arm = new THREE.Group();
-    arm.position.set(sx * 0.34, 1.30, 0);
+    arm.position.set(sx * 0.34, LEG_H + TORSO_H * 0.88, 0);   // 1.30
     arm.add(part(new THREE.CapsuleGeometry(0.105, 0.42, 4, 10), skin, 0, -0.28, 0));
     arm.add(part(new THREE.SphereGeometry(0.115, 12, 10), toon('#FFFFFF'), 0, -0.56, 0));
     g.add(arm);
     arms.push(arm);
 
     const leg = new THREE.Group();
-    leg.position.set(sx * 0.15, 0.74, 0);
+    leg.position.set(sx * 0.15, LEG_H, 0);
     leg.add(part(new THREE.CapsuleGeometry(0.115, 0.44, 4, 10), dark, 0, -0.30, 0));
     leg.add(part(new THREE.BoxGeometry(0.20, 0.11, 0.30), toon('#FFFFFF'), 0, -0.56, 0.06));
     g.add(leg);
     legs.push(leg);
   }
 
-  return { group: g, torso, head, arms, legs };
+  // torsoH and legH, for the same reason buildKitKevin returns them: main.js
+  // hangs the dumbbells off torsoH and computes the bench press reach from both,
+  // and this body returned neither — so on this fallback the bar AND the bells
+  // were positioned at NaN. Named and used above rather than left as the
+  // literals 0.74 and 1.30, so the two cannot drift apart.
+  return { group: g, torso, head, arms, legs, torsoH: TORSO_H, legH: LEG_H };
 }
 
 /** One number, 0..1, and the whole body reads as bigger. */
@@ -801,7 +817,14 @@ function paintBody(kev, rgb) {
   const ref = new THREE.Color('#E02128');
   const r = { h: 0, s: 0, l: 0 };
   ref.getHSL(r);
-  const target = rgb ? new THREE.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255) : null;
+  // setRGB with an explicit SRGBColorSpace, NOT the three-number constructor.
+  // With ColorManagement on, new THREE.Color(r,g,b) takes its arguments as
+  // LINEAR working-space values, and these are sRGB bytes out of parts.json —
+  // so every skin came out washed: Cold Blue [42,108,214] should render #2a6cd6
+  // and rendered #71aeec. It looked blue, which is why it passed a glance.
+  const target = rgb
+    ? new THREE.Color().setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, THREE.SRGBColorSpace)
+    : null;
   const t = { h: 0, s: 0, l: 0 };
   (target ?? ref).getHSL(t);
 

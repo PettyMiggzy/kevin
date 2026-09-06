@@ -234,5 +234,9 @@ export function buildKitKevin({ toon }) {
 
   // torsoH is what main.js measures a dumbbell's drop by (-torsoH * 0.95 lands
   // in the hand), so it has to describe the arm, not the chest.
-  return { group, rig, torso, head, arms, legs, torsoH };
+  // legH as well as torsoH. main.js's seated press does
+  //   const reach = kevin.legH + kevin.torsoH * 0.94
+  // and this is the DEFAULT body, so leaving legH off made that NaN and put the
+  // barbell at an undefined height — it simply did not appear on the bench.
+  return { group, rig, torso, head, arms, legs, torsoH, legH };
 }
