@@ -74,7 +74,7 @@
              "Live on" in hardcoded HTML directly above a contract address that
              is published but not trading yet, which reads as "buy this now". -->
         <span id="heroChainVerb">Launching on</span>
-        <strong>Robinhood Chain</strong> with a 15% <strong>GME</strong> pool.
+        <strong>Robinhood Chain</strong> with a <span id="heroGmeWeight">15%</span> <strong>GME</strong> pool.
         <a href="#burn">I keep none of it. →</a>
       </p>
 
@@ -153,13 +153,18 @@
       </div>
       <div class="card card--void" style="transform:rotate(-1deg)">
         <p class="receipt__meta">Liquidity composition</p>
-        <ol class="chain-order">
+        <!-- Rendered from js/config.js, like #pools-grid below it. Hand-typed,
+             this list and the line under it were a second copy of numbers the
+             config already owned, and the line had already drifted: it said
+             EIGHTEEN percent under a list that said fifteen. Spelled out in
+             words, so nobody grepping for "18" would ever have found it. -->
+        <ol class="chain-order" id="chain-order">
           <li><b>WETH<em>45%</em></b><span>The plumbing. Biggest slice, because the boring thing has to work first.</span></li>
           <li><b>KEK<em>40%</em></b><span>The laugh. Locked by the pad at a 10% minimum — this one isn't going anywhere.</span></li>
           <li><b>GME<em>15%</em></b><span>The point. Smallest slice. Loudest joke.</span></li>
         </ol>
-        <p style="font-size:13px;margin:16px 0 0;opacity:.8">
-          Eighteen percent of the liquidity. One hundred percent of the point.
+        <p style="font-size:13px;margin:16px 0 0;opacity:.8" id="gme-share">
+          Fifteen percent of the liquidity. One hundred percent of the point.
         </p>
       </div>
     </div>
@@ -543,7 +548,7 @@
       <figure class="receipt receipt--wall">
         <p class="receipt__meta">The buy button · you remember</p>
         <blockquote>"Due to unprecedented volatility, this asset is restricted to position closing only."</blockquote>
-        <figcaption>In the bin. The GME pool is fifteen percent and I am not discussing it.</figcaption>
+        <figcaption>In the bin. The GME pool is <span id="gme-words">fifteen</span> percent and I am not discussing it.</figcaption>
       </figure>
       <figure class="receipt receipt--wall">
         <p class="receipt__meta">Somebody's group chat · March</p>

@@ -106,6 +106,48 @@
     });
   }
 
+  // --- the composition, wherever it is written down -------------------------
+  // The weights appeared in FOUR places: the pools grid below (from config),
+  // an ordered list in the chain section, a line under it, and a figcaption
+  // two sections further down — the last three typed by hand. They had already
+  // drifted: the line said EIGHTEEN percent under a list that said fifteen, and
+  // it was spelled out in words, so nobody grepping for "18" was ever going to
+  // find it. There is one source now.
+  var WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
+    'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
+    'seventeen', 'eighteen', 'nineteen'];
+  var TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+  function inWords(n) {
+    if (n === 100) return 'one hundred';
+    if (n < 20) return WORDS[n] || String(n);
+    var t = TENS[Math.floor(n / 10)];
+    var u = n % 10;
+    return u ? t + '-' + WORDS[u] : t;
+  }
+
+  var gme = (K.pools || []).filter(function (p) { return p.ticker === 'GME'; })[0];
+  if (gme) {
+    var heroWeight = $('#heroGmeWeight');
+    if (heroWeight) heroWeight.textContent = gme.weight + '%';
+    var gmeWords = $('#gme-words');
+    if (gmeWords) gmeWords.textContent = inWords(gme.weight);
+    var share = $('#gme-share');
+    if (share) {
+      share.textContent = inWords(gme.weight).replace(/^./, function (c) { return c.toUpperCase(); })
+        + ' percent of the liquidity. One hundred percent of the point.';
+    }
+  }
+
+  var order = $('#chain-order');
+  if (order && K.pools) {
+    order.innerHTML = K.pools
+      .map(function (p) {
+        return '<li><b>' + p.ticker + '<em>' + p.weight + '%</em></b><span>'
+          + p.nickname + '. ' + p.note + '</span></li>';
+      })
+      .join('');
+  }
+
   // --- pools --------------------------------------------------------------
   var poolsGrid = $('#pools-grid');
   if (poolsGrid && K.pools) {
