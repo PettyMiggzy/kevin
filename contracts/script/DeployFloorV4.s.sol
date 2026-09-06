@@ -19,14 +19,20 @@ import {Currency} from "v4-core/src/types/Currency.sol";
  * Env:
  *   PRIVATE_KEY     deployer key
  *   KEVIN_TOKEN     $KEVIN ERC-20
- *   POOL_MANAGER    v4 PoolManager. Uniswap's docs give 4663 as
- *                   0x8366a39cc670b4001a1121b8f6a443a643e40951 — CHECK IT on
- *                   robinhoodchain.blockscout.com before you send anything.
- *   QUOTE           the other side of the pool. address(0) for native ETH,
- *                   which is what a v4 ETH pool uses.
- *   POOL_FEE        the fee tier the pool was created with, e.g. 3000
- *   TICK_SPACING    the pool's tick spacing, e.g. 60
- *   POOL_HOOKS      the pool's hooks address, or address(0)
+ *   POOL_MANAGER    v4 PoolManager. VERIFIED on chain 4663 by reading it off
+ *                   the launchpad's own router: 0x8366a39CC670B4001A1121B8F6A443A643e40951
+ *   QUOTE           the other side of the pool. Defaults to WETH, because this
+ *                   launchpad pairs against WETH and NOT native ETH — a v4 ETH
+ *                   pool would use address(0) and this is not one.
+ *   POOL_FEE        VERIFIED 3000 on the live pools from this factory.
+ *   TICK_SPACING    VERIFIED 60.
+ *   POOL_HOOKS      VERIFIED 0xFEf8e78090697C808116c56A9E81fC83d4f76000. NOT
+ *                   address(0) — these pools have a hook, and a PoolKey with a
+ *                   zero hook hashes to a pool that does not exist.
+ *
+ * All five were read off the live WETH/CULT pool created by the same factory
+ * (0xE4AcdB51b6554246Da8488d1e68E8FAd1b93f383). RUN script/Preflight.s.sol
+ * FIRST — it proves the pool is really there before anything is deployed at it.
  *   FLOOR_OWNER     can sweep and re-tune. Defaults to the owner's wallet:
  *                   0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf
  *                   It is one key, deliberately. See LOCK.md for what that
@@ -64,7 +70,8 @@ contract DeployFloorV4 is Script {
     function run() external returns (KevinFloorV4 floor) {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address token = vm.envAddress("KEVIN_TOKEN");
-        address quote = vm.envAddress("QUOTE");
+        // WETH on Robinhood Chain 4663, read off the launchpad factory's weth().
+        address quote = vm.envOr("QUOTE", address(0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73));
         address owner = vm.envOr("FLOOR_OWNER", address(0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf));
 
         // v4 sorts the two currencies by address; native ETH is address(0) and
@@ -73,15 +80,20 @@ contract DeployFloorV4 is Script {
         PoolKey memory key = PoolKey({
             currency0: Currency.wrap(c0),
             currency1: Currency.wrap(c1),
-            fee: uint24(vm.envUint("POOL_FEE")),
-            tickSpacing: int24(vm.envInt("TICK_SPACING")),
-            hooks: IHooks(vm.envAddress("POOL_HOOKS"))
+            fee: uint24(vm.envOr("POOL_FEE", uint256(3000))),
+            tickSpacing: int24(vm.envOr("TICK_SPACING", int256(60))),
+            hooks: IHooks(vm.envOr("POOL_HOOKS", address(0xFEf8e78090697C808116c56A9E81fC83d4f76000)))
         });
 
         Rails memory r = _rails();
 
         vm.startBroadcast(pk);
-        floor = new KevinFloorV4(owner, IPoolManager(vm.envAddress("POOL_MANAGER")), key, token);
+        floor = new KevinFloorV4(
+            owner,
+            IPoolManager(vm.envOr("POOL_MANAGER", address(0x8366a39CC670B4001A1121B8F6A443A643e40951))),
+            key,
+            token
+        );
         if (owner == vm.addr(pk)) {
             floor.setOperator(vm.envAddress("FLOOR_OPERATOR"));
             floor.setRails(r.maxTokens, r.maxQuote, r.dayTokens, r.dayQuote, r.cooldown);
@@ -97,9 +109,13 @@ contract DeployFloorV4 is Script {
         console2.log("upIsUp       ", floor.upIsUp());
         console2.log("owner        ", owner);
         console2.log("");
-        console2.log("READ upIsUp ABOVE. In an ETH pool it must be FALSE:");
-        console2.log("ETH is address(0), so $KEVIN is currency1, and a rising");
-        console2.log("$KEVIN is a FALLING sqrtPrice. If that looks wrong, stop.");
+        console2.log("READ upIsUp ABOVE. WETH is 0x0Bd7... which is a very low");
+        console2.log("address, so $KEVIN is almost certainly currency1 and");
+        console2.log("upIsUp must be FALSE. Preflight.s.sol prints the same");
+        console2.log("value off the live pool -- they must agree. If not, stop.");
+        console2.log("");
+        console2.log("The quote is an ERC20, so top the bid up with");
+        console2.log("fundWarChestToken(). The payable fundWarChest() reverts.");
         console2.log("");
         if (owner != vm.addr(pk)) {
             console2.log("From the owner: setOperator(...) and setRails(...)");

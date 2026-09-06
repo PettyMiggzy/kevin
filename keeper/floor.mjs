@@ -48,7 +48,11 @@ function loadKey(name) {
 }
 
 const cfg = {
-  rpc: process.env.ROBINHOOD_RPC_URL || 'https://rpc.robinhood.com',
+  // Robinhood Chain 4663. The old default here was rpc.robinhood.com, which
+  // does not resolve — a keeper started without ROBINHOOD_RPC_URL set would
+  // simply have failed at every tick. This one is the chain's published
+  // endpoint and answers eth_chainId with 0x1237.
+  rpc: process.env.ROBINHOOD_RPC_URL || 'https://rpc.mainnet.chain.robinhood.com',
   chainId: Number(process.env.CHAIN_ID || 4663),
   floor: process.env.FLOOR_ADDRESS,
   // Optional. The lockbox holding the treasury bag, if there is one. The keeper

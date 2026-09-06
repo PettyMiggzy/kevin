@@ -3,6 +3,36 @@
 > Sells $KEVIN into strength, buys it back into weakness, and cannot push the
 > price through the floor — because the pool will not let it.
 
+## Never call this a floor in public
+
+Read this before writing a single word of announcement copy.
+
+**What this contract actually guarantees is one-sided:** it will not sell below
+a level, no single sale will move the chart more than `sellStopBps`, and it
+cannot exceed a published daily rate. Those are real, they are enforced by the
+pool and by the bytecode, and they are worth saying.
+
+**What it does not guarantee is a price.** The bid side is `warChest`, which is
+a fraction of what has already been sold. Against these pools that is a small
+number, and a motivated seller walks through it. Anyone who wants to can spend
+well under an ETH and exhaust it permanently.
+
+So publish the mechanism and the numbers — the contract address, the daily cap,
+the sell stop, the amount actually sitting on the bid, `lockbox()`, `locked()`.
+All of that is checkable and all of it survives contact with reality. Say
+"seeded liquidity" and "a published sell policy".
+
+If you say "floor" and 0.35 ETH is the whole of it, the day it breaks is the day
+your holders conclude you lied to them — and they will be right, because you
+will have. The file is called FLOOR.md because the contract is called
+KevinFloorV4; that is an internal name for a rate limiter, not a promise to
+make to anybody.
+
+Three things that draw real trouble, none of which this does by construction,
+and all of which are easy to drift into: **wash trading** (being both sides to
+manufacture volume for a trending rank), **spoof walls** (showing depth you
+intend to pull), and **guaranteed-floor claims**. Stay off all three.
+
 `KevinFloorV4` holds $KEVIN and ETH against one Uniswap v4 pool. You send it
 tokens; it sells them into buy pressure and never below a floor that ratchets up
 with the chart. A share of every sale is kept back and spent bidding when the
@@ -432,15 +462,71 @@ any other way: it was reading its own system clock instead of the chain's, and
 it was checking the cooldown before the ratchet, so a pump arriving in the five
 minutes after a sale was neither ratcheted under nor reset.
 
-## Other v4 addresses on Robinhood Chain (4663)
+## Robinhood Chain 4663, read off the chain rather than off a docs page
 
-From Uniswap's docs; verify before use.
+RPC `https://rpc.mainnet.chain.robinhood.com` — answers `eth_chainId` with
+`0x1237`. (The value that used to be in the keeper, `rpc.robinhood.com`, does
+not resolve at all.) Explorer: `robinhoodchain.blockscout.com`.
+
+Everything below was read from the chain by following the launchpad factory
+that made `0x94B579b6650d80f836B3146e5196b769Bf77a589`, not copied from
+documentation.
+
+| | | |
+|---|---|---|
+| PoolManager | `0x8366a39CC670B4001A1121B8F6A443A643e40951` | matches the docs |
+| PositionManager | `0x58daec3116aae6D93017bAAea7749052E8a04fA7` | matches |
+| Quoter | `0x8Dc178eFB8111BB0973Dd9d722ebeFF267c98F94` | matches |
+| StateView | `0xF3334192D15450CdD385c8B70e03f9A6bD9E673b` | matches |
+| Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | matches |
+| Universal Router | `0x06AfBA43Fd06227fA663b0DAecF536f6EaA6bf99` | **the docs value was wrong** |
+| WETH | `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` | |
+| KEK | `0x5a3544a0328afd50a9979e03404f35c555b88c00` | |
+
+### The launchpad
 
 | | |
 |---|---|
-| PoolManager | `0x8366a39cc670b4001a1121b8f6a443a643e40951` |
-| PositionManager | `0x58daec3116aae6d93017baaea7749052e8a04fa7` |
-| Quoter | `0x8dc178efb8111bb0973dd9d722ebeff267c98f94` |
-| StateView | `0xf3334192d15450cdd385c8b70e03f9a6bd9e673b` |
-| Universal Router | `0x8876789976decbfcbbbe364623c63652db8c0904` |
-| Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
+| factory | `0xE4AcdB51b6554246Da8488d1e68E8FAd1b93f383` |
+| token implementation | `0x0094cD52CA12Cdc6E7620084B594a1392095D459` (each token is a 45-byte EIP-1167 clone) |
+| router | `0xcae82a0059cb441d263170743b82a62e2499c378` |
+| liquidity manager | `0xeb0226f992f959b7fa2ac7c3dafc712915310fea` |
+| locker | `0x506200532B0a5A7B9d1e7C50D0014680FC3B5b13` |
+| owner / fee recipient | `0x08cDab8b049D2A42125C3A2bf1bF1E2f619C4e01` |
+
+### The PoolKey, which is the thing that has to be exactly right
+
+Read off the live WETH/CULT pool made by this factory:
+
+```
+currency0    0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73   WETH
+currency1    <$KEVIN>
+fee          3000
+tickSpacing  60
+hooks        0xFEf8e78090697C808116c56A9E81fC83d4f76000
+```
+
+Three things in there are not what this repo originally assumed:
+
+- **The quote is WETH, an ERC20 — not native ETH.** So `fundWarChest()` reverts
+  and `fundWarChestToken()` is the one that works, and the swap settles by
+  sync-transfer-settle rather than by sending value. That is the path
+  `test/KevinFloorV4Erc20.t.sol` exists to cover.
+- **There is a hook.** A `PoolKey` with `hooks = address(0)` hashes to a pool
+  that does not exist, and a keeper pointed at one looks perfectly healthy while
+  doing nothing at all.
+- **The fee is 3000 and `lpFee` reads back as 3000**, so liquidity in these
+  pools does earn the 0.3%.
+
+The hook's permissions are encoded in the low 14 bits of its address:
+`0xFEf8…6000 & 0x3FFF = 0x2000`, which is `BEFORE_INITIALIZE` and nothing else.
+**It runs once when the pool is created and never touches a swap or a liquidity
+change.** So it cannot tax this contract's trades, cannot block anyone from
+adding liquidity, and needs no special handling — it just has to be in the key.
+
+Two pools per token, not three: WETH and KEK. No native-ETH pool, and no GME
+pool for the reference token.
+
+**Run `script/Preflight.s.sol` before deploying anything.** It rebuilds the
+PoolKey from the same env vars the deploy script uses, reads the pool back, and
+refuses if it is not initialised or has no liquidity.
