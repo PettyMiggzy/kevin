@@ -86,10 +86,10 @@ in one costs nothing in the others:
   hands read as one
 - Kevin, whose body scales with a single muscle number, and who can be a
   billboard of Todd's hand-drawn walk cycles instead (`?sprite`)
-- Six stations that work: bench, dumbbells, lat pulldown and squat rack feed
-  strength, treadmill and rower feed stamina — each with its own sweep speed and
-  timing window, so the heavy ones are slow and tight and the warm-up is quick
-  and forgiving
+- Seven stations that work: bench, dumbbells, lat pulldown and squat rack feed
+  strength, treadmill, rower and exercise bike feed stamina — each with its own
+  sweep speed and timing window, so the squat is the slowest and tightest thing
+  in the building and the bike is the most forgiving
 - Exponential decay with a cap, a streak, and earnable freezes
 - **A shop with eighteen things in it**: three consumables, eight colourways,
   and seven skins cut out of the contract address itself

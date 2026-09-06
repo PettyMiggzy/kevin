@@ -546,6 +546,18 @@ const STATIONS = [
     lines: ['Rowing. To nowhere. Like everything.', 'Two thousand metres of storeroom.', 'Legs, back, arms. In that order.'],
   },
   {
+    // The corner the boxing ring moved into had a bike in it that did nothing.
+    // Measured off the model: the seat is at x 13.95 and 0.85 high, the bars at
+    // x 15.0, so the rider sits at -0.45 along the prop and faces +x.
+    id: 'bike', prop: 'exercise-bike', label: 'Exercise bike',
+    x: 14.4, z: 8.4, width: 1.6, rotY: -Math.PI / 2,
+    stat: 'stamina', gain: 2.4, coin: 6,
+    sweep: 1.90, window: 0.190,          // the easiest thing in the room
+    mount: { pose: 'bike', dx: 0, dz: -0.45, ry: Math.PI / 2, seatY: 0.25 },
+    cam: { x: -1.2, y: 2.1, z: 3.4, at: 1.15 },
+    lines: ['A bike that goes nowhere. Like the chart.', 'Warm up. That is all this is.', 'Steady state.'],
+  },
+  {
     id: 'squat', prop: 'squat-rack', label: 'Squat rack',
     x: -9.0, z: -10.0, width: 2.6, rotY: 0,
     stat: 'muscle', gain: 3.4, coin: 12,
@@ -634,7 +646,6 @@ const SCENERY = [
   // deck (z <= -1), the changing end and the doorway (x -3..3), and it leaves
   // the middle of the room as floor you can walk and film across.
   ['boxing-ring', { x: 10.2, z: 7.8, width: 6.0, rotY: 0, solid: 'box' }],
-  ['exercise-bike', { x: 14.4, z: 8.4, width: 1.6, rotY: -Math.PI / 2 }],
   ['dip-station', { x: -14.4, z: -6.0, width: 1.8, rotY: Math.PI / 2 }],
   ['incline-bench', { x: -5.0, z: -4.6, width: 1.8, rotY: 0.3 }],
   ['weight-bench', { x: -12.0, z: -2.0, width: 1.8, rotY: Math.PI / 2 }],
@@ -2230,6 +2241,15 @@ function tickSet(dt, now) {
     const reach = kevin.legH + kevin.torsoH * 0.94;
     bar.position.set(0, reach + 0.62 - p * 0.62, 0.10);
     bar.rotation.set(0, 0, 0);
+  } else if (pose === 'bike') {
+    // Seated and pedalling. The hips stay put and the legs go round, which for
+    // a limb with no knee is one sine against another half a turn behind it —
+    // the same trick 'run' uses, at a seated offset so the thighs stay forward.
+    const c = Math.sin(now / 90);
+    kevin.legs[0].rotation.x = -Math.PI / 2 + c * 0.46;
+    kevin.legs[1].rotation.x = -Math.PI / 2 - c * 0.46;
+    for (const a of kevin.arms) a.rotation.x = -1.05;
+    kevin.torso.rotation.x = -0.14;
   } else if (pose === 'row') {
     // Seated with the legs out, hauling the handle back to the ribs and
     // leaning with it. No bar: a rower's handle is part of the machine.
@@ -2335,7 +2355,7 @@ function mount(st) {
     if (m.pose !== 'squat') for (const l of kevin.legs) l.rotation.x = -Math.PI / 2;
     bar.visible = true;
     bells.forEach((bl) => { bl.visible = false; });
-  } else if (m.pose === 'run' || m.pose === 'row') {
+  } else if (m.pose === 'run' || m.pose === 'row' || m.pose === 'bike') {
     bar.visible = false;
     bells.forEach((b) => { b.visible = false; });
   } else {
