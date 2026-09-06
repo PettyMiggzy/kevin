@@ -23,56 +23,83 @@
     if (url) el.setAttribute('href', url);
   });
 
-  // --- hero state ----------------------------------------------------------
-  // The eyebrow used to read "the auction is open" as hardcoded text, with
-  // nothing anywhere updating it. It said that while the contract was null and
-  // the launch was still days away — a false claim about a financial event, on
-  // the one line under the masthead. It is driven off config now, so it cannot
-  // drift from reality again.
+  // --- everything that changes when the clock passes a date ------------------
+  //
+  // ALL OF THIS WAS COMPUTED ONCE, ON LOAD, next to a countdown that ticks
+  // every second. The moment contractLiveAt passed, an open tab showed a
+  // countdown at zero above a hero reading "launches 7 September · not trading
+  // yet", a chain line reading "Launching on", an address labelled "do not try
+  // to buy yet", and a sentence saying the auction "has not opened yet".
+  //
+  // The people it fails are exactly the people who care most: somebody who
+  // opens the page before the launch and leaves it open waiting for the
+  // countdown to run out. It runs out, and the page goes on telling them not
+  // to buy until they think to reload. Same tick as the countdown; it costs
+  // nothing to be right.
+  var utcDay = function (iso) {
+    // timeZone UTC: a midnight-Z instant renders as the previous day for every
+    // visitor west of Greenwich without it.
+    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+  };
+  var contractLive = function () {
+    return !K.contractLiveAt || Date.now() >= Date.parse(K.contractLiveAt);
+  };
+
   var heroState = $('#heroState');
-  if (heroState) {
-    var live = !K.contractLiveAt || Date.now() >= Date.parse(K.contractLiveAt);
-    var when = K.contractLiveAt
-      // timeZone UTC: a midnight-Z instant renders as the previous day for
-      // every visitor west of Greenwich without it.
-      ? new Date(K.contractLiveAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })
-      : null;
-    // The chain is already the middle segment, so "live on " + K.chain read
-    // "Fry cook · Robinhood Chain · live on Robinhood Chain" from the moment
-    // contractLiveAt passed. Said once.
-    var state = live
-      ? (K.contract ? 'live now' : 'launching soon')
-      : (when ? 'launches ' + when + ' \u00b7 not trading yet' : 'not trading yet');
-    heroState.textContent = 'Fry cook \u00b7 ' + K.chain + ' \u00b7 ' + state;
-  }
-
-  // The hero's chain line carries the same truth. Hardcoding "Live on" in the
-  // markup is how the site claimed the token was tradeable while config said it
-  // was not — the one place a visitor is most likely to read.
   var chainVerb = $('#heroChainVerb');
-  if (chainVerb) {
-    var chainLive = !K.contractLiveAt || Date.now() >= Date.parse(K.contractLiveAt);
-    chainVerb.textContent = chainLive && K.contract ? 'Live on' : 'Launching on';
-  }
-
-  // --- contract address ---------------------------------------------------
   var caValue = $('#ca-value');
   var caCopy = $('#ca-copy');
-  var caLive = !K.contractLiveAt || Date.now() >= Date.parse(K.contractLiveAt);
+  var caNote = null;
+
+  function renderLaunchState() {
+    var live = contractLive();
+    var when = K.contractLiveAt ? utcDay(K.contractLiveAt) : null;
+
+    // The eyebrow used to read "the auction is open" as hardcoded text, with
+    // nothing anywhere updating it — a false claim about a financial event, on
+    // the one line under the masthead.
+    if (heroState) {
+      // The chain is already the middle segment, so "live on " + K.chain read
+      // "Fry cook · Robinhood Chain · live on Robinhood Chain". Said once.
+      var state = live
+        ? (K.contract ? 'live now' : 'launching soon')
+        : (when ? 'launches ' + when + ' \u00b7 not trading yet' : 'not trading yet');
+      heroState.textContent = 'Fry cook \u00b7 ' + K.chain + ' \u00b7 ' + state;
+    }
+
+    // The hero's chain line carries the same truth. Hardcoding "Live on" in the
+    // markup is how the site claimed the token was tradeable while config said
+    // it was not — the one place a visitor is most likely to read.
+    if (chainVerb) chainVerb.textContent = live && K.contract ? 'Live on' : 'Launching on';
+
+    // Before it trades, say so next to the address. An address on a token site
+    // reads as "buy this now" unless something states otherwise, and for the
+    // next few days that would send people somewhere nothing is listed.
+    //
+    // Created once and then shown or hidden, rather than appended each pass —
+    // on a one-second tick, appending would stack a new line every second.
+    if (caValue && K.contract && K.contractLiveAt) {
+      if (!caNote) {
+        caNote = document.createElement('span');
+        caNote.className = 'ca__pending';
+        caNote.textContent = 'Not live until ' + utcDay(K.contractLiveAt) +
+          '. Verify it here now; do not try to buy yet.';
+        caValue.parentNode.appendChild(caNote);
+      }
+      caNote.hidden = live;
+    }
+  }
+
   if (caValue && K.contract) {
     caValue.textContent = K.contract;
     caCopy.disabled = false;
-    // Before it trades, say so next to it. An address on a token site reads as
-    // "buy this now" unless something states otherwise, and for the next few
-    // days that would send people somewhere nothing is listed.
-    if (!caLive) {
-      var note = document.createElement('span');
-      note.className = 'ca__pending';
-      note.textContent = 'Not live until ' + new Date(K.contractLiveAt)
-        .toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' }) +
-        '. Verify it here now; do not try to buy yet.';
-      caValue.parentNode.appendChild(note);
-    }
+  }
+  renderLaunchState();
+  // Once a second, alongside the countdown. If there is no date to cross, the
+  // state cannot change and there is nothing to tick.
+  if (K.contractLiveAt && !contractLive()) setInterval(renderLaunchState, 1000);
+
+  if (caValue && K.contract) {
     caCopy.addEventListener('click', function () {
       var done = function () {
         caCopy.textContent = 'Copied';
@@ -137,6 +164,11 @@
         + ' percent of the liquidity. One hundred percent of the point.';
     }
   }
+
+  // The sticker section said "fifteen moods" over a grid that renders twenty
+  // of them from the same config this reads. Another hand-typed count.
+  var stickerCount = $('#stickerCount');
+  if (stickerCount && K.animated) stickerCount.textContent = inWords(K.animated.length);
 
   var order = $('#chain-order');
   if (order && K.pools) {
@@ -223,16 +255,16 @@
 
   function pad(n) { return n < 10 ? '0' + n : String(n); }
 
-  renderCountdown();
-  if (auction.startsAt) setInterval(renderCountdown, 1000);
-
   // The launch section asserted "The auction is open now" in hardcoded markup,
   // three sections below a countdown reading TBA and a contract address saying
-  // not live. Whatever the config actually says, it says here too.
+  // not live. Whatever the config actually says, it says here too — and it says
+  // it on the same tick as the countdown, so the sentence and the clock above
+  // it cannot disagree the second the window opens or shuts.
   var auctionState = $('#auctionState');
-  if (auctionState) {
-    var aStart = K.auction && K.auction.startsAt ? new Date(K.auction.startsAt) : null;
-    var aEnd = K.auction && K.auction.endsAt ? new Date(K.auction.endsAt) : null;
+  function renderAuctionState() {
+    if (!auctionState) return;
+    var aStart = auction.startsAt ? new Date(auction.startsAt) : null;
+    var aEnd = auction.endsAt ? new Date(auction.endsAt) : null;
     var nowA = new Date();
     auctionState.textContent =
       !aStart || isNaN(aStart)        ? 'has not opened yet'
@@ -240,6 +272,11 @@
       : aEnd && !isNaN(aEnd) && nowA > aEnd ? 'has closed'
       :                                 'is open now';
   }
+
+  function tick() { renderCountdown(); renderAuctionState(); }
+
+  tick();
+  if (auction.startsAt) setInterval(tick, 1000);
 
   // --- stickers -----------------------------------------------------------
   // One grid. The webm autoplays inline as its own preview; png / webm / gif
