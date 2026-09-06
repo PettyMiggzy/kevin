@@ -536,23 +536,61 @@ async function main() {
       const history = memory.get(memKey) ?? [];
       try {
         await tg(token, 'sendChatAction', { chat_id: chatId, action: 'typing' }).catch(() => {});
-        const { text } = await chat(key, {
+        const ask = (extra = []) => chat(key, {
           model,
           messages: [
             { role: 'system', content: system },
             ...history,
             { role: 'user', content: question },
+            ...extra,
           ],
         });
+
+        let { text } = await ask();
         // Deterministic gate: see guardModelReply. A model that invents or is
         // talked into an address does not get to say it.
-        const safe = guardModelReply(text, config.contract);
+        let safe = guardModelReply(text, config.contract);
+
+        // A SAFETY REFUSAL IS NOT AN ANSWER, AND IT IS NOT KEVIN.
+        //
+        // The model reads half the questions in a token group as requests for
+        // financial advice and returns "I'm sorry, but I can't help with
+        // that." Sending that is worse than sending nothing: it is out of
+        // character, it tells the asker nothing, and after the third time the
+        // room concludes the bot is broken. So it never goes out.
+        //
+        // In a DM somebody is talking to Kevin directly and deserves an
+        // answer, so it is worth one retry telling the model what it is
+        // actually being asked. In a group, silence is the better outcome and
+        // costs nothing.
+        if (safe.text === null && safe.blocked?.startsWith('refusal')) {
+          console.error('model refused:', safe.blocked);
+          if (msg.chat.type === 'private') {
+            const nudge = {
+              role: 'system',
+              content: 'That was a refusal, not an answer. Nobody asked for financial '
+                + 'advice. You are Kevin, a man who works a fryer, being asked an ordinary '
+                + 'question. If Kevin does not know the answer, Kevin says so in his own '
+                + 'words and says what he is doing instead. Never apologise and never '
+                + 'mention being unable to do something. Answer again, in character.',
+            };
+            ({ text } = await ask([{ role: 'assistant', content: text }, nudge]));
+            safe = guardModelReply(text, config.contract);
+            if (safe.text === null) {
+              safe = { text: 'Kevin do not know that one. Kevin is on the fryer.', blocked: null };
+            }
+          }
+        }
+
         if (safe.blocked) console.error('blocked model reply:', safe.blocked);
+        if (safe.text === null) continue;   // nothing to say, so say nothing
         await reply(safe.text);
+        // Only a reply that actually went out belongs in the history. Keeping a
+        // refusal would teach the next turn that refusing is what Kevin does.
         remember(memKey, [
           ...history,
           { role: 'user', content: question },
-          { role: 'assistant', content: text },
+          { role: 'assistant', content: safe.text },
         ].slice(-MEMORY_TURNS * 2));
       } catch (e) {
         console.error('groq failed:', e.message);

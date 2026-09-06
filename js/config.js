@@ -20,6 +20,23 @@ window.KEVIN = {
     receipts: [],
   },
 
+  // The GME that the KEVIN pools earn, going back to people who hold.
+  //
+  // NOTHING HERE IS A PROMISE, and the wording is careful on purpose: an
+  // airdrop that is announced and then does not happen is worse than one that
+  // was never mentioned. `confirmed` stays false until it is actually built,
+  // funded and dated, and while it is false Kevin may only ever HINT — no
+  // date, no amount, no "hold to qualify", which is the line between a nice
+  // idea and telling people to buy.
+  //
+  // Set to null to remove it from the bot's facts entirely.
+  airdrop: {
+    token: 'GME',
+    confirmed: false,
+    who: 'people holding $KEVIN, weighted by how much and how long',
+    note: 'No date, no amount, no snapshot taken.',
+  },
+
   // Launch mechanics, taken from the kekfun docs. These are protocol rules
   // enforced on-chain by TokenFactory, not promises anybody here is making.
   mechanics: {

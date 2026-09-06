@@ -46,6 +46,37 @@ function contractNote(c) {
     `  buy yet.`;
 }
 
+/**
+ * The GME airdrop, which Kevin may HINT at and must never promise.
+ *
+ * An airdrop that gets announced and then does not happen is worse than one
+ * nobody mentioned, so until `confirmed` this says loudly that nothing is
+ * decided — and forbids the two sentences that turn a nice idea into telling
+ * somebody to buy: a date, and "hold to qualify".
+ */
+function airdropNote(c) {
+  const a = c.airdrop;
+  if (!a) return '';
+  if (a.confirmed) {
+    return `THE ${a.token} AIRDROP\n- Confirmed. ${a.who}. ${a.note}\n\n`;
+  }
+  return `THE ${a.token} THING (Kevin may HINT. Kevin must NEVER promise)
+- Some ${a.token} the pools earn may go back to ${a.who}.
+- NOTHING IS DECIDED. ${a.note} Nothing is claimable. Kevin never says it is
+  confirmed, never gives a date or amount, never says to buy or hold to
+  qualify. Kevin heard people talking, that is all.
+- Kevin like GameStop because Kevin like games.
+
+`;
+}
+
+/**
+ * The site's ticker-tape slogans used to be in here as "things Kevin may
+ * repeat". They came out: the prompt is resent on every reply, so its length
+ * IS the group's replies-per-minute, and a list of marketing lines is the
+ * least useful thing to spend that on when the persona already forbids Kevin
+ * from advertising. The site still renders them from config.ticker.
+ */
 /** The hard facts, stated plainly. The persona layer makes them sound like him. */
 function factSheet(c) {
   const pools = c.pools.map((p) => `${p.ticker} ${p.weight}%`).join(' / ');
@@ -75,7 +106,7 @@ THE BURN
 - Burn address: ${c.burn.burnAddr}
 - Burned so far: ${fmt(c.burn.burned, 'nothing published yet')}
 
-WHERE TO GO
+${airdropNote(c)}WHERE TO GO
 - Site: https://iamkevin.lol
 - Game: https://iamkevin.lol/gym  (also /game and /play)
 - Card room: https://iamkevin.lol/poker  (also inside the game, at Kevin's Crib)
@@ -84,26 +115,19 @@ WHERE TO GO
 - Chart: ${fmt(c.links.chart, 'no chart yet — nothing is trading')}
 
 THE CARD ROOM (a free browser game, built by the team)
-- Texas hold'em at https://iamkevin.lol/poker. Six seats, works on a phone, free.
-- The other five seats are Kevin characters with real playing styles — a rock
-  folds weak hands, a caller pays you off, a shark bets hard, a maniac raises
-  with anything.
-- The chips are a score in the player's own browser. They are NOT the token and
-  they touch no wallet and no chain.
+- Texas hold'em at https://iamkevin.lol/poker. Six seats, free, works on a phone.
+  The other five are Kevin characters and they each play differently.
+- The chips are a score in the player's own browser. NOT the token, no wallet,
+  no chain.
 
 THE GAME (free, in a browser, at https://iamkevin.lol/gym) — three places
 - KEVIN'S CRIB, his home, first person, with the card table and a telly that
   takes you to the other two. KEVIN'S GYM, inside and out. McKEVIN'S, the fry
   house, where the shift is.
-- The gym has bench, dumbbells and treadmill. Five reps to a set, each rep a
-  timing hit. Miss a day and muscle comes off — that is the whole point of it.
-- Out the front: a market with a supplement stall and a crew stall.
-- The $KEVIN you earn is a SCORE. It is not the token, it is not supply, and
-  nothing in the game mints or moves anything on a chain.
-- Saves in your own browser only. No account, no server. Works on a phone.
-
-THINGS KEVIN SAYS (the lines on the site — Kevin may repeat these)
-${c.ticker.map((t) => `- ${t}`).join('\n')}
+- Bench, dumbbells, treadmill. Five reps to a set, each rep a timing hit. Miss
+  a day and muscle comes off — that is the whole point of it. A market out front.
+- The $KEVIN you earn is a SCORE. Not the token, not supply, and nothing in the
+  game mints or moves anything on a chain. Saves in your browser only.
 
 STICKERS
 - There is a Telegram sticker pack, ${c.animated.length} animated stickers, free, in the group.

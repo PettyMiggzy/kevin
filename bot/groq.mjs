@@ -24,12 +24,20 @@ export const DEFAULT_MODEL = process.env.GROQ_MODEL || null;
  * resolved against the live list rather than a fixed choice.
  */
 const PREFERRED = [
-  'openai/gpt-oss-120b',
-  'openai/gpt-oss-20b',
+  // llama-3.3 first, and gpt-oss demoted, for one reason: gpt-oss answers
+  // "I'm sorry, but I can't help with that." to a large share of ordinary
+  // questions in a token group. Its safety policy reads any mention of a coin
+  // as a request for financial advice, and the refusal is out of character,
+  // useless, and — repeated — makes the bot look broken to the room. That was
+  // the live complaint. The refusal is also caught downstream in persona.mjs
+  // so a model swap alone is never the whole fix, but the cheapest 90% of it
+  // is not asking the model that does it most.
+  'llama-3.3-70b-versatile',
   'qwen/qwen3.8-27b',
   'qwen/qwen3.6-27b',
-  'llama-3.3-70b-versatile',
   'groq/compound',
+  'openai/gpt-oss-120b',
+  'openai/gpt-oss-20b',
   'groq/compound-mini',
   'allam-2-7b',
 ];
