@@ -76,8 +76,10 @@ export function open(file) {
     `),
 
     logEvent: db.prepare('INSERT INTO events (player, kind, detail, at) VALUES (?, ?, ?, ?)'),
-    setsSince: db.prepare(
-      `SELECT COUNT(*) AS n FROM events WHERE player = ? AND kind = 'set' AND at > ?`
+    // Per kind, because the cap that used this counted sets and only sets, so
+    // shift events were never counted against anything at all.
+    eventsSince: db.prepare(
+      'SELECT COUNT(*) AS n FROM events WHERE player = ? AND kind = ? AND at > ?'
     ),
 
     // Boards. Only players who have linked a Telegram account appear: a name

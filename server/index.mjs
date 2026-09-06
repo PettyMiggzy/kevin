@@ -180,8 +180,11 @@ const routes = {
     if (!p) return { status: 401, error: 'unknown session' };
     const body = await readJson(req);
 
-    const recent = q.setsSince.get(p.id, now() - HOUR).n;
-    const why = implausible(p, now(), recent);
+    const since = now() - HOUR;
+    const why = implausible(p, now(), {
+      sets: q.eventsSince.get(p.id, 'set', since).n,
+      shifts: q.eventsSince.get(p.id, 'shift', since).n,
+    });
     if (why) return { status: 429, error: why };
 
     let next;

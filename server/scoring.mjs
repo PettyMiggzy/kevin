@@ -12,11 +12,26 @@
 // moment a leaderboard or a reward depends on it. Nothing in this file trusts
 // a timestamp, a total, or a rate that came over the wire.
 
-/** Mirrors STATIONS in gym/js/main.js. Changing one means changing both. */
+/**
+ * Mirrors STATIONS in gym/js/main.js. Changing one means changing both.
+ *
+ * Which is exactly what went wrong: four stations were added to the gym — the
+ * lat pulldown, the rower, the squat rack and the exercise bike — and this
+ * table was not touched, so creditSet() answered 'unknown station' to every set
+ * played at any of them. The client kept its own score and the server silently
+ * kept none, which on a leaderboard means the four newest machines paid nothing
+ * at all. server/test/scoring.test.mjs now reads the gym's table and fails if
+ * the two ever disagree again, because a comment saying "change both" is not a
+ * mechanism.
+ */
 export const STATIONS = {
   bench: { stat: 'muscle', gain: 3.0, coin: 10 },
   rack: { stat: 'muscle', gain: 2.0, coin: 7 },
   treadmill: { stat: 'stamina', gain: 3.6, coin: 9 },
+  pulldown: { stat: 'muscle', gain: 2.6, coin: 9 },
+  rower: { stat: 'stamina', gain: 3.0, coin: 8 },
+  squat: { stat: 'muscle', gain: 3.4, coin: 12 },
+  bike: { stat: 'stamina', gain: 2.4, coin: 6 },
 };
 
 export const DECAY_PER_DAY = 0.052;      // ~13-day half-life
@@ -36,6 +51,24 @@ export const MIN_SET_MS = 4000;
 
 /** And nobody trains for eight hours straight. Sets per rolling hour. */
 export const MAX_SETS_PER_HOUR = 90;
+
+/**
+ * The same, for shifts — which had NO hourly cap at all.
+ *
+ * The counter query behind the cap above selects `kind = 'set'`, so it counted
+ * sets and only sets. A shift event went through it reading zero every time,
+ * which left one guard on the whole endpoint: the four-second floor between any
+ * two events. POST /event with {type:'shift', served:6, mistakes:0, walked:0}
+ * every 4.001 seconds is 900 perfect shifts an hour at 168 coin each — 151,200
+ * an hour onto the coin board, which is the board this pays into.
+ *
+ * A hundred an hour is one every thirty-six seconds, sustained, for an hour.
+ * No one plays like that; a script does it in four minutes. Deliberately
+ * generous for the same reason MIN_SET_MS is: a false accusation costs a real
+ * player their progress, and the point is to make cheating cost about what
+ * playing costs, not to win an arms race.
+ */
+export const MAX_SHIFTS_PER_HOUR = 100;
 
 /** Quality is graded client-side; clamp it to what the grading can produce. */
 const MIN_QUALITY = 0.25;
@@ -109,8 +142,9 @@ export function creditShift(row, { served, mistakes, walked }, now) {
  * there is no way to make a browser game unforgeable, so the aim is to make
  * cheating cost about as much time as playing, which removes the point of it.
  */
-export function implausible(row, now, recentSets) {
+export function implausible(row, now, { sets = 0, shifts = 0 } = {}) {
   if (now - row.last_event < MIN_SET_MS) return 'too fast';
-  if (recentSets >= MAX_SETS_PER_HOUR) return 'too many sets this hour';
+  if (sets >= MAX_SETS_PER_HOUR) return 'too many sets this hour';
+  if (shifts >= MAX_SHIFTS_PER_HOUR) return 'too many shifts this hour';
   return null;
 }

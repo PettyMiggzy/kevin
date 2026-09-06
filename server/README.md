@@ -15,7 +15,7 @@ Worth reading before any reward depends on these numbers.
 |---|---|
 | **Fixed** | Decay and every total are computed here, from **this machine's clock**. Winding a phone forward a year now does nothing. That was the worst hole and it is closed. |
 | **Fixed** | The client reports what it **did** — "a set at the bench, played this well" — never what it is **worth**. The sums happen server-side. Forging the quality field buys 1.37× one good set, not an arbitrary number. |
-| **Raised** | Rate limits: no set inside 4 seconds, 90 sets an hour. Farming costs about what playing costs, which removes most of the reason. |
+| **Raised** | Rate limits: nothing inside 4 seconds, 90 sets an hour, 100 shifts an hour. Farming costs about what playing costs, which removes most of the reason. The shift cap was missing entirely — the counter behind it selected `kind = 'set'`, so shift events read zero through it and the only guard left was the four-second floor: 900 perfect shifts an hour, 151,200 coin, straight onto the board this pays into. |
 | **Not fixed** | It is still a browser game. Somebody determined can script the endpoints at human speed and climb slowly. Only running the gameplay server-side changes that. |
 
 **So: do not pay out on these numbers without looking at the event log first.**
