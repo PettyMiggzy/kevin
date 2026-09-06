@@ -51,7 +51,14 @@ export const QUEUE = [
   // Inside now, on the customer's side of the counter. A line receding from it
   // rather than a huddle, so the camera can see past whoever is being served to
   // whoever is next.
-  { x: -2.0, z: 1.4 }, { x: -3.2, z: 2.6 }, { x: -1.4, z: 3.6 }, { x: -3.0, z: 4.8 },
+  //
+  // AND ON FLOOR THE GAME AGREES IS FLOOR. Two of the four marks failed the
+  // game's own collision test — __free() answered false at (-3.2, 2.6) and
+  // (-3.0, 4.8) — because the booths at x -4.2 carry a 1.1 m solid and a body
+  // is 0.34 wide, so those two customers stood a metre inside a booth for the
+  // whole shift. The lane between the booths at x -4.2 and the sauce stand
+  // blocker at x 2.5 is what is actually free, so the queue snakes down that.
+  { x: -2.0, z: 1.4 }, { x: -1.1, z: 2.7 }, { x: -2.3, z: 3.9 }, { x: -1.3, z: 5.1 },
 ];
 
 /**

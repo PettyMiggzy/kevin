@@ -404,8 +404,32 @@ export const fryHouseTexture = () =>
   });
 
 /** The menu above the counter. Prices in $KEVIN, which is a score. */
-export const menuTexture = () =>
+/**
+ * One of the three boards over the counter.
+ *
+ * It took no argument and was called three times, so McKevin's had three
+ * byte-identical menu boards side by side over a six-metre counter — which is
+ * the one place in that building a player's eye actually rests while they are
+ * queueing or serving. It also priced everything at "1", which was a
+ * placeholder nobody came back to.
+ *
+ * Three panels now, because that is what a menu board wall is: the food, the
+ * meals, and the drinks and the thing they are pushing this week.
+ */
+export const menuTexture = (panel = 0) =>
   canvasTexture(640, 448, (x, w, h) => {
+    const PANELS = [
+      { title: 'MENU', foot: 'ASK ABOUT THE FRYER', rows: [
+        ['BURGER', '4'], ['FRIES', '3'], ['SHAKE', '4'], ['NUGGETS', '5'],
+      ] },
+      { title: 'MEALS', foot: 'ANY THREE, ONE PRICE', rows: [
+        ['THE KEVIN', '9'], ['BIG KEVIN', '12'], ['KIDS', '6'], ['+ GO LARGE', '2'],
+      ] },
+      { title: 'DRINKS', foot: '2 FOR 1 FRIES · ALL WEEK', rows: [
+        ['COLA', '2'], ['SHAKE', '4'], ['COFFEE', '2'], ['WATER', '0'],
+      ] },
+    ];
+    const m = PANELS[panel % PANELS.length];
     x.fillStyle = '#141418';
     x.fillRect(0, 0, w, h);
     x.strokeStyle = '#FFE500';
@@ -415,10 +439,9 @@ export const menuTexture = () =>
     x.textBaseline = 'middle';
     x.fillStyle = '#FFE500';
     x.font = '700 40px ui-monospace, Menlo, monospace';
-    x.fillText('MENU', 40, 56);
-    const rows = [['BURGER', '1'], ['FRIES', '1'], ['SHAKE', '1'], ['NUGGETS', '1']];
+    x.fillText(m.title, 40, 56);
     x.font = '700 34px ui-monospace, Menlo, monospace';
-    rows.forEach(([name, price], i) => {
+    m.rows.forEach(([name, price], i) => {
       const y = 130 + i * 62;
       x.fillStyle = '#FFFFFF';
       x.fillText(name, 44, y);
@@ -429,7 +452,7 @@ export const menuTexture = () =>
     });
     x.fillStyle = '#8A8A8A';
     x.font = '700 22px ui-monospace, Menlo, monospace';
-    x.fillText('ASK ABOUT THE FRYER', 44, h - 42);
+    x.fillText(m.foot, 44, h - 42);
   });
 
 /**

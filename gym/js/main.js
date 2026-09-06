@@ -1730,27 +1730,35 @@ function frame() {
       chase.yaw += d * (1 - Math.pow(0.22, dt));
       chase.lift += (0 - chase.lift) * (1 - Math.pow(0.5, dt));
     }
-    let want = chase.dist + out * 5.2;
+    const nominal = chase.dist + out * 5.2;
+    let want = nominal;
     const sx = Math.sin(chase.yaw), sz = Math.cos(chase.yaw);
-    // KEEP IT IN THE BUILDING, by shortening the shot rather than by shoving it
-    // sideways afterwards. From outside a room built of single-sided planes you
-    // see nothing at all — the screen simply goes black — but a camera clamped
-    // back to the wall arrives somewhere the heading never pointed, and lands
-    // inside whatever stands against that wall. Cutting the ray at the wall
-    // keeps the shot on its own line, and lets the occlusion march below have
-    // the final word about what is in it.
+    // KEEP IT ON THE INSIDE OF THE WALLS, by shortening the shot rather than by
+    // shoving it sideways afterwards. Behind a wall you see the back of it and
+    // the screen goes dark — but a camera clamped back to the wall arrives
+    // somewhere the heading never pointed and lands inside whatever stands
+    // against it. Cutting the ray at the wall keeps the shot on its own line
+    // and lets the occlusion march below have the final word about what is in
+    // it.
     //
     // Only while the player is INSIDE that building, and only in a world that
-    // declared one. Out on a forecourt there is no roof to hit and no wall to
-    // see through, so the shot is free.
+    // declared one. Out on a forecourt there is nothing to hit, so the shot is
+    // free — and the side a building is CUT OPEN on is not a wall either.
     const kp = kevin.group.position;
     const indoors = camRoom
       && kp.x > camRoom.x0 && kp.x < camRoom.x1 && kp.z > camRoom.z0 && kp.z < camRoom.z1;
     if (indoors) {
+      // ONLY AT SIDES THAT HAVE A WALL. Both buildings are cut down at the
+      // front — the gym has three walls and no fourth, McKevin's a 1.5 m knee
+      // wall with glazing over it — because that is how you see into a room at
+      // all. Cutting the ray there anyway meant walking through your own front
+      // door pulled the shot to the 0.9 m floor and pointed it at the ground.
+      const open = camRoom.open ?? [];
       const lim = (p, s, at) => (Math.abs(s) < 1e-4 ? Infinity : (at - p) / s);
-      want = Math.min(want,
-        lim(kp.x, sx, sx > 0 ? camRoom.x1 - 0.9 : camRoom.x0 + 0.9),
-        lim(kp.z, sz, sz > 0 ? camRoom.z1 - 0.9 : camRoom.z0 + 0.9));
+      const side = sx > 0 ? 'x1' : 'x0';
+      const end = sz > 0 ? 'z1' : 'z0';
+      if (!open.includes(side)) want = Math.min(want, lim(kp.x, sx, camRoom[side] + (sx > 0 ? -0.9 : 0.9)));
+      if (!open.includes(end)) want = Math.min(want, lim(kp.z, sz, camRoom[end] + (sz > 0 ? -0.9 : 0.9)));
       // A wall is a hard limit, not a preference: floored at CAM_MIN this would
       // put the shot back through it, which is the black frame all over again.
       want = Math.max(want, 0.9);
@@ -1766,7 +1774,13 @@ function frame() {
     // Drop the camera as it comes in. Held at head height a close shot points
     // down at his cap and shows the floor; coming down with the pull-in keeps
     // it over the shoulder and keeps the room in frame.
-    const high = 1.42 + 1.43 * clamp(dist / Math.max(want, 0.001), 0, 1);
+    //
+    // AGAINST THE NOMINAL DISTANCE, not the one the wall just cut. Measured
+    // against `want`, a shot shortened to 0.9 m by a wall has dist/want = 1 and
+    // so stays at the full 2.85 m — three metres up and one metre back, aimed
+    // at the floor. That is what standing anywhere near a wall looked like: one
+    // frame of it was 82% floor paint.
+    const high = 1.42 + 1.43 * clamp(dist / nominal, 0, 1);
     tmp.set(
       kevin.group.position.x + sx * dist,
       kevin.group.position.y + high + out * 3.1 + chase.lift,
@@ -1987,7 +2001,10 @@ async function buildGymWorld() {
   places.push({ kind: 'door', to: 'work', label: "McKevin's", note: 'down the road',
     act: 'Go', x: YARD.x - 3.0, z: YARD.z - 4.0 });
   return { fp: false, spawn: { x: 0, z: 15.5 }, mood: 'gym',
-    room: { x0: -ROOM.w / 2, x1: ROOM.w / 2, z0: -ROOM.d / 2, z1: ROOM.d / 2, h: ROOM.h } };
+    // The gym has three walls. buildRoom draws the back and both sides and no
+    // front at all — that opening IS the dollhouse cut you look in through.
+    room: { x0: -ROOM.w / 2, x1: ROOM.w / 2, z0: -ROOM.d / 2, z1: ROOM.d / 2, h: ROOM.h,
+            open: ['z1'] } };
 }
 
 /**
@@ -2009,8 +2026,11 @@ async function buildWorkWorld() {
   places.push({ kind: 'door', to: 'gym', label: 'Back to the gym', note: 'up the road',
     act: 'Go', x: 5.8, z: 12.0 });
   return { fp: false, spawn: { x: 5.8, z: 10.5 }, mood: 'work',
+    // Same at McKevin's: the front is a 1.5 m knee wall with glazing above it,
+    // which a camera at head height sees straight over.
     room: { x0: FRY.x - FRY.w / 2, x1: FRY.x + FRY.w / 2,
-            z0: FRY.z - FRY.d / 2, z1: FRY.z + FRY.d / 2, h: FRY.h } };
+            z0: FRY.z - FRY.d / 2, z1: FRY.z + FRY.d / 2, h: FRY.h,
+            open: ['z1'] } };
 }
 
 async function buildCribWorld() {

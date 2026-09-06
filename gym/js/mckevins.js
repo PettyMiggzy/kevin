@@ -19,16 +19,17 @@ export const LOT = { z0: 8.0, z1: 26.0, x: 20.0 };
  * Every model this world would use, if the pack has it.
  *
  * McKevin's was built out of boxes because there was no restaurant pack to
- * build it out of, and that is the whole of why it reads as primitives next to
- * the gym: the gym is full of real models and this place had none. Waiting for
- * a pack before furnishing it would leave the world crude in the meantime, and
- * furnishing it twice is work done twice.
- *
- * So every fixture below asks for its model first and draws the boxes it
- * already was when the model is missing. This list is a shopping list and a
- * manifest at once — main.js preloads it, loadProps() shrugs off the names that
- * are not there yet, and the day the GLBs land the restaurant furnishes itself
+ * build it out of, and that is the whole of why it read as primitives next to
+ * the gym. So every fixture below asks for its model first and draws the boxes
+ * it already was when the model is missing: a shopping list and a manifest at
+ * once, so that the day the GLBs landed the restaurant would furnish itself
  * with no further code.
+ *
+ * THE GLBs HAVE LANDED. All fifteen names below have a real file in
+ * gym/assets/props/ and the world spawns 47 instances of them, so the boxes in
+ * this file are now the fallback they were always meant to be rather than what
+ * you actually see. Worth knowing before reading any of them: the box next to a
+ * fixture is not the thing on screen.
  */
 export const SHOP_PROPS = [
   // kitchen
@@ -137,8 +138,18 @@ export function buildShop(scene, { flat, solids, blockers, spawn = null }) {
     });
   }
   // Menu boards over the counter, which is where you actually read them.
+  //
+  // Three different boards, and each on a box rather than on nothing. They were
+  // three calls to menuTexture() with no argument — three byte-identical panels
+  // over a six-metre counter, all pricing everything at 1 — and they were bare
+  // PlaneGeometry, which is front-faced, so from behind the counter they were
+  // not merely blank but ABSENT. That is where the player stands for the whole
+  // shift: the only signage in the building was invisible from the one position
+  // the game puts you in.
   for (let i = 0; i < 3; i++) {
-    quad(3.4, 1.5, menuTexture(), CL + 2.4 + i * 4.6, 2.9, counterZ - 0.6);
+    const mx = CL + 2.4 + i * 4.6;
+    solid(3.6, 1.7, 0.12, '#141418', mx, 2.9, counterZ - 0.66);
+    quad(3.4, 1.5, menuTexture(i), mx, 2.9, counterZ - 0.59);
   }
   solid(CR - CL + 0.4, 0.3, 0.3, '#2A2A2E', (CL + CR) / 2, 3.75, counterZ - 0.6);
   blockers.push({ x0: CL - 0.2, x1: CR + 0.2, z0: counterZ - 0.6, z1: counterZ + 0.6 });
@@ -221,7 +232,11 @@ export function buildShop(scene, { flat, solids, blockers, spawn = null }) {
       solid(0.5, 0.12, 0.4, '#C7382F', px, 1.06, pz);
     });
   }
-  for (const [kx, kz] of [[2.9, 2.7], [3.9, 2.7]]) {
+  // ON the stand, not 15cm off the back of it. The stand is 1.6 by 0.7 at
+  // (3.4, 2.2), so its top runs z 1.85..2.55 and the bottles were at z 2.7 —
+  // the right height, standing on nothing, which is the one arrangement that
+  // reads as a bug rather than as a bottle.
+  for (const [kx, kz] of [[2.75, 2.30], [4.05, 2.30]]) {
     fixture('ketchup-bottle', { x: kx, z: kz, y: 1.0 }, () => {});
   }
   blockers.push({ x0: 2.5, x1: 4.3, z0: 1.7, z1: 4.9 });
