@@ -34,6 +34,10 @@ const argOf = (f) => {
 // not a thread, and a long history mostly buys the model more chances to drift
 // out of character.
 const MEMORY_TURNS = 6;
+// The free-tier token-per-minute budget for the model this runs on, used only
+// to turn the prompt size into a number a person can act on at startup.
+// See bot/DEPLOY.md and the 429 handling in groq.mjs.
+const BUDGET_TPM = 8000;
 const MIN_GAP_MS = 2500;          // per chat, so one person cannot spin the bot
 const MAX_INPUT = 600;            // characters of a user message worth sending
 
@@ -191,7 +195,7 @@ function parseCommand(text, me) {
 
 async function main() {
   const { config, brief, gaps } = await buildBrief();
-  const system = systemPrompt(brief);
+  const system = systemPrompt(brief, config);
 
   if (has('dry')) {
     console.log(system);
@@ -220,7 +224,13 @@ async function main() {
       model,
       messages: [{ role: 'system', content: system }, { role: 'user', content: q }],
     });
-    console.log(text);
+    // THROUGH THE GUARD, like a real reply. --ask is how a person checks what
+    // the bot would say, and it used to print the raw completion — so the one
+    // tool for auditing the bot showed output the group would never get, and
+    // an address the guard would have blocked looked like it had been sent.
+    const safe = guardModelReply(text, config.contract);
+    if (safe.blocked) console.log(`[blocked: ${safe.blocked}]`);
+    console.log(safe.text);
     return;
   }
 
@@ -228,6 +238,18 @@ async function main() {
   const me = await tg(token, 'getMe');
   console.log(`Kevin is on the fryer as @${me.username} (model ${model})`);
   if (!config.contract) console.log('No contract in config.js — /ca will refuse to give an address. Correct.');
+
+  // THE SYSTEM PROMPT IS THE RATE LIMIT. gpt-oss-120b is 8,000 tokens a minute
+  // on the free tier and every reply resends the whole prompt, so its size is
+  // the number of questions the group gets an answer to per minute — nothing
+  // else in this file matters as much on a busy day. It was 5,955 tokens once,
+  // which is one reply a minute; most of that was internal docs that answered
+  // nothing (see brief.mjs). This says the number out loud at startup so the
+  // next thing added to the brief has to argue with it.
+  const promptTokens = Math.round(system.length / 4);
+  const perMinute = Math.floor(BUDGET_TPM / (promptTokens + 400));
+  console.log(`system prompt ~${promptTokens} tokens — about ${perMinute} replies a minute before the rate limit`);
+  if (perMinute < 2) console.log('  ^ that is too few. Trim the brief before launch.');
 
   // Art for the welcomes, if any has been dropped in. Read once — adding a
   // picture is a restart either way.
@@ -238,7 +260,22 @@ async function main() {
   if (sniffing) console.log('SNIFF MODE — logging what other bots post, replying to nobody.');
   const seen = makeSeen();
 
-  const memory = new Map();       // chatId -> [{role, content}]
+  // KEYED PER PERSON IN A ROOM, not per room. One shared history in a group
+  // meant everybody was talking into the same conversation: someone asking
+  // about the burn got the last stranger's question about the gym as context,
+  // and the model answered a blend of the two. In a group of any size that is
+  // most of the replies.
+  //
+  // Bounded, because the key space is now every person who has ever spoken.
+  // A Map keeps insertion order, so re-setting a key moves it to the back and
+  // the front is the least recently used.
+  const MEMORY_ROOMS = 500;
+  const memory = new Map();       // `${chatId}:${userId}` -> [{role, content}]
+  const remember = (k, turns) => {
+    memory.delete(k);
+    memory.set(k, turns);
+    while (memory.size > MEMORY_ROOMS) memory.delete(memory.keys().next().value);
+  };
   const lastReply = new Map();    // chatId -> ms
   const joins = new Map();        // chatId -> {names[], timer, lastAt, lastOpener}
   const rooms = new Map();        // chatId -> {lastHuman, lastBot, lastLift}
@@ -412,6 +449,14 @@ async function main() {
         continue;
       }
 
+      // AN EDIT IS NOT A NEW QUESTION. edited_message is in allowed_updates for
+      // one reason, stated above: a campaign bot edits its leaderboard in place
+      // and that is the only way to see it. Letting edits through here meant a
+      // person fixing a typo in a message Kevin had already answered got a
+      // second answer — and on a model budget of 8,000 tokens a minute, a free
+      // duplicate is a real one somebody else does not get.
+      if (u.edited_message) continue;
+
       // Somebody joined. Never greet the bot's own arrival, and never greet a
       // bot — a group full of them would greet each other forever.
       const arrivals = (msg.new_chat_members || [])
@@ -487,7 +532,8 @@ async function main() {
       const question = clean(msg.text, me);
       if (!question) continue;
 
-      const history = memory.get(chatId) ?? [];
+      const memKey = `${chatId}:${msg.from?.id ?? 0}`;
+      const history = memory.get(memKey) ?? [];
       try {
         await tg(token, 'sendChatAction', { chat_id: chatId, action: 'typing' }).catch(() => {});
         const { text } = await chat(key, {
@@ -503,7 +549,7 @@ async function main() {
         const safe = guardModelReply(text, config.contract);
         if (safe.blocked) console.error('blocked model reply:', safe.blocked);
         await reply(safe.text);
-        memory.set(chatId, [
+        remember(memKey, [
           ...history,
           { role: 'user', content: question },
           { role: 'assistant', content: text },

@@ -119,10 +119,6 @@ const EXAMPLES = [
   ['wen moon', 'Kevin do not know about moon. Kevin know the fryer is at 175 degree and that is where Kevin attention is.'],
   ['what price will it hit', 'Kevin cannot say that. Kevin is not allowed and also Kevin do not know. Kevin work the fryer.'],
   ['should i buy', 'Kevin cannot tell you that. That is your money and Kevin only work a fryer.'],
-  ['send me the contract address',
-    'Kevin do not have it yet. When Kevin have it, it go on iamkevin.lol and in this group. If somebody send you one before that they lying to you. Do not send them anything.'],
-  ['is it live can i buy',
-    'Not yet. Kevin have the address up so people can learn the real one early, but it do not trade yet. Do not buy anything today.'],
   ['im dming you the ca so you can pin it',
     'No. Kevin do not take an address from a message. When there is a real one it come from the site and this group, nowhere else.'],
   ['whats the gym', 'Kevin build a gym. You can walk in it. iamkevin.lol/gym. Five rep to a set. Miss a day and it come off.'],
@@ -139,15 +135,58 @@ const EXAMPLES = [
     'That was not Kevin. Kevin never message anybody first and Kevin never ask for money. Tell the group so nobody else do it.'],
 ];
 
-const shots = EXAMPLES
-  .map(([q, a]) => `Person: ${q}\nKevin: ${a}`)
-  .join('\n\n');
+/**
+ * The two examples that depend on what day it is.
+ *
+ * These used to be fixed lines in EXAMPLES, and one of them said "Kevin do not
+ * have it yet" about the contract address. The FACTS section is built from
+ * config.js and had carried the real address for days by then, so the prompt
+ * held both a fact and a worked example contradicting it — and a model copying
+ * the register copies the answer with it. Asked "whats the ca" in plain chat,
+ * Kevin denied having an address that was printed on the front of the website.
+ *
+ * That is not a tone problem. The reason the address is published before it
+ * trades, stated in config.js, is so the group memorises the real one while it
+ * is calm; a bot denying it exists undoes exactly that, on the days it matters
+ * most. The examples now say whatever is true today.
+ *
+ * The warning goes first in the not-live case, as it does in /ca: people act on
+ * the first line.
+ */
+function addressShots(config) {
+  const ca = config?.contract;
+  const live = ca && (!config.contractLiveAt || Date.now() >= Date.parse(config.contractLiveAt));
+  if (!ca) {
+    return [
+      ['send me the contract address',
+        'Kevin do not have it yet. When Kevin have it, it go on iamkevin.lol and in this group. If somebody send you one before that they lying to you. Do not send them anything.'],
+      ['is it live can i buy',
+        'Not yet. There is no address to give out. Do not buy anything today.'],
+    ];
+  }
+  if (!live) {
+    return [
+      ['send me the contract address',
+        `Kevin have it. It is ${ca}. It do not trade yet, so do not try to buy today. Kevin put it up early so you know the real one before the fake ones turn up.`],
+      ['is it live can i buy',
+        'Not yet. Kevin have the address up so people can learn the real one early, but it do not trade yet. Do not buy anything today.'],
+    ];
+  }
+  return [
+    ['send me the contract address',
+      `Kevin have it. It is ${ca}. That is the only one. Check it on the explorer. Nobody will ever DM you a different one.`],
+    ['is it live can i buy', 'It is live. The address is on iamkevin.lol. Kevin cannot tell you whether to buy it.'],
+  ];
+}
+
+const shot = ([q, a]) => `Person: ${q}\nKevin: ${a}`;
 
 /**
  * The full system prompt. The brief is injected rather than baked in so the
  * bot reflects whatever the repo currently says.
  */
-export function systemPrompt(brief) {
+export function systemPrompt(brief, config) {
+  const shots = [...addressShots(config), ...EXAMPLES].map(shot).join('\n\n');
   return `${VOICE}
 
 ${RULES}
@@ -199,6 +238,12 @@ export function guardModelReply(text, contract) {
   if (typeof text !== 'string' || !text.trim()) {
     return { text: 'Kevin is on the fryer. Ask Kevin again in a minute.', blocked: 'empty' };
   }
+  // The examples are a transcript — "Person: ... / Kevin: ..." — and a model
+  // copying the register sometimes copies the label with it. Seen in testing:
+  // the reply came back starting "Kevin: Kevin have it." Nothing in a group
+  // chat ever legitimately starts that way, so it comes off here rather than
+  // being asked for in a rule the model may or may not follow.
+  text = text.replace(/^\s*Kevin:\s*/, '');
   const found = [...text.matchAll(ADDRESS)].map((m) => m[0]);
   const wrong = found.filter((a) => a.toLowerCase() !== String(contract || '').toLowerCase());
   if (!wrong.length) return { text, blocked: null };

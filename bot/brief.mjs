@@ -91,30 +91,23 @@ THE CARD ROOM (a free browser game, built by the team)
 - The chips are a score in the player's own browser. They are NOT the token and
   they touch no wallet and no chain.
 
-THE GAME (free, in a browser, built by the team) — three separate places
-- It starts at KEVIN'S CRIB, his home, which is FIRST PERSON. The card table is
-  there, and the telly is a map that takes you to the other two.
-- KEVIN'S GYM is a full gym, inside and out: reception, a supplement counter, a
-  water station, free weights, machines and cardio.
-- McKEVIN'S is the fry house, where the shift is.
-- Only the place you are in is loaded, so each can be as detailed as it likes.
-- Walk into it at https://iamkevin.lol/gym. Works on a phone. Free.
-- Bench, dumbbells and treadmill. Five reps to a set; each rep is a timing hit —
-  land the marker in the green band.
-- Miss a day and muscle comes off. That is the whole point of it.
-- Out the front: a market with a supplement stall and a crew stall, and
-  McKevin's, where you clock in and serve six customers a shift.
-- The $KEVIN you earn in the game is a SCORE. It is not the token, it is not
-  supply, nothing in the game mints or moves anything on a chain.
-- Progress saves in your own browser only. There is no account and no server.
-- You play as Kevin. If you want, you can switch to any of the crew faces at
-  the crew stall.
+THE GAME (free, in a browser, at https://iamkevin.lol/gym) — three places
+- KEVIN'S CRIB, his home, first person, with the card table and a telly that
+  takes you to the other two. KEVIN'S GYM, inside and out. McKEVIN'S, the fry
+  house, where the shift is.
+- The gym has bench, dumbbells and treadmill. Five reps to a set, each rep a
+  timing hit. Miss a day and muscle comes off — that is the whole point of it.
+- Out the front: a market with a supplement stall and a crew stall.
+- The $KEVIN you earn is a SCORE. It is not the token, it is not supply, and
+  nothing in the game mints or moves anything on a chain.
+- Saves in your own browser only. No account, no server. Works on a phone.
 
 THINGS KEVIN SAYS (the lines on the site — Kevin may repeat these)
 ${c.ticker.map((t) => `- ${t}`).join('\n')}
 
 STICKERS
-- There is a Telegram sticker pack: ${c.animated.map((a) => a.name).join(', ')}.
+- There is a Telegram sticker pack, ${c.animated.length} animated stickers, free, in the group.
+  Kevin does not list them out.
 
 KEVIN'S CREW (the NFT collection)
 - 32x32 pixel characters, the people Kevin works with.
@@ -136,29 +129,58 @@ function unknowns(c) {
 }
 
 /**
- * Trim a markdown doc down to something worth spending context on. Keeps the
- * prose, drops the tables of file paths and the asset inventories — Kevin does
- * not need to know where the favicon lives to answer a question in a group.
+ * Take only the named `## ` sections out of a markdown doc.
+ *
+ * The docs in this repo are written for the PEOPLE who build Kevin, and three
+ * of them used to be dumped into the prompt whole, truncated at a character
+ * count. That was two thirds of everything Kevin knew, and it was the wrong
+ * two thirds:
+ *
+ *   docs/LAUNCH.md is the runbook — DNS records, GitHub Pages settings, the
+ *   repo URL, a checklist of things not done yet. None of it answers anything
+ *   a person in the group can ask, and all of it is ours rather than theirs.
+ *
+ *   docs/BRAND.md is art direction — which woff2 files to self-host, which
+ *   module draws the in-art lettering. Same again.
+ *
+ *   docs/LORE.md is mostly craft direction, and it CONTRADICTED the prompt it
+ *   was inside: "Do: First person. Present tense." sat about four thousand
+ *   characters above "Third person, always — if a sentence contains 'I', 'me'
+ *   or 'my', write it again with 'Kevin' instead." A prompt arguing with
+ *   itself gets whichever half the model reaches for.
+ *
+ * What survives is the part a stranger can actually ask about: who he is and
+ * the facts of his life. The register is carried by VOICE, RULES and twelve
+ * worked examples in persona.mjs, which is where register belongs.
+ *
+ * Reading the sections rather than retyping them keeps the single source this
+ * file exists for: change LORE.md and the bot changes with it.
  */
-function trimDoc(md, maxChars) {
-  const out = md
-    .split('\n')
-    .filter((l) => !/^\|/.test(l))            // markdown tables
-    .filter((l) => !/^\s*```/.test(l) === false || true)
-    .join('\n')
+function sections(md, wanted) {
+  const want = new Set(wanted);
+  const out = [];
+  let keep = false;
+  for (const line of md.split('\n')) {
+    const h = /^##\s+(?:[IVX]+\.\s*)?(.+?)\s*$/.exec(line);
+    if (h) { keep = want.has(h[1].toUpperCase()); continue; }
+    if (keep) out.push(line);
+  }
+  // Markdown furniture only a renderer cares about. It is not free — every
+  // asterisk and fence is a token spent on nothing, and a model reading
+  // "*No pain, only Kevin.*" will happily type the asterisks back into a group.
+  return out.join('\n')
+    .replace(/^>\s?/gm, '')
+    .replace(/^\s*```.*$/gm, '')
+    .replace(/\*/g, '')
     .replace(/\n{3,}/g, '\n\n')
+    .replace(/\n*---\n*/g, '\n')
     .trim();
-  return out.length > maxChars ? out.slice(0, maxChars) + '\n[...]' : out;
 }
 
 /** Everything Kevin knows, as one block of text for the system prompt. */
 export async function buildBrief() {
   const config = await loadConfig();
-  const [lore, launch, brand] = await Promise.all([
-    readFile(join(ROOT, 'docs/LORE.md'), 'utf8').catch(() => ''),
-    readFile(join(ROOT, 'docs/LAUNCH.md'), 'utf8').catch(() => ''),
-    readFile(join(ROOT, 'docs/BRAND.md'), 'utf8').catch(() => ''),
-  ]);
+  const lore = await readFile(join(ROOT, 'docs/LORE.md'), 'utf8').catch(() => '');
 
   const gaps = unknowns(config);
   const brief = `${factSheet(config)}
@@ -166,14 +188,8 @@ export async function buildBrief() {
 THINGS KEVIN DOES NOT KNOW — say so plainly, never guess:
 ${gaps.map((g) => `- ${g}`).join('\n')}
 
---- BACKGROUND: THE BOOK OF KEVIN ---
-${trimDoc(lore, 5200)}
-
---- BACKGROUND: HOW THE LAUNCH WORKS ---
-${trimDoc(launch, 3600)}
-
---- BACKGROUND: WHO KEVIN IS TO LOOK AT ---
-${trimDoc(brand, 2200)}`;
+--- KEVIN'S LIFE (facts, not a script) ---
+${sections(lore, ['WHO HE IS', 'THE FACTS OF HIS LIFE'])}`;
 
   return { config, brief, gaps };
 }

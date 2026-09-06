@@ -83,7 +83,7 @@ here and normal-sized everywhere else, and this is never addressed.
 directly, with a spoon, from a bowl with his name on it. This is not a metaphor
 either.
 
-**The sign on the road out of town.** BIG DREAMS → MCDONALD'S → FREEDOM. Three
+**The sign on the road out of town.** BIG DREAMS → MCKEVIN'S → FREEDOM. Three
 arrows, one direction. He is following it in order.
 
 ---
