@@ -150,9 +150,22 @@
     var target = now < start ? start : end;
     var label = now < start ? 'until the auction opens' : 'until the auction closes';
 
-    if (!target || isNaN(target) || now > target) {
-      countdown.innerHTML = '<div class="count count--tba"><b>' + (now > start ? 'LIVE' : 'TBA') + '</b><span>Auction</span></div>';
-      if (note) note.textContent = now > start ? 'Auction window is open. Bid on kekfun.xyz.' : '';
+    // THREE states, not two. `target` is the END once the auction has started,
+    // so `now > target` means the auction has FINISHED — and this branch used to
+    // render that as LIVE and tell people to go and bid, permanently, because
+    // `now > start` stays true forever afterwards. A four-day window means that
+    // would have started lying about five days after launch.
+    var closed = end && !isNaN(end) && now > end;
+    if (closed) {
+      countdown.innerHTML = '<div class="count count--tba"><b>CLOSED</b><span>Auction</span></div>';
+      if (note) note.textContent = 'The auction window has closed.';
+      return;
+    }
+    if (!target || isNaN(target)) {
+      // Started, with no end published. Live, but do not invent a deadline.
+      var open = now >= start;
+      countdown.innerHTML = '<div class="count count--tba"><b>' + (open ? 'LIVE' : 'TBA') + '</b><span>Auction</span></div>';
+      if (note) note.textContent = open ? 'Auction window is open. Bid on kekfun.xyz.' : '';
       return;
     }
 
@@ -170,6 +183,21 @@
 
   renderCountdown();
   if (auction.startsAt) setInterval(renderCountdown, 1000);
+
+  // The launch section asserted "The auction is open now" in hardcoded markup,
+  // three sections below a countdown reading TBA and a contract address saying
+  // not live. Whatever the config actually says, it says here too.
+  var auctionState = $('#auctionState');
+  if (auctionState) {
+    var aStart = K.auction && K.auction.startsAt ? new Date(K.auction.startsAt) : null;
+    var aEnd = K.auction && K.auction.endsAt ? new Date(K.auction.endsAt) : null;
+    var nowA = new Date();
+    auctionState.textContent =
+      !aStart || isNaN(aStart)        ? 'has not opened yet'
+      : nowA < aStart                 ? 'has not opened yet'
+      : aEnd && !isNaN(aEnd) && nowA > aEnd ? 'has closed'
+      :                                 'is open now';
+  }
 
   // --- stickers -----------------------------------------------------------
   // One grid. The webm autoplays inline as its own preview; png / webm / gif
