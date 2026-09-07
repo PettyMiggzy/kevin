@@ -26,7 +26,7 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { keccak256, encodeAbiParameters, concatHex, getAddress } from 'viem';
+import { keccak256, encodeAbiParameters, decodeAbiParameters, concatHex, getAddress } from 'viem';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -43,6 +43,15 @@ const cfg = {
   total: BigInt(arg('total', '0')),
   // Only count the last N days. 0 means the token's whole life so far.
   days: Number(arg('days', '0')),
+  // OR pin the window exactly. THIS IS WHAT MAKES A ROUND REPRODUCIBLE.
+  // With only --days the window is anchored to whatever block the head
+  // happened to be at when the team ran it, so nobody outside the team can
+  // rebuild the root — and "this list hashes to this root" is a property a
+  // fabricated list also has. Every round file records these, so re-running
+  // the printed command must produce the same root or something is wrong.
+  fromBlock: arg('from-block', null),
+  toBlock: arg('to-block', null),
+  blocksPerDay: arg('blocks-per-day', null),
   // An address must have held something for at least this long to qualify at
   // all, on top of being weighted by time. Stops a dust of accounts with a
   // few seconds of holding from appearing in the list at all.
@@ -68,10 +77,19 @@ const EXCLUDE = new Set([
   '0x506200532B0a5A7B9d1e7C50D0014680FC3B5b13', // launchpad locker
   '0x06AfBA43Fd06227fA663b0DAecF536f6EaA6bf99', // universal router
   '0x000000000022D473030F116dDEE9F6B43aC78BA3', // permit2
+  // The treasury itself. It is the one address most obviously not entitled to
+  // a share of its own airdrop, and the one an exclusion list built by looking
+  // at the pools is most likely to forget.
+  '0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf',
   ...(arg('exclude', '') || '').split(',').filter(Boolean),
 ].map((a) => getAddress(a)));
 
 const TRANSFER = keccak256(new TextEncoder().encode('Transfer(address,address,uint256)'));
+
+/** One eth_call, for the verifier. */
+async function rpcCall(to, data) {
+  return rpc('eth_call', [{ to, data }, 'latest']);
+}
 
 async function rpc(method, params) {
   const r = await fetch(cfg.rpc, {
@@ -249,6 +267,51 @@ async function verify(path) {
   console.log(`holders    ${rows.length}`);
   console.log(`pays out   ${sum}  of ${j.total}`);
   console.log(`root       ${root}`);
+
+  // AND, IF ASKED, AGAINST THE CHAIN RATHER THAN AGAINST THE FILE.
+  //
+  // Everything above compares the file to itself, which a fabricated file
+  // satisfies just as well. This is the half that cannot be faked: the root,
+  // the token and the funded total as the contract actually holds them.
+  const at = arg('airdrop');
+  const roundId = arg('round');
+  if (at && roundId !== null) {
+    const sel = keccak256(new TextEncoder().encode('rounds(uint256)')).slice(0, 10);
+    const data = sel + BigInt(roundId).toString(16).padStart(64, '0');
+    const res = await rpcCall(at, data);
+    const [r] = decodeAbiParameters(
+      [{
+        type: 'tuple',
+        components: [
+          { name: 'token', type: 'address' }, { name: 'merkleRoot', type: 'bytes32' },
+          { name: 'total', type: 'uint256' }, { name: 'claimed', type: 'uint256' },
+          { name: 'deadline', type: 'uint64' }, { name: 'createdAt', type: 'uint64' },
+          { name: 'swept', type: 'bool' }, { name: 'uri', type: 'string' },
+        ],
+      }],
+      res,
+    );
+    console.log('');
+    console.log(`on chain   round ${roundId} of ${at}`);
+    console.log(`  root     ${r.merkleRoot}`);
+    console.log(`  token    ${r.token}`);
+    console.log(`  funded   ${r.total}   claimed ${r.claimed}`);
+    console.log(`  uri      ${r.uri}`);
+    if (r.merkleRoot.toLowerCase() !== root.toLowerCase()) {
+      problems.push(`THE CHAIN'S ROOT IS ${r.merkleRoot}, NOT THIS LIST'S ${root}`);
+    }
+    if (sum > r.total) {
+      problems.push(`the list pays ${sum} but the round is only funded with ${r.total}`);
+    }
+    if (j.token && r.token.toLowerCase() === j.token.toLowerCase()) {
+      problems.push('the payout token is the same as the snapshot token — check that is intended');
+    }
+  } else {
+    console.log('');
+    console.log('NOTE: checked the file against itself only. To check it against the');
+    console.log('round the contract actually holds, add --airdrop <addr> --round <id>.');
+  }
+
   if (problems.length) {
     console.log('');
     for (const p of problems) console.log('  BAD  ' + p);
@@ -257,7 +320,12 @@ async function verify(path) {
   }
   console.log('');
   console.log('OK. Every leaf, every proof and the total all check out.');
-  console.log('Now confirm this root is the one the contract stores for the round.');
+  if (j.reproduceWith) {
+    console.log('');
+    console.log('That only proves the list hashes to the root, which a made-up list');
+    console.log('also does. To prove it came off the chain, run this and compare:');
+    console.log(`  ${j.reproduceWith}`);
+  }
 }
 
 // --- main -------------------------------------------------------------------
@@ -267,20 +335,49 @@ async function main() {
     console.error('--total is required: how much of the payout token to split, in wei.');
     process.exit(1);
   }
-  const latest = Number(await rpc('eth_blockNumber', []));
-  const [head, older] = await Promise.all([
-    rpc('eth_getBlockByNumber', ['0x' + latest.toString(16), false]),
-    rpc('eth_getBlockByNumber', ['0x' + Math.max(0, latest - 10000).toString(16), false]),
-  ]);
-  const secsPerBlock = (Number(head.timestamp) - Number(older.timestamp)) / Math.min(10000, latest);
-  const blocksPerDay = Math.max(1, Math.round(86400 / (secsPerBlock || 1)));
+  const head0 = Number(await rpc('eth_blockNumber', []));
+  const latest = cfg.toBlock !== null ? Number(cfg.toBlock) : head0;
 
-  const fromBlock = cfg.days > 0 ? Math.max(0, latest - cfg.days * blocksPerDay) : 0;
+  let blocksPerDay;
+  if (cfg.blocksPerDay !== null) {
+    blocksPerDay = Number(cfg.blocksPerDay);
+  } else {
+    const span = Math.min(10000, latest);
+    const [a, b] = await Promise.all([
+      rpc('eth_getBlockByNumber', ['0x' + latest.toString(16), false]),
+      rpc('eth_getBlockByNumber', ['0x' + Math.max(0, latest - span).toString(16), false]),
+    ]);
+    const secs = (Number(a.timestamp) - Number(b.timestamp)) / (span || 1);
+    blocksPerDay = Math.max(1, Math.round(86400 / (secs || 1)));
+  }
+
+  const fromBlock = cfg.fromBlock !== null
+    ? Number(cfg.fromBlock)
+    : (cfg.days > 0 ? Math.max(0, latest - cfg.days * blocksPerDay) : 0);
+
   console.error(`token      ${cfg.token}`);
-  console.error(`window     blocks ${fromBlock}..${latest}  (~${secsPerBlock.toFixed(3)}s/block, ${blocksPerDay}/day)`);
+  console.error(`window     blocks ${fromBlock}..${latest}  (${blocksPerDay} blocks/day)`);
 
   const transfers = await allTransfers(latest);
   const { weight, heldFor, bal } = weigh(transfers, fromBlock, latest);
+
+  // EVERY BALANCE, ADDED UP, MUST BE THE SUPPLY.
+  //
+  // allTransfers halves its chunk when the endpoint errors, but an endpoint
+  // that silently CAPS its results returns fewer logs and no error at all —
+  // and a dropped Transfer corrupts every balance downstream while leaving the
+  // round file perfectly self-consistent. $KEVIN is fixed at 1e27 and cannot
+  // mint or burn, so this one line catches exactly that.
+  const supply = BigInt(await rpc('eth_call', [{ to: cfg.token, data: '0x18160ddd' }, 'latest']));
+  const replayed = [...bal.values()].reduce((n, v) => n + v, 0n);
+  if (replayed !== supply) {
+    console.error('');
+    console.error(`MISMATCH: replaying the log gives ${replayed} but totalSupply() is ${supply}.`);
+    console.error('Logs are missing — the RPC probably capped a range without erroring.');
+    console.error('Re-run with a smaller --chunk. DO NOT publish this.');
+    process.exit(1);
+  }
+  console.error(`supply     ${supply} reconciles against the replayed log`);
 
   const minBlocks = BigInt(Math.round(cfg.minHoldDays * blocksPerDay));
   let rows = [...weight.entries()]
@@ -313,7 +410,11 @@ async function main() {
     minHoldDays: cfg.minHoldDays,
     holders: rows.length,
     excluded: [...EXCLUDE],
-    generatedFrom: 'Transfer log only. Re-runnable by anyone; check the root.',
+    generatedFrom: 'Transfer log only.',
+    // Run this and you must get the same root. That is what turns "this list
+    // hashes to this root" — which a fabricated list also satisfies — into
+    // "this list came from the chain".
+    reproduceWith: command,
     claims: Object.fromEntries(rows.map((r, i) => [r.address, {
       index: i,
       amount: r.amount.toString(),
@@ -322,6 +423,18 @@ async function main() {
       proof: proofFor(layers, i),
     }])),
   };
+
+  // The exact command that regenerates this file. Anybody can run it.
+  const command = [
+    'node tools/airdrop-snapshot.mjs',
+    `--token ${cfg.token}`,
+    `--total ${cfg.total}`,
+    `--from-block ${fromBlock}`,
+    `--to-block ${latest}`,
+    `--blocks-per-day ${blocksPerDay}`,
+    `--min-hold-days ${cfg.minHoldDays}`,
+    cfg.minPayout > 0n ? `--min-payout ${cfg.minPayout}` : '',
+  ].filter(Boolean).join(' ');
 
   const path = cfg.out || join(ROOT, 'airdrop', `round-${Date.now()}.json`);
   await mkdir(dirname(path), { recursive: true });
@@ -334,7 +447,17 @@ async function main() {
   console.error(`root       ${root}`);
   console.error(`written    ${path}`);
   console.error('');
-  console.error('Publish that file BEFORE opening the round, so people can check the root.');
+  console.error('Anybody can rebuild this exact file with:');
+  console.error(`  ${command}`);
+  console.error('');
+  console.error('Publish it BEFORE opening the round. Then, from the owner, paste this');
+  console.error('rather than retyping any of it — the numbers below are the ones the');
+  console.error('list was actually built for, and a round funded with a different');
+  console.error('number cannot pay its own list:');
+  console.error('');
+  console.error(`  cast send <PAYOUT_TOKEN> "approve(address,uint256)" <AIRDROP> ${cfg.total}`);
+  console.error(`  cast send <AIRDROP> "openRound(address,bytes32,uint256,uint64,string)" \\`);
+  console.error(`    <PAYOUT_TOKEN> ${root} ${cfg.total} <DEADLINE> "<WHERE YOU PUBLISHED IT>"`);
 }
 
 // Only when run directly. Importing this from a test must not start a run —

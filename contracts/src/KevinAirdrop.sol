@@ -67,6 +67,7 @@ contract KevinAirdrop is Ownable2Step, ReentrancyGuard {
         uint256 claimed;
         uint64 deadline;
         uint64 createdAt;
+        bool swept; // its remainder has been recovered; it can never reopen
         string uri; // where the full list lives, so the root can be checked
     }
 
@@ -93,6 +94,7 @@ contract KevinAirdrop is Ownable2Step, ReentrancyGuard {
     error BadProof();
     error RoundClosed();
     error RoundStillOpen();
+    error Overdrawn();
 
     constructor(address owner_) Ownable(owner_) {}
 
@@ -134,6 +136,7 @@ contract KevinAirdrop is Ownable2Step, ReentrancyGuard {
                 claimed: 0,
                 deadline: deadline,
                 createdAt: uint64(block.timestamp),
+                swept: false,
                 uri: uri
             })
         );
@@ -163,6 +166,27 @@ contract KevinAirdrop is Ownable2Step, ReentrancyGuard {
         // presented as a leaf, which is the standard footgun with 64-byte data.
         bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(index, account, amount))));
         if (!MerkleProof.verifyCalldata(proof, r.merkleRoot, leaf)) revert BadProof();
+
+        // A ROUND MAY ONLY EVER PAY OUT WHAT IT WAS FUNDED WITH.
+        //
+        // Rounds of the same token share one contract balance, and nothing on
+        // chain ties a Merkle root to the sum of its leaves — a root commits to
+        // a list, not to a total. So without this line a round whose leaves add
+        // up to more than it holds pays the difference out of OTHER ROUNDS'
+        // money, and an honest holder of a fully funded round later finds their
+        // claim reverting on a balance that is not there.
+        //
+        // That is not only reachable by mistyping a number. A fee-on-transfer
+        // payout token GUARANTEES it: `total` records what arrived, which is
+        // less than what the list was built for, so the last claims of every
+        // such round would silently come out of a neighbour. And it is what
+        // stopped this contract's central promise from being true — the owner
+        // could open a one-wei round with a root paying themselves, and claim
+        // the whole contract balance immediately.
+        //
+        // With the bound, an oversubscribed round fails on its own last claims
+        // and takes nothing from anybody else.
+        if (r.claimed + amount > r.total) revert Overdrawn();
 
         _setClaimed(roundId, index);
         r.claimed += amount;
@@ -205,6 +229,13 @@ contract KevinAirdrop is Ownable2Step, ReentrancyGuard {
     function extendDeadline(uint256 roundId, uint64 newDeadline) external onlyOwner {
         if (roundId >= _rounds.length) revert NoSuchRound();
         Round storage r = _rounds[roundId];
+        // A swept round has had its remainder taken out but its claim bitmap is
+        // still whatever it was. Moving the deadline forward would make every
+        // unclaimed leaf live again against a round holding nothing — so the
+        // claims would come out of a live round's money. Reads as the benign
+        // "give people longer" this function is for, which is exactly why it
+        // has to be refused here rather than remembered.
+        if (r.swept) revert RoundClosed();
         if (newDeadline <= r.deadline) revert BadParam();
         emit DeadlineExtended(roundId, r.deadline, newDeadline);
         r.deadline = newDeadline;
@@ -219,11 +250,13 @@ contract KevinAirdrop is Ownable2Step, ReentrancyGuard {
         if (to == address(0)) revert BadParam();
         Round storage r = _rounds[roundId];
         if (block.timestamp <= r.deadline) revert RoundStillOpen();
+        if (r.swept) revert RoundClosed();
 
         uint256 left = r.total - r.claimed;
         if (left == 0) revert BadParam();
-        // Mark it fully claimed BEFORE transferring, so a second sweep of the
-        // same round takes nothing even if the token calls back.
+        // Marked BEFORE transferring, so a token that calls back finds a round
+        // that is already closed and already fully accounted for.
+        r.swept = true;
         r.claimed = r.total;
         r.token.safeTransfer(to, left);
         emit SweptExpired(roundId, to, left);

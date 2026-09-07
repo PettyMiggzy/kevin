@@ -44,57 +44,70 @@ contract AirdropOverdrawTest is Test {
         );
     }
 
-    /// Round B's list sums to `total` but B is funded with less. B's claimants
-    /// are paid in full out of round A's money, and A can no longer pay.
-    function test_underfundedRoundEatsAnotherRoundsMoney() public {
+    /**
+     * A ROUND CANNOT SPEND ANOTHER ROUND'S MONEY.
+     *
+     * These three started life as an audit's proof that it could. Rounds of
+     * the same token share one contract balance, and a Merkle root commits to
+     * a list but not to a sum — so nothing stopped a round whose leaves added
+     * up to more than it held from paying the difference out of its
+     * neighbours, leaving an honest holder of a fully funded round with a
+     * claim that reverted on a balance that was not there.
+     *
+     * They are kept, inverted: each one now asserts the round fails on its
+     * own last claim and takes nothing from anybody.
+     */
+    function test_anUnderfundedRoundCannotEatAnothersMoney() public {
         vm.startPrank(owner);
         uint256 a = drop.openRound(IERC20(address(gme)), root, total, uint64(block.timestamp + 30 days), "A");
-        // B funded 1000e18 short of what its own leaves add up to.
         uint256 short_ = 1000e18;
         uint256 b = drop.openRound(IERC20(address(gme)), root, total - short_, uint64(block.timestamp + 30 days), "B");
         vm.stopPrank();
 
-        assertEq(gme.balanceOf(address(drop)), total * 2 - short_);
-        assertEq(drop.rounds(b).total, total - short_, "B holds less than its list promises");
-
-        // B pays out its whole list anyway.
+        // B pays out until its own funding runs out, and then stops.
+        uint256 paid;
         for (uint256 i = 0; i < accounts.length; i++) {
-            drop.claim(b, i, accounts[i], amounts[i], _proof(i));
+            if (drop.rounds(b).claimed + amounts[i] > drop.rounds(b).total) {
+                vm.expectRevert(KevinAirdrop.Overdrawn.selector);
+                drop.claim(b, i, accounts[i], amounts[i], _proof(i));
+            } else {
+                drop.claim(b, i, accounts[i], amounts[i], _proof(i));
+                paid += amounts[i];
+            }
         }
-        assertEq(drop.rounds(b).claimed, total, "B paid out MORE than B was funded with");
-        assertEq(gme.balanceOf(address(drop)), total - short_, "and round A is 1000e18 light");
+        assertLe(drop.rounds(b).claimed, drop.rounds(b).total, "B never pays out more than it holds");
+        assertEq(gme.balanceOf(address(drop)), total * 2 - short_ - paid, "and A is untouched");
 
-        // Round A can no longer pay its own list. Two claims go through and the
-        // third runs out of money that round A was funded with and still owns.
-        drop.claim(a, 0, accounts[0], amounts[0], _proof(0));
-        drop.claim(a, 1, accounts[1], amounts[1], _proof(1));
-        (uint256 leftA,) = drop.remaining(a);
-        assertGt(leftA, gme.balanceOf(address(drop)), "A is owed more than the contract holds");
-        vm.expectRevert(); // ERC20InsufficientBalance
-        drop.claim(a, 2, accounts[2], amounts[2], _proof(2));
+        // A still pays its own list in full, which is the whole point.
+        for (uint256 i = 0; i < accounts.length; i++) {
+            drop.claim(a, i, accounts[i], amounts[i], _proof(i));
+        }
+        assertEq(drop.rounds(a).claimed, total, "A was paid in full");
     }
 
-    /// Once claimed > total, remaining() and sweepExpired() panic forever.
-    function test_overdrawBricksSweepAndViews() public {
+    /// @dev And the views stay readable, rather than panicking on an underflow
+    ///      that could never be undone.
+    function test_theViewsAndTheSweepStayUsable() public {
         vm.startPrank(owner);
-        uint256 a = drop.openRound(IERC20(address(gme)), root, total, uint64(block.timestamp + 30 days), "A");
         uint256 b = drop.openRound(IERC20(address(gme)), root, total - 1000e18, uint64(block.timestamp + 30 days), "B");
         vm.stopPrank();
-        a; // silence
         for (uint256 i = 0; i < accounts.length; i++) {
-            drop.claim(b, i, accounts[i], amounts[i], _proof(i));
+            try drop.claim(b, i, accounts[i], amounts[i], _proof(i)) {} catch {}
         }
-        vm.expectRevert(stdError.arithmeticError);
-        drop.remaining(b);
+        (uint256 left,) = drop.remaining(b);
+        assertLe(left, drop.rounds(b).total, "remaining() is still a number");
+
         vm.warp(block.timestamp + 31 days);
         vm.prank(owner);
-        vm.expectRevert(stdError.arithmeticError);
-        drop.sweepExpired(b, owner);
+        drop.sweepExpired(b, owner);   // used to panic 0x11 forever
+        assertEq(drop.rounds(b).claimed, drop.rounds(b).total);
     }
 
-    /// The fee-on-transfer path the contract explicitly supports produces the
-    /// same shortfall with no operator error at all.
-    function test_feeTokenRoundOverdrawsByTheFee() public {
+    /// @dev The fee-on-transfer path this contract explicitly supports creates
+    ///      the shortfall with NO operator error at all: `total` records what
+    ///      arrived, which is less than the list was built for. So this was
+    ///      never only a mistyped-number bug.
+    function test_aFeeTokenShortfallIsContainedToItsOwnRound() public {
         FeeToken2 fee = new FeeToken2();
         fee.mint(owner, total * 10);
         vm.startPrank(owner);
@@ -102,12 +115,53 @@ contract AirdropOverdrawTest is Test {
         uint256 a = drop.openRound(IERC20(address(fee)), root, total, uint64(block.timestamp + 30 days), "A");
         uint256 b = drop.openRound(IERC20(address(fee)), root, total, uint64(block.timestamp + 30 days), "B");
         vm.stopPrank();
-        a;
+        assertLt(drop.rounds(b).total, total, "the token took its cut, so B is short by construction");
+
         for (uint256 i = 0; i < accounts.length; i++) {
-            drop.claim(b, i, accounts[i], amounts[i], _proof(i));
+            try drop.claim(b, i, accounts[i], amounts[i], _proof(i)) {} catch {}
         }
-        assertGt(drop.rounds(b).claimed, drop.rounds(b).total, "B paid more than it was funded");
-        vm.expectRevert(stdError.arithmeticError);
-        drop.remaining(b);
+        assertLe(drop.rounds(b).claimed, drop.rounds(b).total, "B stayed inside its own funding");
+        assertGe(fee.balanceOf(address(drop)), drop.rounds(a).total, "A's money is all still there");
+    }
+
+    /// @dev The owner could open a one-wei round with a root paying themselves
+    ///      and take the whole contract balance immediately — which would have
+    ///      made the contract's central promise, that a funded round is
+    ///      irrevocable, simply untrue.
+    function test_aTinyRoundCannotDrainTheContract() public {
+        vm.startPrank(owner);
+        uint256 real = drop.openRound(IERC20(address(gme)), root, total, uint64(block.timestamp + 30 days), "real");
+        uint256 sneaky = drop.openRound(IERC20(address(gme)), root, 1, uint64(block.timestamp + 7 days + 1), "1 wei");
+        vm.stopPrank();
+
+        vm.expectRevert(KevinAirdrop.Overdrawn.selector);
+        drop.claim(sneaky, 0, accounts[0], amounts[0], _proof(0));
+
+        assertEq(gme.balanceOf(address(drop)), total + 1, "nothing left");
+        for (uint256 i = 0; i < accounts.length; i++) {
+            drop.claim(real, i, accounts[i], amounts[i], _proof(i));
+        }
+        assertEq(drop.rounds(real).claimed, total, "the real round is still whole");
+    }
+
+    /// @dev A swept round must never reopen. Its bitmap still holds whatever it
+    ///      held, so extending the deadline would make every unclaimed leaf
+    ///      live again against a round holding nothing — and it reads exactly
+    ///      like the benign "give people longer" the function is for.
+    function test_aSweptRoundCannotBeReopened() public {
+        vm.startPrank(owner);
+        uint256 a = drop.openRound(IERC20(address(gme)), root, total, uint64(block.timestamp + 30 days), "A");
+        drop.openRound(IERC20(address(gme)), root, total, uint64(block.timestamp + 400 days), "B");
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 31 days);
+        vm.startPrank(owner);
+        drop.sweepExpired(a, owner);
+        vm.expectRevert(KevinAirdrop.RoundClosed.selector);
+        drop.extendDeadline(a, uint64(block.timestamp + 60 days));
+        vm.stopPrank();
+
+        vm.expectRevert(KevinAirdrop.RoundClosed.selector);
+        drop.claim(a, 0, accounts[0], amounts[0], _proof(0));
     }
 }

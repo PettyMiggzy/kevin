@@ -50,14 +50,25 @@ node tools/airdrop-snapshot.mjs --total 1000000000000000000000 --days 14 --min-h
 # 2. check it, with the same tool anybody else will use
 node tools/airdrop-snapshot.mjs --verify airdrop/round-<n>.json
 
-# 3. PUBLISH that file. Then, from the owner:
-cast send <airdrop> "openRound(address,bytes32,uint256,uint64,string)" \
-  <gme> <root> <amount> <deadline> "<where the file is>"
+# 3. PUBLISH that file. Then paste the cast commands step 1 printed —
+#    do not retype the numbers.
 ```
+
+**Do not hand-type the total.** Step 1 prints the exact `approve` and
+`openRound` calls carrying the root and the total the list was actually built
+for. A round funded with a different number than its list adds up to cannot pay
+its own list, and with one signer there is nobody between "typed 9000 instead of
+10000" and a holder whose claim reverts.
 
 **Publish before opening, not after.** The root is fixed the moment the round
 exists and there is no `setRoot` — so if the published file and the root
 disagree, the file is the thing that was wrong, and everybody can see it.
+
+Then anyone can check it against the chain rather than against itself:
+
+```bash
+node tools/airdrop-snapshot.mjs --verify round-<n>.json --airdrop <addr> --round <id>
+```
 
 ## What the owner cannot do
 
@@ -68,27 +79,67 @@ disagree, the file is the thing that was wrong, and everybody can see it.
 | shorten the claim window | `extendDeadline` moves it later only |
 | open a round it has not funded | `openRound` pulls the tokens in the same call |
 | open a round nobody could claim in | `MIN_WINDOW` is 7 days |
-| reach into another round's money | `sweepExpired` is bounded by that round's own unclaimed remainder |
+| reach into another round's money | every claim is bounded by its own round's funding, and `sweepExpired` by its own remainder |
+| reopen a round it already swept | a swept round is closed forever; `extendDeadline` refuses it |
 
-That last one has a test (`test_sweepingOneRoundCannotTakeAnothersMoney`),
-because rounds share a contract but must not share a balance — otherwise
-letting an old round lapse would be a way to end a live one early.
+## The bug an audit found here
+
+The last two rows were not true when this was written, and it was the whole
+ballgame.
+
+Rounds of the same token share one contract balance, and **a Merkle root
+commits to a list but not to a sum**. `claim` had no bound against its round's
+funding — so a round whose leaves added up to more than it held paid the
+difference out of its neighbours, and an honest holder of a fully funded round
+later found their claim reverting on money that was not there. Once
+`claimed > total`, `remaining()` and `sweepExpired()` panicked on the underflow
+permanently, so the round's leftovers were unrecoverable too.
+
+Three things made that worse than a typo:
+
+- **A fee-on-transfer payout token manufactures it.** `total` records what
+  arrived, which is less than the list was built for. No operator error needed.
+- **It broke the contract's central promise.** The owner could open a one-wei
+  round with a root paying themselves, and take the whole contract balance in
+  the same block — so "a funded round is irrevocable" was simply untrue.
+- **`extendDeadline` reopened a swept round.** Its bitmap still held whatever it
+  held, so pushing the deadline forward re-paid its entire list out of a live
+  round. One transaction that reads exactly like the benign "give people
+  longer" the function is for.
+
+Fixed with `if (r.claimed + amount > r.total) revert Overdrawn()` and a `swept`
+flag. `test/AirdropOverdraw.t.sol` is the audit's own proof-of-concept, kept and
+inverted: each test now asserts the round fails on its own last claim and takes
+nothing from anybody.
 
 ## What is trusted, and what is checked
 
-**Checked by anyone:** the list, the root, every proof, and the total. Run
-`--verify` on the published file and compare its root to the one the contract
-stores. A file with a doctored amount fails on three separate grounds — the
-root, the proofs, and the sum.
+**Checked by anyone.** Every round file records the exact command that
+regenerates it — token, block window, blocks-per-day, min-hold-days, total. Run
+it and you must get the same root.
 
-**Trusted:** that the published file is the one the root was built from, and
-that the window, `--min-hold-days` and the exclusion list were chosen before
-the data was looked at rather than after. Nothing on chain binds the `uri` to
-the root, and nothing binds the parameters at all.
+That distinction is the whole thing. `--verify` on its own proves *this list
+hashes to this root*, which a **fabricated list satisfies just as well**. It is
+re-running the command from the recorded window that proves the list came off
+the Transfer log at all. That is why the window is an input (`--from-block`,
+`--to-block`, `--blocks-per-day`) and not just something the tool picked from
+wherever the chain head happened to be — anchored to a live head, nobody
+outside the team could ever reproduce the root.
 
-**So publish the parameters with the round, not just the file.** They are the
-part nobody can check, which is exactly why saying them out loud in advance is
-worth something.
+`--verify --airdrop <addr> --round <id>` then reads the round the contract
+actually holds and compares the root, the token and the funded total. Publishing
+one list while opening a round against a different root fails there, loudly.
+
+The snapshot also refuses to write a file at all unless every replayed balance
+adds up to `totalSupply()`. `eth_getLogs` on a public endpoint can silently cap
+its results, and a single dropped Transfer corrupts every balance downstream
+while leaving the file perfectly self-consistent — the worst kind of failure,
+because it looks like it worked.
+
+**Still trusted:** that the window and `--min-hold-days` were chosen before the
+data was looked at rather than after, and that the exclusion list is complete.
+Announce those before you run it. They are the part nobody can check, which is
+exactly why saying them out loud in advance is worth something.
 
 ## Tests
 

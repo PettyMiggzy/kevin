@@ -189,7 +189,7 @@ contract KevinAirdropTest is Test {
         vm.warp(block.timestamp + 31 days);
         vm.startPrank(owner);
         drop.sweepExpired(id, owner);
-        vm.expectRevert(KevinAirdrop.BadParam.selector);
+        vm.expectRevert(KevinAirdrop.RoundClosed.selector);
         drop.sweepExpired(id, owner);
         vm.stopPrank();
     }
