@@ -27,9 +27,19 @@ const cfg = {
   rpc: process.env.ROBINHOOD_RPC_URL || 'https://rpc.mainnet.chain.robinhood.com',
   chainId: Number(process.env.CHAIN_ID || 4663),
   token: process.env.KEVIN_TOKEN || '0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A',
-  // Every pool's tokens live in the v4 PoolManager, so a transfer to it IS a
-  // sale, whichever of the three pools it went through.
+  // Every pool's tokens live in the v4 PoolManager, so a transfer to it is a
+  // sale whichever of the three pools it went through.
   poolManager: getAddress(process.env.POOL_MANAGER || '0x8366a39CC670B4001A1121B8F6A443A643e40951'),
+  // ...but MOST sells never touch the PoolManager directly. They go through a
+  // router, which takes the tokens, sells them, and forwards the proceeds. To
+  // a naive scan that first hop looks like an innocent wallet-to-wallet move,
+  // so counting only the PoolManager reports real sellers as pure holders.
+  //
+  // 0x8876...C0904 is the sell router on this chain: a contract holding zero
+  // KEVIN that 36 unrelated wallets have sent tokens to, every one of which
+  // it forwarded straight into the pools. Sending to it IS selling.
+  routers: (process.env.SELL_ROUTERS || '0x8876789976dEcBfCbBbe364623C63652db8C0904')
+    .split(',').filter(Boolean).map((a) => getAddress(a.trim())),
   span: BigInt(process.env.SPAN || 1_800_000),
   chunk: BigInt(process.env.CHUNK || 200_000),
   paceMs: Number(process.env.PACE_MS || 300),
@@ -88,19 +98,30 @@ const balanceOf = (w) => withRetry(async () =>
     { address: cfg.token, abi: balanceAbi, functionName: 'balanceOf', args: [w] }), 18)));
 
 /** One wallet's story: what it bought from the pools, what it SOLD back, what it holds. */
+export function isVenue(addr) {
+  return addr === cfg.poolManager || cfg.routers.includes(addr);
+}
+
 export async function inspect(wallet, from, head) {
   const { out, into } = await transfersFor(wallet, from, head);
-  const sum = (logs, side, who) => logs.filter((l) => partyOf(l, side) === who).reduce((a, l) => a + amountOf(l), 0);
+  const sum = (logs, side, pick) => logs.filter((l) => pick(partyOf(l, side))).reduce((a, l) => a + amountOf(l), 0);
+  const total = (logs) => logs.reduce((a, l) => a + amountOf(l), 0);
+  const bought = sum(into, 1, isVenue);
+  const sold = sum(out, 2, isVenue);             // pool OR router: both are sales
   return {
     wallet,
     held: await balanceOf(wallet),
-    bought: sum(into, 1, cfg.poolManager),
-    sold: sum(out, 2, cfg.poolManager),          // the only number that is a sale
-    movedIn: into.reduce((a, l) => a + amountOf(l), 0) - sum(into, 1, cfg.poolManager),
-    movedOut: out.reduce((a, l) => a + amountOf(l), 0) - sum(out, 2, cfg.poolManager),
+    bought,
+    sold,
+    viaRouter: sum(out, 2, (a) => cfg.routers.includes(a)),
+    movedIn: total(into) - bought,
+    movedOut: total(out) - sold,
     txs: new Set([...out, ...into].map((l) => l.transactionHash)).size,
+    // Never follow a venue outward. A router is used by everybody, so crawling
+    // through one stops tracing a cluster and starts tracing the whole chain —
+    // which is how a shared router's throughput gets misread as one person's dump.
     counterparties: [...new Set([...out, ...into].flatMap((l) => [partyOf(l, 1), partyOf(l, 2)]))]
-      .filter((a) => a !== cfg.poolManager && a !== ZERO && a !== wallet),
+      .filter((a) => !isVenue(a) && a !== ZERO && a !== wallet),
   };
 }
 
@@ -119,8 +140,8 @@ async function main() {
     const r = await inspect(w, from, head);
     rows.push(r);
     console.log(`${r.wallet}`);
-    console.log(`   holds ${fmt(r.held).padStart(14)}   bought ${fmt(r.bought).padStart(14)}   SOLD ${fmt(r.sold).padStart(14)}`);
-    console.log(`   moved in/out of other wallets: ${fmt(r.movedIn)} / ${fmt(r.movedOut)}   (${r.txs} txs)\n`);
+    console.log(`   holds ${fmt(r.held).padStart(14)}   bought ${fmt(r.bought).padStart(14)}   SOLD ${fmt(r.sold).padStart(14)}${r.viaRouter ? ` (${fmt(r.viaRouter)} via router)` : ''}`);
+    console.log(`   moved to/from other wallets: ${fmt(r.movedIn)} in / ${fmt(r.movedOut)} out   (${r.txs} txs)\n`);
     if (cluster) for (const c of r.counterparties) if (!seen.has(c) && !queue.includes(c)) queue.push(c);
   }
 
@@ -129,7 +150,13 @@ async function main() {
   console.log(`bought from pools : ${fmt(t('bought'))}`);
   console.log(`SOLD to pools     : ${fmt(t('sold'))}`);
   console.log(`still holding     : ${fmt(t('held'))}  = ${(t('held') / 1e9 * 100).toFixed(2)}% of supply`);
-  if (t('sold') === 0) console.log(`\nNothing here was ever sold. Every token that left went to another wallet.`);
+  if (t('sold') === 0) {
+    console.log(`\nNothing here was ever sold — into a pool or through a router.`);
+    if (t('movedOut') > 0) {
+      console.log(`But ${fmt(t('movedOut'))} did leave for other wallets. Whether THOSE sold is`);
+      console.log(`a separate question: re-run with --cluster, or trace them directly.`);
+    }
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
