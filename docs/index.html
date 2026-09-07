@@ -72,6 +72,28 @@
      hangs off a heading, so it needs its own or the sticky nav covers it. */
   h2[id] { scroll-margin-top: 104px; }
 
+  /* §8.2 — the map. On a phone the labels would be unreadable if the whole
+     thing scaled down, so it keeps a minimum width and scrolls sideways
+     inside its own box rather than shrinking or breaking the page. */
+  .map { margin: 34px 0 0; }
+  .map__scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .map__svg {
+    display: block; width: 100%; min-width: 780px; height: auto;
+    border: var(--edge) solid var(--ink); border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  .map figcaption { font-size: 14px; opacity: .8; margin-top: 18px; max-width: 68ch; }
+  .map__label { font-family: var(--display); font-size: 26px; fill: var(--ink); }
+  .map__sub   { font-family: var(--body); font-size: 16px; fill: var(--ink); opacity: .72; }
+  .map__no    { font-family: var(--display); font-size: 32px; fill: var(--ink); }
+  .pin--now .map__no { fill: #fff; }
+  .map__you   { font-family: var(--display); font-size: 30px; fill: #fff; }
+  .map__fog   { font-family: var(--display); font-size: 24px; fill: #ffe500; opacity: .85; }
+  .map__label--fog, .map__sub--fog, .map__no--fog { fill: var(--cream); }
+  .map__sub--fog { opacity: .8; }
+  .map__flag { animation: bob 3.6s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { .map__flag { animation: none; } }
+
   /* §8.2 — the road. one spine, one pin per stop, destination in the void. */
   .road { position: relative; padding-left: 78px; margin-top: 34px; }
   .road::before {
@@ -477,6 +499,111 @@
         so.
       </p>
     </div>
+
+    <!-- The map. Fog is not decoration: it covers exactly the stops that have
+         not happened, so progress cannot be faked by redrawing the picture.
+         The pin is where the project actually is. -->
+    <figure class="map">
+      <div class="map__scroll">
+        <svg viewBox="0 0 1240 640" role="img" aria-labelledby="map-title map-desc" class="map__svg">
+          <title id="map-title">The road to McKevin's</title>
+          <desc id="map-desc">A map with five stops. The fryer is complete. The storeroom is where the
+            project is now: four contracts written, none deployed. The loading bay, a fogged stop, and
+            McKevin's are ahead and not yet reached.</desc>
+
+          <defs>
+            <pattern id="mapGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M40 0H0V40" fill="none" stroke="rgba(0,0,0,.07)" stroke-width="2"/>
+            </pattern>
+            <linearGradient id="fog" x1="0" x2="1">
+              <stop offset="0" stop-color="#0b0b0b" stop-opacity="0"/>
+              <stop offset=".35" stop-color="#0b0b0b" stop-opacity=".34"/>
+              <stop offset="1" stop-color="#0b0b0b" stop-opacity=".5"/>
+            </linearGradient>
+          </defs>
+
+          <rect width="1240" height="640" fill="#ffe500"/>
+          <rect width="1240" height="640" fill="url(#mapGrid)"/>
+
+          <!-- ground -->
+          <path d="M0 560q160-40 320-16t300 24 300-56 320-28v156H0Z" fill="#f5c400" stroke="#0b0b0b" stroke-width="6"/>
+
+          <!-- the road -->
+          <path d="M150 505C250 470 300 420 385 405s180 60 265 70 175-90 250-135 75-28 118-12"
+                fill="none" stroke="#0b0b0b" stroke-width="26" stroke-linecap="round"/>
+          <path d="M150 505C250 470 300 420 385 405s180 60 265 70 175-90 250-135 75-28 118-12"
+                fill="none" stroke="#fff6c8" stroke-width="8" stroke-linecap="round"
+                stroke-dasharray="26 22"/>
+
+          <!-- 1 · the fryer, done -->
+          <g class="pin pin--done">
+            <circle cx="150" cy="505" r="40" fill="#2fbf4a" stroke="#0b0b0b" stroke-width="7"/>
+            <path d="M132 505l14 15 25-30" fill="none" stroke="#fff" stroke-width="9"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+            <text x="150" y="586" text-anchor="middle" class="map__label">THE FRYER</text>
+            <text x="150" y="610" text-anchor="middle" class="map__sub">launch · pools · site · bot</text>
+          </g>
+
+          <!-- 2 · the storeroom, you are here -->
+          <g class="pin pin--now">
+            <image href="../assets/sprites/walk/right-00.png" x="330" y="252" width="108" height="120"/>
+            <g class="map__flag">
+              <rect x="252" y="176" width="270" height="62" rx="14" fill="#e8232b" stroke="#0b0b0b" stroke-width="7"/>
+              <text x="387" y="216" text-anchor="middle" class="map__you">YOU ARE HERE</text>
+            </g>
+            <circle cx="387" cy="405" r="40" fill="#e8232b" stroke="#0b0b0b" stroke-width="7"/>
+            <text x="387" y="418" text-anchor="middle" class="map__no">2</text>
+            <text x="387" y="486" text-anchor="middle" class="map__label">THE STOREROOM</text>
+            <text x="387" y="510" text-anchor="middle" class="map__sub">4 contracts written</text>
+            <text x="387" y="532" text-anchor="middle" class="map__sub">0 deployed</text>
+          </g>
+
+          <!-- 3 · the loading bay, the next one. Deliberately OUTSIDE the fog:
+               it is the step actually being walked towards. -->
+          <g class="pin pin--todo">
+            <text x="650" y="398" text-anchor="middle" class="map__label">THE LOADING BAY</text>
+            <text x="650" y="422" text-anchor="middle" class="map__sub">put an address on one</text>
+            <circle cx="650" cy="475" r="40" fill="#fff" stroke="#0b0b0b" stroke-width="7"/>
+            <text x="650" y="488" text-anchor="middle" class="map__no">3</text>
+          </g>
+
+          <!-- the fog. Drawn HERE, not last: everything above it is reached or
+               being walked to, everything after it is not. -->
+          <path d="M812 0h428v640H812c44-92 20-152-4-216s-8-122 2-190 24-134-2-234Z" fill="url(#fog)"/>
+          <text x="1000" y="612" text-anchor="middle" class="map__fog">NOT BEEN THERE YET</text>
+
+          <!-- 4 · redacted, inside the fog where it belongs -->
+          <g class="pin pin--fog">
+            <circle cx="900" cy="340" r="40" fill="none" stroke="#fff6c8" stroke-width="7"
+                    stroke-dasharray="12 10"/>
+            <text x="900" y="354" text-anchor="middle" class="map__no map__no--fog">?</text>
+            <text x="900" y="424" text-anchor="middle" class="map__label map__label--fog">REDACTED</text>
+            <text x="900" y="448" text-anchor="middle" class="map__sub map__sub--fog">§7 · do not ask</text>
+          </g>
+
+          <!-- 5 · McKevin's, drawn ON TOP of the fog on purpose. The way there
+               is unknown; the destination has never been in any doubt. -->
+          <g class="pin pin--end" transform="translate(-58 0)">
+            <path d="M980 262q58-72 130-28t118 64v54q-188 28-296-16Z" fill="#f5c400"
+                  stroke="#0b0b0b" stroke-width="6"/>
+            <path d="M1140 196V150h-16l16-26 16 26h-16" fill="#e8232b" stroke="#0b0b0b" stroke-width="5"/>
+            <rect x="1092" y="196" width="96" height="70" rx="10" fill="#fff6c8" stroke="#0b0b0b" stroke-width="7"/>
+            <path d="M1084 198h112l-15-30h-82Z" fill="#e8232b" stroke="#0b0b0b" stroke-width="7"
+                  stroke-linejoin="round"/>
+            <rect x="1124" y="230" width="32" height="36" fill="#0b0b0b"/>
+            <text x="1140" y="352" text-anchor="middle" class="map__label">McKEVIN&#8217;S</text>
+            <text x="1140" y="376" text-anchor="middle" class="map__sub">his name over the door</text>
+          </g>
+
+        </svg>
+      </div>
+      <figcaption>
+        The fog covers the stops that have not happened. It only lifts when
+        something actually ships, which is why the picture cannot be used to
+        claim progress that has not been made. The pin is where the project is
+        today, not where it is going.
+      </figcaption>
+    </figure>
 
     <div class="road">
 
