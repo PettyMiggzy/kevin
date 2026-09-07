@@ -119,6 +119,20 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
     uint256 public constant MAX_BOOST_BPS = 20_000;
 
     /**
+     * @notice Hard ceiling on the COMMITMENT boost: +100% bps, so committing
+     *         for the longest term is worth at most double, and the two boosts
+     *         together can never make one token count as more than four.
+     *
+     * @dev Separate from MAX_BOOST_BPS and capped separately on purpose. They
+     *      pay for different things — the crew is something you bought, the
+     *      term is something you promised — and letting one eat the other's
+     *      headroom would mean retuning the tier table could silently change
+     *      what a commitment is worth. Like the NFT cap it is a `constant`, so
+     *      the worst the owner can do to a plain staker is fixed at deploy.
+     */
+    uint256 public constant MAX_TERM_BOOST_BPS = 10_000;
+
+    /**
      * @notice Most NFTs one address can have staked here at once.
      * @dev The boost recompute walks this list. 32 entries is ~70k gas worst
      *      case on a cold cache, which is affordable, and it is a hard bound so
@@ -219,6 +233,47 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
 
     mapping(address account => BoostCache) private _boostCache;
 
+    // -------------------------------------------------------------------
+    // Commitment
+    // -------------------------------------------------------------------
+    //
+    // ENTIRELY OPTIONAL AND OFF BY DEFAULT. With `minStake` and `warmup` at
+    // zero and no terms configured, every path below is a no-op and this
+    // contract behaves exactly as it did before any of it existed — which is
+    // why the whole existing test suite still applies unchanged.
+    //
+    // Turned on, it is: hold at least `minStake`, wait `warmup` before you
+    // start earning at all, and pick a term you are willing to be locked for.
+    // Longer terms earn a bigger share. Leave early, or let your stake fall
+    // under `minStake`, and you keep every token of principal and forfeit the
+    // rewards — which go straight back to the people who stayed.
+
+    /// @notice Least you may hold and still earn. Zero disables it.
+    uint256 public minStake;
+
+    /// @notice How long a new stake sits before it earns anything. Zero
+    ///         disables it.
+    uint256 public warmup;
+
+    /// @notice A term somebody may commit to.
+    struct Term {
+        uint32 duration; // seconds locked
+        uint16 boostBps; // what that promise is worth, on top of 1x
+    }
+
+    /// @notice The terms on offer. Index 0 is always "no commitment": zero
+    ///         duration, zero boost, and it cannot be removed.
+    Term[] public terms;
+
+    /// @notice What one account has committed to.
+    struct Lock {
+        uint64 earnFrom; // nothing accrues before this
+        uint64 until; // leaving before this forfeits the rewards
+        uint16 boostBps; // the term's boost, frozen at stake time
+    }
+
+    mapping(address account => Lock) public lockOf;
+
     /// @notice The boost bps currently baked into `effectiveBalanceOf`.
     mapping(address account => uint256) public appliedBoostBps;
 
@@ -254,6 +309,11 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
     event EffectiveBalanceSynced(
         address indexed account, uint256 boostBps, uint256 effectiveBalance
     );
+    event Committed(address indexed account, uint64 until, uint16 boostBps, uint64 earnFrom);
+    event Forfeited(address indexed account, uint256 rewards, bool early, bool belowMinimum);
+    event TermSet(uint256 indexed index, uint32 duration, uint16 boostBps);
+    event MinStakeSet(uint256 minStake);
+    event WarmupSet(uint256 warmup);
     event RewardAdded(uint256 reward, uint256 rate, uint256 periodFinish);
     event RewardToppedUp(uint256 reward, uint256 rate, uint256 periodFinish);
     event RewardsDurationUpdated(uint256 duration);
@@ -281,6 +341,10 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
     error RewardTooSmall();
     error BadDuration();
     error BoostAboveCap();
+    error NoSuchTerm();
+    error TermBoostAboveCap();
+    error StillLocked();
+    error BelowMinimum();
     error ReservedTier();
     error LengthMismatch();
     error AmountExceedsRecoverable(uint256 requested, uint256 available);
@@ -359,6 +423,34 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
         return rewardRate * rewardsDuration;
     }
 
+    /// @notice Is this account earning right now?
+    /// @dev Three ways to not be: too small, still warming up, or nothing
+    ///      staked at all. Nothing here can be false because of anything the
+    ///      owner did after the stake was made — `minStake` and `warmup` are
+    ///      frozen into `lockOf.earnFrom` at stake time for the warm-up, and
+    ///      the minimum is checked live so that selling down genuinely does
+    ///      stop the earning, which is the point of having one.
+    function qualifies(address account) public view returns (bool) {
+        uint256 bal = balanceOf[account];
+        if (bal == 0 || bal < minStake) return false;
+        return block.timestamp >= lockOf[account].earnFrom;
+    }
+
+    /// @notice Is this account still inside the term it committed to?
+    function isLocked(address account) public view returns (bool) {
+        return block.timestamp < lockOf[account].until;
+    }
+
+    /// @notice What leaving right now would cost, in reward tokens.
+    /// @dev Zero if the term is over, or if none was taken.
+    function forfeitIfLeavingNow(address account) external view returns (uint256) {
+        return isLocked(account) ? earned(account) : 0;
+    }
+
+    function termCount() external view returns (uint256) {
+        return terms.length;
+    }
+
     /// @notice The boost `account` WOULD have if synced right now, capped.
     ///         Differs from `appliedBoostBps` only after the owner retunes a
     ///         tier and before that account's next sync.
@@ -388,15 +480,78 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
     // Staking — ERC-20
     // -------------------------------------------------------------------
 
+    /// @notice Stake with no commitment. Identical to `stakeFor(amount, 0)`.
     function stake(uint256 amount) external nonReentrant whenDepositsAllowed settle(msg.sender) {
+        _stake(amount, 0);
+    }
+
+    /**
+     * @notice Stake, and promise to leave it for `termIndex`.
+     *
+     * @dev The promise can only ever be strengthened. Adding to a stake, or
+     *      picking a new term, may push `until` further out and may raise the
+     *      boost — it can never pull `until` closer or lower the boost, so
+     *      there is no sequence of calls that shortens a commitment already
+     *      made. Topping up a locked stake keeps the lock.
+     *
+     *      The warm-up is charged on the FIRST stake only. Someone already
+     *      earning who adds more does not go back to the start; someone who
+     *      left and came back does, because their `earnFrom` was cleared when
+     *      their balance hit zero.
+     */
+    function stakeFor(uint256 amount, uint256 termIndex)
+        external
+        nonReentrant
+        whenDepositsAllowed
+        settle(msg.sender)
+    {
+        _stake(amount, termIndex);
+    }
+
+    function _stake(uint256 amount, uint256 termIndex) private {
         if (amount == 0) revert ZeroAmount();
+        if (termIndex >= terms.length && termIndex != 0) revert NoSuchTerm();
+
+        Lock storage l = lockOf[msg.sender];
+        if (balanceOf[msg.sender] == 0) l.earnFrom = uint64(block.timestamp + warmup);
+
+        if (termIndex != 0) {
+            Term memory t = terms[termIndex];
+            uint64 endsAt = uint64(block.timestamp + t.duration);
+            if (endsAt > l.until) l.until = endsAt;
+            if (t.boostBps > l.boostBps) l.boostBps = t.boostBps;
+        }
 
         totalStaked += amount;
         balanceOf[msg.sender] += amount;
         _syncEffective(msg.sender);
 
         emit Staked(msg.sender, amount);
+        emit Committed(msg.sender, l.until, l.boostBps, l.earnFrom);
         stakingToken.safeTransferFrom(msg.sender, address(this), amount);
+    }
+
+    /**
+     * @notice Bring a warmed-up account into the pool. Permissionless.
+     *
+     * @dev The accumulator is global, so nothing fires by itself when one
+     *      account's warm-up ends — somebody has to touch it. Anybody may,
+     *      because the only account it can possibly help is the one named: an
+     *      account inside its warm-up counts for nothing, so calling this late
+     *      costs that staker and nobody else, and calling it early does
+     *      nothing at all. The keeper does it so no one has to remember.
+     */
+    function activate(address account) external nonReentrant settle(account) {
+        _syncEffective(account);
+    }
+
+    /// @notice `activate` for a list, so one transaction can catch everybody.
+    function activateMany(address[] calldata accounts) external nonReentrant {
+        uint256 n = accounts.length;
+        for (uint256 i; i < n; ++i) {
+            _updateReward(accounts[i]);
+            _syncEffective(accounts[i]);
+        }
     }
 
     /// @dev No pause check. On purpose. See `depositsPaused`.
@@ -442,6 +597,7 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
 
         balanceOf[msg.sender] = 0;
         totalStaked -= amount;
+        delete lockOf[msg.sender];
 
         uint256 eff = effectiveBalanceOf[msg.sender];
         effectiveBalanceOf[msg.sender] = 0;
@@ -661,6 +817,55 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
     // Owner — misc
     // -------------------------------------------------------------------
 
+    /**
+     * @notice Add or retune a term. Index 0 is reserved for "no commitment"
+     *         and is created at the first call; it can never be given a
+     *         duration or a boost.
+     *
+     * @dev Retuning a term changes what FUTURE stakes get. Nobody's existing
+     *      commitment moves: `lockOf` freezes the boost and the end date at
+     *      stake time, so the owner cannot reach back and devalue a promise
+     *      somebody already made, or extend a lock they are already inside.
+     */
+    function setTerm(uint256 index, uint32 duration, uint16 boostBps) external onlyOwner {
+        if (boostBps > MAX_TERM_BOOST_BPS) revert TermBoostAboveCap();
+        if (terms.length == 0) {
+            terms.push(Term({duration: 0, boostBps: 0})); // index 0, forever
+            emit TermSet(0, 0, 0);
+        }
+        if (index == 0) revert NoSuchTerm();
+        if (index > terms.length) revert NoSuchTerm();
+        if (index == terms.length) {
+            terms.push(Term({duration: duration, boostBps: boostBps}));
+        } else {
+            terms[index] = Term({duration: duration, boostBps: boostBps});
+        }
+        emit TermSet(index, duration, boostBps);
+    }
+
+    /**
+     * @notice Least somebody may hold and still earn. Zero turns it off.
+     *
+     * @dev Checked live rather than frozen, so selling down under it really
+     *      does stop the earning — that is the whole point of having one. The
+     *      cost of that: raising it can push existing stakers under, and they
+     *      stop earning until they top up. Announce a change before making it.
+     */
+    function setMinStake(uint256 amount) external onlyOwner {
+        minStake = amount;
+        emit MinStakeSet(amount);
+    }
+
+    /**
+     * @notice How long a new stake waits before it earns. Zero turns it off.
+     * @dev Frozen into `earnFrom` at stake time, so a later change never
+     *      moves somebody who has already started.
+     */
+    function setWarmup(uint256 seconds_) external onlyOwner {
+        warmup = seconds_;
+        emit WarmupSet(seconds_);
+    }
+
     /// @notice Stop new deposits. Does not and cannot stop withdrawals.
     function setDepositsPaused(bool paused) external onlyOwner {
         depositsPaused = paused;
@@ -724,15 +929,46 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
     // Internals
     // -------------------------------------------------------------------
 
+    /**
+     * @dev PRINCIPAL IS NEVER TOUCHED. Breaking a commitment costs the rewards
+     *      and only the rewards — a contract holding other people's tokens
+     *      that can keep any of them is a different and much worse kind of
+     *      contract, and no configuration of this one can do it.
+     *
+     *      Two ways to break it, and they are the two the design asks for:
+     *      leaving before the term is up, and selling down under the minimum.
+     *      Both give the whole accrued reward back to the pool, where it is
+     *      emitted again to whoever stayed.
+     */
     function _withdraw(uint256 amount) private {
         if (amount == 0) revert ZeroAmount();
         uint256 bal = balanceOf[msg.sender];
         if (amount > bal) revert InsufficientBalance();
 
+        uint256 left = bal - amount;
+        bool early = isLocked(msg.sender);
+        // Leaving entirely is not "falling under the minimum" — that is just
+        // leaving, and it only costs anything if the term was still running.
+        bool below = left != 0 && minStake != 0 && left < minStake;
+
+        if (early || below) {
+            uint256 forfeited = rewards[msg.sender];
+            if (forfeited != 0) {
+                rewards[msg.sender] = 0;
+                _releaseCommitment(forfeited);
+            }
+            // The promise is spent either way, so it does not survive to bind
+            // whatever is left behind.
+            delete lockOf[msg.sender];
+            if (left != 0) lockOf[msg.sender].earnFrom = uint64(block.timestamp + warmup);
+            emit Forfeited(msg.sender, forfeited, early, below);
+        }
+
         unchecked {
-            balanceOf[msg.sender] = bal - amount;
+            balanceOf[msg.sender] = left;
         }
         totalStaked -= amount;
+        if (left == 0) delete lockOf[msg.sender];
         _syncEffective(msg.sender);
 
         emit Withdrawn(msg.sender, amount);
@@ -785,7 +1021,13 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
      */
     function _syncEffective(address account) private {
         uint256 boost = _cap(_rawBoostBps(account));
-        uint256 newEff = (balanceOf[account] * (BPS + boost)) / BPS;
+        // A stake that is under the minimum, or still inside its warm-up, is
+        // worth nothing in the accumulator. It is not slashed and it is not
+        // stuck — it simply does not count while it does not qualify, so what
+        // it would have earned goes to the people who do.
+        uint256 newEff = qualifies(account)
+            ? (balanceOf[account] * (BPS + boost + lockOf[account].boostBps)) / BPS
+            : 0;
         uint256 oldEff = effectiveBalanceOf[account];
 
         if (appliedBoostBps[account] != boost) appliedBoostBps[account] = boost;

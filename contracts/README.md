@@ -372,3 +372,66 @@ no formal disclosure process yet, which is itself a gap worth naming.
 ---
 
 *Launching as soon as my shift is over.*
+
+---
+
+## Commitment staking
+
+`KevinStaking` gained an optional layer that does what the treasury actually
+asked for: **hold a minimum, wait before you start earning, pick a term you are
+willing to be locked for, and forfeit the rewards — never the principal — if you
+break it.**
+
+```
+setMinStake(5_000_000e18)   hold at least five million $KEVIN
+setWarmup(5 days)           nothing accrues for the first five days
+setTerm(1, 30 days,  2_500) +25%
+setTerm(2, 90 days,  6_000) +60%
+setTerm(3, 180 days, 10_000) +100%, and MAX_TERM_BOOST_BPS is a constant
+```
+
+**It is off until it is configured.** With no minimum, no warm-up and no terms,
+every path is a no-op and the contract behaves exactly as it did before the
+layer existed — which is why the 70 tests written before it still pass
+untouched. That is the reason it was built as a layer instead of a second
+contract: a staking contract holds *other people's* tokens, and the safest
+version of a new feature is one the existing test suite already covers.
+
+### What breaking a commitment costs
+
+Rewards. Only rewards. **No configuration of this contract lets anybody keep
+somebody else's principal**, and there is a test that sets the minimum to
+`type(uint128).max`, pauses deposits, and shows the principal still walks out.
+
+Two ways to break it, which are the two that were asked for:
+
+- leaving before your term is up
+- selling down *under* the minimum while still holding some
+
+Both hand the whole accrued reward back to the pool, where it is emitted again
+to whoever stayed. It is not stranded and it does not go to the treasury.
+Leaving *completely* after your term is up costs nothing at all.
+
+### What the owner cannot do
+
+`lockOf` freezes the boost and the end date at stake time. Retuning a term
+changes what future stakes get and **cannot reach back** to devalue a promise
+somebody already made or extend a lock they are already inside. Terms can only
+ever be strengthened by the staker: topping up may push the end date further out
+or raise the boost, never the reverse.
+
+### The warm-up needs a poke
+
+The reward accumulator is global, so nothing fires by itself when one account's
+warm-up ends. `activate(address)` and `activateMany(address[])` are
+permissionless — anybody may call them, because the only account they can help
+is the one named. An account inside its warm-up counts for nothing, so calling
+late costs that staker and nobody else. **The keeper should call it** so no one
+has to remember.
+
+### Why this is also floor support
+
+Staked tokens are not sellable tokens. A commitment layer that locks supply for
+a term does more for the chart than any bid wall the treasury could afford at
+this size — and unlike a bid wall, it costs nothing to run and cannot be walked
+through.
