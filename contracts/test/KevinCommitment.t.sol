@@ -354,6 +354,130 @@ contract KevinCommitmentTest is Test {
         );
     }
 
+    // --- the hole four reviewers found --------------------------------------
+    //
+    // Every forfeiture test above exits having NEVER CLAIMED, which is the one
+    // path where forfeiture worked. Rewards were claimable from inside a lock,
+    // so the whole penalty could be voided by calling getReward() first: empty
+    // the bucket, then break the promise against a zero balance and forfeit
+    // nothing. These are the tests that were missing.
+
+    function test_rewardsCannotBeClaimedFromInsideALock() public {
+        vm.prank(alice);
+        s.stakeFor(MIN, 3); // 180 days
+        vm.warp(block.timestamp + WARMUP + 1);
+        s.activate(alice);
+        _fund();
+        vm.warp(block.timestamp + 10 days);
+        assertGt(s.earned(alice), 0, "she has earned plenty");
+
+        vm.prank(alice);
+        vm.expectRevert(KevinStaking.StillLocked.selector);
+        s.getReward();
+    }
+
+    /// @dev The exact exploit: claim, then run. It must not pay better than
+    ///      keeping the promise would have.
+    function test_claimingThenBreakingTheTermPaysNothingExtra() public {
+        vm.prank(alice);
+        s.stakeFor(MIN, 3); // 180 days, +100%
+        vm.prank(bob);
+        s.stakeFor(MIN, 0); // no promise at all
+        vm.warp(block.timestamp + WARMUP + 1);
+        s.activate(alice);
+        s.activate(bob);
+        _fund();
+
+        // Try to milk it: claim every day for ten days, then leave on day 11
+        // with 170 days still to run.
+        for (uint256 i = 0; i < 10; i++) {
+            vm.warp(block.timestamp + 1 days);
+            vm.prank(alice);
+            vm.expectRevert(KevinStaking.StillLocked.selector);
+            s.getReward();
+        }
+        vm.prank(alice);
+        s.exit();
+
+        assertEq(gme.balanceOf(alice), 0, "broke a 180-day promise on day 11, took nothing");
+        assertEq(kevin.balanceOf(alice), 50_000_000e18, "and every token of principal came back");
+
+        // Bob, who promised nothing and kept it, is paid.
+        vm.warp(block.timestamp + 25 days);
+        vm.prank(bob);
+        s.exit();
+        assertGt(gme.balanceOf(bob), 0, "the honest staker is the one who gets paid");
+    }
+
+    function test_exitStillWorksMidTerm() public {
+        vm.prank(alice);
+        s.stakeFor(MIN, 3);
+        vm.warp(block.timestamp + WARMUP + 1);
+        s.activate(alice);
+        _fund();
+        vm.warp(block.timestamp + 10 days);
+
+        // _withdraw runs first, takes the penalty and deletes the lock, so by
+        // the time _getReward is reached there is nothing to be locked by.
+        vm.prank(alice);
+        s.exit();
+        assertEq(kevin.balanceOf(alice), 50_000_000e18, "never trapped");
+    }
+
+    function test_afterTheTermTheRewardsAreClaimableAgain() public {
+        vm.prank(alice);
+        s.stakeFor(MIN, 1); // 30 days
+        vm.warp(block.timestamp + WARMUP + 1);
+        s.activate(alice);
+        _fund();
+        vm.warp(block.timestamp + 31 days);
+
+        uint256 owed = s.earned(alice);
+        vm.prank(alice);
+        s.getReward();
+        assertEq(gme.balanceOf(alice), owed, "paid in full, promise kept");
+        assertEq(s.balanceOf(alice), MIN, "and still staked");
+    }
+
+    // --- the boost must not outlive the promise -----------------------------
+
+    function test_theBoostExpiresWithTheTerm() public {
+        vm.prank(alice);
+        s.stakeFor(MIN, 1); // 30 days, +25%
+        vm.warp(block.timestamp + WARMUP + 1);
+        s.activate(alice);
+        assertEq(s.effectiveBalanceOf(alice), (MIN * 12_500) / 10_000, "boosted while promised");
+
+        vm.warp(block.timestamp + 31 days);
+        assertFalse(s.isLocked(alice));
+        assertTrue(s.needsSync(alice), "the applied weight is now stale");
+        s.activate(alice);
+        assertEq(s.effectiveBalanceOf(alice), MIN, "and the boost went with the promise");
+    }
+
+    /// @dev Otherwise one thirty-day term buys a permanent boost on an
+    ///      unlimited, uncommitted stake for ever after.
+    function test_anExpiredTermDoesNotBoostLaterTopUps() public {
+        vm.prank(alice);
+        s.stakeFor(MIN, 1);
+        vm.warp(block.timestamp + WARMUP + 31 days);
+        s.activate(alice);
+
+        vm.prank(alice);
+        s.stake(MIN * 5); // a big top-up, no new promise
+        assertEq(s.effectiveBalanceOf(alice), MIN * 6, "no boost without a live term");
+    }
+
+    function test_needsSyncIsTheKeepersWholeJob() public {
+        vm.prank(alice);
+        s.stake(MIN);
+        assertFalse(s.needsSync(alice), "nothing owed during the warm-up");
+        vm.warp(block.timestamp + WARMUP + 1);
+        assertTrue(s.needsSync(alice), "warmed up and not yet counted");
+        s.activate(alice);
+        assertFalse(s.needsSync(alice), "and settled");
+    }
+
     // --- off unless it is turned on -----------------------------------------
 
     function test_withNothingConfiguredItBehavesExactlyAsBefore() public {

@@ -412,6 +412,27 @@ Both hand the whole accrued reward back to the pool, where it is emitted again
 to whoever stayed. It is not stranded and it does not go to the treasury.
 Leaving *completely* after your term is up costs nothing at all.
 
+**While your term is running you cannot claim.** `getReward()` reverts
+`StillLocked`. That is not an inconvenience bolted on — it is the only thing
+that makes the penalty mean anything, and an audit found out the hard way:
+
+> Forfeiture can only take what is still sitting in `rewards[account]`. Without
+> a gate on the claim path, a staker empties that bucket with one
+> `getReward()`, then breaks a 180-day promise on day eleven and forfeits
+> **exactly nothing** — keeping the full +100% term boost. Four of five
+> reviewers found it independently. The tell was that `StillLocked` was
+> declared in the errors and thrown from nowhere.
+
+`exit()` still works mid-term: `_withdraw` runs first, takes the penalty and
+deletes the lock, so nobody is ever trapped. You are paid for the promise when
+the promise is kept.
+
+**And the boost dies with the term.** It used to outlive its own end date and,
+worse, apply to every later top-up — so one thirty-day term bought a permanent
++25% on an unlimited, uncommitted stake. A term boost is now paid only while
+`isLocked`, which also means topping up after your term ends earns nothing
+extra unless you take a new one.
+
 ### What the owner cannot do
 
 `lockOf` freezes the boost and the end date at stake time. Retuning a term
@@ -433,17 +454,23 @@ going unrun; people who staked and waited their five days simply earn nothing
 and cannot tell why. That is a support disaster rather than a hack, and it is
 the kind of thing that stays unbuilt until it has already happened.
 
-`keeper/activate.mjs` indexes `Staked` events, checks
-`qualifies(a) && effectiveBalanceOf(a) == 0` — warmed up, not yet counted — and
-batches them into `activateMany`. Hourly, because a staker loses nothing by
+`keeper/activate.mjs` indexes `Staked` events, asks the contract
+`needsSync(a)`, and batches whoever says yes into `activateMany`. It asks
+rather than working it out, because it first tried to — "warmed up and not yet
+counted" — and that missed a term expiring, so a boost went on being paid after
+the promise it was paid for had ended. `needsSync` compares the applied weight
+to what it should be and answers in one word, so the keeper can never quietly
+disagree with the contract about who is owed what. Hourly, because a staker loses nothing by
 being brought in a few minutes late; they were earning nothing either way. It
 holds no money, cannot trade, and the only call it makes is one anybody could
 make. `keeper/kevin-activate.service` is the unit, and like the floor keeper it
 starts in dry run and `setup.sh` refuses to start it until it is configured.
 
-Driven end to end on anvil: quiet during the warm-up, then one `activateMany`
-the moment the five days were up, taking a 6m stake on a +25% term to 7.5m
-effective — and quiet again on the next tick rather than re-sending forever.
+Driven end to end on anvil, both transitions: quiet during the warm-up, then one
+`activateMany` the moment the five days were up, taking a 6m stake on a +25%
+term to 7.5m effective; then quiet for thirty days; then one more the moment the
+term expired, putting it back to 6m. Quiet again after each, rather than
+re-sending forever.
 
 ### Why this is also floor support
 

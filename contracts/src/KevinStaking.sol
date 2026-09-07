@@ -455,6 +455,24 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
         return block.timestamp >= lockOf[account].earnFrom;
     }
 
+    /// @notice What this account's effective balance WOULD be if synced now.
+    /// @dev The applied number is `effectiveBalanceOf`. These disagree between
+    ///      the moment something changes off the account's own path — a warm-up
+    ///      ending, a term expiring, the owner moving `minStake` — and the next
+    ///      time anything touches it.
+    function effectiveBalanceIfSynced(address account) public view returns (uint256) {
+        if (!qualifies(account)) return 0;
+        uint256 term = isLocked(account) ? lockOf[account].boostBps : 0;
+        return (balanceOf[account] * (BPS + pendingBoostBps(account) + term)) / BPS;
+    }
+
+    /// @notice Does this account owe a sync? The keeper's entire job, in one
+    ///         call, so it never has to reimplement the weighting off chain
+    ///         and quietly disagree with the contract about who is owed what.
+    function needsSync(address account) external view returns (bool) {
+        return effectiveBalanceOf[account] != effectiveBalanceIfSynced(account);
+    }
+
     /// @notice Is this account still inside the term it committed to?
     function isLocked(address account) public view returns (bool) {
         return block.timestamp < lockOf[account].until;
@@ -994,7 +1012,27 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
         stakingToken.safeTransfer(msg.sender, amount);
     }
 
+    /**
+     * @dev THE COMMITMENT IS ENFORCED HERE, NOT ONLY ON THE WAY OUT.
+     *
+     *      Forfeiture in `_withdraw` can only take what is still sitting in
+     *      `rewards[msg.sender]` — and without this line a staker could empty
+     *      that bucket with one `getReward()` and then break a 180-day promise
+     *      on day eleven, forfeiting exactly nothing and keeping the full term
+     *      boost. Four independent reviewers found it; the tell was that
+     *      `StillLocked` was declared and never thrown.
+     *
+     *      So: while your term is running, your rewards are not yours to take.
+     *      That IS the commitment — you are paid for the promise when the
+     *      promise is kept.
+     *
+     *      `exit()` still works mid-term, because `_withdraw` runs first, takes
+     *      the penalty and deletes the lock, so by the time this is reached
+     *      there is nothing left to claim and nothing left to be locked by.
+     */
     function _getReward() private {
+        if (isLocked(msg.sender)) revert StillLocked();
+
         uint256 reward = rewards[msg.sender];
         if (reward == 0) return;
 
@@ -1044,9 +1082,14 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
         // worth nothing in the accumulator. It is not slashed and it is not
         // stuck — it simply does not count while it does not qualify, so what
         // it would have earned goes to the people who do.
-        uint256 newEff = qualifies(account)
-            ? (balanceOf[account] * (BPS + boost + lockOf[account].boostBps)) / BPS
-            : 0;
+        // The term boost is paid WHILE THE PROMISE IS LIVE and not a second
+        // longer. Without the isLocked check it survived its own end date
+        // forever, and worse, still applied to every later top-up — so one
+        // 30-day term bought a permanent +25% on an unlimited, uncommitted
+        // stake. Expiring it also means a top-up after the term is over gets
+        // the boost only if a new term is taken with it.
+        uint256 term = isLocked(account) ? lockOf[account].boostBps : 0;
+        uint256 newEff = qualifies(account) ? (balanceOf[account] * (BPS + boost + term)) / BPS : 0;
         uint256 oldEff = effectiveBalanceOf[account];
 
         if (appliedBoostBps[account] != boost) appliedBoostBps[account] = boost;

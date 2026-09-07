@@ -52,7 +52,7 @@ const chain = defineChain({
 });
 
 const ABI = [
-  { type: 'function', name: 'qualifies', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'bool' }] },
+  { type: 'function', name: 'needsSync', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'bool' }] },
   { type: 'function', name: 'effectiveBalanceOf', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'minStake', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -143,24 +143,29 @@ async function main() {
       const head = await pub.getBlockNumber();
       await findStakers(head);
 
-      // Warmed up, and not yet counted. That second half is what stops this
-      // sending the same transaction every hour for the rest of time.
+      // ONE CALL, AND THE CONTRACT DECIDES.
+      //
+      // This used to ask "warmed up and not yet counted", which is only one of
+      // the reasons an account can be owed a sync — it missed a term expiring,
+      // so a boost went on being paid after the promise it was paid for had
+      // ended. Rather than reimplement the weighting here and quietly disagree
+      // with the contract about who is owed what, `needsSync` compares the
+      // applied weight to what it should be and answers in one word.
       const due = [];
       for (const a of known) {
-        const [ok, eff] = await Promise.all([
-          pub.readContract({ address: cfg.staking, abi: ABI, functionName: 'qualifies', args: [a] }),
-          pub.readContract({ address: cfg.staking, abi: ABI, functionName: 'effectiveBalanceOf', args: [a] }),
-        ]);
-        if (ok && eff === 0n) due.push(a);
+        const owed = await pub.readContract({
+          address: cfg.staking, abi: ABI, functionName: 'needsSync', args: [a],
+        });
+        if (owed) due.push(a);
       }
 
       if (!due.length) {
-        const line = `nothing to ring · ${known.size} stakers known`;
+        const line = `everybody is settled · ${known.size} stakers known`;
         if (line !== lastSaid) say(line);
         lastSaid = line;
       } else {
         lastSaid = '';
-        say(`${due.length} of ${known.size} stakers are warmed up and not yet counted`);
+        say(`${due.length} of ${known.size} stakers are owed a sync`);
         for (let i = 0; i < due.length; i += cfg.batch) {
           const slice = due.slice(i, i + cfg.batch);
           if (!cfg.live) { say('  WOULD ACTIVATE', slice.length, slice.slice(0, 3).join(' '), '...'); continue; }
