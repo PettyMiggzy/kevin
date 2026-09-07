@@ -16,9 +16,12 @@ and roadmap are all live and all chain-verified.
       burned and a viewer clicks through to a counter reading zero, that is
       worse than having no counter at all. Burn first, let the row land, then
       he films.
-- [ ] Send him `docs/BRIEF.md` — the one-page voice and rules sheet, including
-      the rule that protects him: **if he was paid in $KEVIN, he says so,
-      once, in the post.**
+- [ ] Send him **`https://www.iamkevin.lol/kit`** — the marketing kit. Pitch,
+      live numbers, the verifiable facts, every asset downloadable, the voice
+      guide, and the four things not to claim. One link, everything on it.
+- [ ] `docs/BRIEF.md` is the same thing as a file if he wants it in writing,
+      including the rule that protects him: **if he was paid in $KEVIN, he
+      says so, once, in the post.**
 - [ ] Send him `assets/png/kevin-gme-1080.png` for the thumbnail or the X post
 - [ ] Agree what he is NOT saying: no price, no targets, no floor, no airdrop
       date. That list is in the brief — point at it rather than trusting memory.
