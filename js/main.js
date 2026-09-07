@@ -282,7 +282,7 @@
     if (links.telegram) out.push(['Telegram', links.telegram]);
     if (links.x) out.push(['X', links.x]);
     if (links.chart) out.push(['Chart', links.chart]);
-    out.push(['Lore', 'docs/LORE.md']);
+    out.push(['Docs', K.links && K.links.docs ? K.links.docs : 'docs/']);
     out.push(['GitHub', 'https://github.com/PettyMiggzy/kevin']);
     footer.innerHTML = out
       .map(function (l) {

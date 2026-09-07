@@ -96,8 +96,10 @@ window.KEVIN = {
     launchpad: 'https://kekfun.xyz',
     telegram: 'https://t.me/kevinRBH',
     x: 'https://x.com/Iamkevinonrh',
-    chart: null,
-    docs: 'docs/LORE.md',
+    // Live from launch day. All three pools roll up to this one token page.
+    chart: 'https://dexscreener.com/robinhood/0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A',
+    // /docs is a real page now, not a raw markdown file a browser downloads.
+    docs: 'docs/',
   },
 
   // Auction window. ISO-8601 with a timezone offset, e.g. '2026-03-04T18:00:00Z'.

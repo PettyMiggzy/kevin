@@ -65,13 +65,17 @@ Enter exactly these. All three returned HTTP 200 on 7 Sep 2026.
 | slot | value |
 |---|---|
 | Website | `https://iamkevin.lol` |
+| Docs | `https://iamkevin.lol/docs` |
 | Twitter / X | `https://x.com/Iamkevinonrh` |
 | Telegram | `https://t.me/kevinRBH` |
 
 The API stores known socials with a `type` (`twitter`, `telegram`, `discord`,
-`instagram`) and everything else as a `label` + url pair, so "Website" is a
-labelled link, not a typed one. In the form that distinction is just which
-row you fill.
+`instagram`) and everything else as a `label` + url pair, so "Website" and
+"Docs" are labelled links, not typed ones. In the form that distinction is
+just which row you fill.
+
+`/docs` is served by `docs/index.html` — a real page, not a raw markdown file.
+It resolves with or without the trailing slash.
 
 Do **not** list: the launchpad, the block explorer, or a chart link. DEX Screener
 renders those itself and a duplicate row looks like filler.
@@ -85,11 +89,15 @@ Already in the repo at the right sizes. Nothing needs regenerating.
 | slot | file | size | why it fits |
 |---|---|---|---|
 | Icon / logo | `assets/png/logo-512.png` | 512×512, 40 KB | DEX Screener serves the icon through `?width=64&height=64&fit=crop`, so it wants a square. 512 is oversized on purpose and downsamples clean. |
-| Header / banner | `assets/png/banner-1500x500.png` | 1500×500, 126 KB | Served through `?width=600&height=200&fit=crop` — exactly 3:1. This file is exactly 3:1, so the crop takes nothing. |
+| Header / banner | `assets/png/header-1500x500.png` | 1500×500, 54 KB | The red script wordmark. Served through `?width=600&height=200&fit=crop` — exactly 3:1, so the crop takes nothing. Built from the owner's original by thresholding out the JPEG ringing, so the strokes stay crisp down at 600px. Meets the stated rules: 3:1, ≥600px wide, PNG, well under 4.5 MB. |
+| Header — alternative | `assets/png/banner-1500x500.png` | 1500×500, 126 KB | The yellow-void banner with the character and WETH / KEK / GME. Busier at 600×200; use it if the header should carry the tagline rather than just the name. |
 | Open Graph | usually not needed | — | For every profile sampled, DEX Screener generated the OG card itself from the token images (`cdn.dexscreener.com/token-images/og/...`). If the form offers a slot anyway, use `assets/png/og-1200x630.png` (1200×630, 122 KB). |
 
 Fallbacks if a square with more face in it reads better at 64px:
 `assets/png/pfp-1000.png` (1000×1000) or `assets/logo/image-512.png`.
+
+DEX Screener's stated header rules, for the record: 3:1 aspect, minimum width
+600px, png / jpg / webp / gif, maximum 4.5 MB.
 
 DEX Screener does not publish max file sizes or accepted formats. All of the
 above are PNG and none exceeds 130 KB, which is well under any plausible cap.

@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KEVIN — The Documentation</title>
+<meta name="description" content="Technical documentation for $KEVIN on Robinhood Chain. Supply, pools, mechanics, risk factors, glossary and errata. Written by a guy who works the fryer.">
+<link rel="icon" href="../assets/art/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/png/favicon-180.png">
+<link rel="canonical" href="https://iamkevin.lol/docs/">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://iamkevin.lol/docs/">
+<meta property="og:title" content="KEVIN — The Documentation">
+<meta property="og:description" content="Real projects have documentation. He read that on his phone, in the walk-in, at work. So: documentation.">
+<meta property="og:image" content="https://iamkevin.lol/assets/png/og-1200x630.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Iamkevinonrh">
+<meta name="twitter:image" content="https://iamkevin.lol/assets/png/og-1200x630.png">
+<meta name="theme-color" content="#ffe500">
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  /* docs-only additions. everything else is the site's own stylesheet. */
+  .doc { max-width: 78ch; }
+  .doc h2 { margin-top: 0; }
+  .doc h2 .no {
+    display: inline-block; background: var(--ink); color: var(--void);
+    padding: 2px 12px; border-radius: 8px; margin-right: 12px;
+    font-size: 0.72em; vertical-align: middle;
+  }
+  .section + .section { border-top: var(--edge) solid var(--ink); }
+
+  .toc { list-style: none; margin: 0; padding: 0; counter-reset: none; }
+  .toc li { border-bottom: 2px dashed rgba(0,0,0,.25); }
+  .toc a {
+    display: flex; gap: 14px; align-items: baseline;
+    padding: 10px 4px; text-decoration: none; font-weight: 700;
+  }
+  .toc a:hover { background: var(--cream); }
+  .toc b { min-width: 3.2em; font-family: var(--display); font-size: 20px; }
+  .toc span { opacity: .62; font-size: 13px; margin-left: auto; text-align: right; }
+
+  .spec { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .spec th, .spec td { text-align: left; padding: 11px 12px; border-bottom: 2px solid rgba(0,0,0,.18); vertical-align: top; }
+  .spec th { width: 38%; font-weight: 700; }
+  .spec td { font-family: var(--body); }
+  .spec tr:last-child th, .spec tr:last-child td { border-bottom: 0; }
+  .spec code { word-break: break-all; }
+
+  /* sits inside .section--ink, which paints everything yellow — so this box
+     re-asserts its own colours instead of inheriting the section's. */
+  .reserved {
+    border: var(--edge) dashed var(--ink); border-radius: var(--radius);
+    padding: clamp(28px, 5vw, 52px); text-align: center;
+    background: var(--cream); color: var(--ink);
+  }
+  .reserved h2, .reserved p, .reserved b { color: var(--ink); }
+  .reserved .no { background: var(--ink); color: var(--void); margin-right: 18px; }
+  .reserved p { max-width: 44ch; margin: 14px auto 0; }
+
+  .isnt { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .isnt ul { margin: 10px 0 0; padding-left: 20px; }
+  .isnt li { margin-bottom: 7px; }
+  @media (max-width: 720px) { .isnt { grid-template-columns: 1fr; } }
+
+  .stamp-note {
+    border-left: var(--edge) solid var(--red); padding: 4px 0 4px 16px;
+    margin: 22px 0; font-size: 15px;
+  }
+  .updated { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; opacity: .65; }
+</style>
+</head>
+<body>
+
+<!-- ====================== NAV ====================== -->
+<nav class="nav">
+  <div class="wrap nav__inner">
+    <a class="nav__brand" href="../">
+      <img src="../assets/art/logo.svg" alt="" width="46" height="46">
+      <span>KEVIN</span>
+    </a>
+    <div class="nav__links">
+      <a href="#toc">Contents</a>
+      <a href="#numbers">Numbers</a>
+      <a href="#pools">Pools</a>
+      <a href="#stack">Stack</a>
+      <a href="#risk">Risk</a>
+      <a href="#glossary">Glossary</a>
+      <a href="#errata">Errata</a>
+      <a href="../">← Site</a>
+    </div>
+    <div class="nav__social">
+      <a class="btn btn--sm btn--ghost" href="https://x.com/Iamkevinonrh" target="_blank" rel="noopener">X</a>
+      <a class="btn btn--sm btn--ghost" href="https://t.me/kevinRBH" target="_blank" rel="noopener">TG</a>
+      <a class="btn btn--sm" href="https://github.com/PettyMiggzy/kevin" target="_blank" rel="noopener">Source ↗</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ====================== TICKER ====================== -->
+<div class="ticker" aria-hidden="true">
+  <div class="ticker__track" id="ticker"></div>
+</div>
+
+<!-- ====================== HERO ====================== -->
+<header class="hero" id="top">
+  <div class="wrap hero__grid">
+    <div>
+      <p class="eyebrow">Kevin · Technical documentation · Revision 1</p>
+      <h1>The Docs</h1>
+      <p class="hero__sub">
+        Real projects have documentation. He read that on his phone, in the
+        walk-in, on a break. So: documentation.
+      </p>
+      <p class="updated">Last updated during a break · Next update during a break</p>
+    </div>
+    <div class="hero__art">
+      <img src="../assets/png/header-1500x500.png" alt="Kevin" width="1500" height="500">
+    </div>
+  </div>
+</header>
+
+<!-- ====================== HOW TO READ THIS ====================== -->
+<section class="section section--cream">
+  <div class="wrap doc">
+    <p class="eyebrow">Read me first</p>
+    <h2>How to read this</h2>
+    <p class="lead">
+      This document has two voices in it and it matters which one you are
+      hearing.
+    </p>
+    <ol class="rules">
+      <li><b>Facts are facts.</b> Supply, addresses, percentages, pool weights — all of it is on chain and all of it is checkable. Go check it. If this page and the chain disagree, the chain is right and this page is a bug.</li>
+      <li><b>Kevin is Kevin.</b> He is extremely confident. Confidence is a character trait. It is not a source, a forecast, or a filing.</li>
+      <li><b>Nothing here is advice.</b> Not the numbers, not the jokes, and especially not the parts where he sounds certain.</li>
+    </ol>
+    <p class="stamp-note">
+      If you only read one section, read <a href="#risk"><b>§9, Risk factors</b></a>.
+      It is the only section written entirely in the first voice.
+    </p>
+  </div>
+</section>
+
+<!-- ====================== CONTENTS ====================== -->
+<section class="section" id="toc">
+  <div class="wrap doc">
+    <p class="eyebrow">Contents</p>
+    <h2>Table of contents</h2>
+    <ul class="toc">
+      <li><a href="#abstract"><b>§1</b> Abstract <span>the serious one</span></a></li>
+      <li><a href="#what"><b>§2</b> What Kevin is, and is not <span>mostly is not</span></a></li>
+      <li><a href="#numbers"><b>§3</b> The numbers <span>all real</span></a></li>
+      <li><a href="#pools"><b>§4</b> The three pools <span>plumbing, laugh, point</span></a></li>
+      <li><a href="#stack"><b>§5</b> The stack <span>more than expected</span></a></li>
+      <li><a href="#governance"><b>§6</b> Governance <span>none</span></a></li>
+      <li><a href="#seven"><b>§7</b> Reserved <span>do not ask</span></a></li>
+      <li><a href="#plan"><b>§8</b> The plan <span>¾ complete</span></a></li>
+      <li><a href="#risk"><b>§9</b> Risk factors <span>read this one</span></a></li>
+      <li><a href="#glossary"><b>§10</b> Glossary <span>required reading</span></a></li>
+      <li><a href="#errata"><b>§11</b> Errata <span>growing</span></a></li>
+      <li><a href="#support"><b>§12</b> Support <span>he is at work</span></a></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ====================== §1 ABSTRACT ====================== -->
+<section class="section section--cream" id="abstract">
+  <div class="wrap doc">
+    <h2><span class="no">§1</span>Abstract</h2>
+    <p>
+      We present <b>KEVIN</b>, a fixed-supply ERC-20 token deployed on Robinhood
+      Chain (chain id 4663), distributed by a four-day variable rate gradual
+      Dutch auction, with sixty percent of supply committed to locked liquidity
+      across three pools and zero percent allocated to the creator, the last of
+      which is enforced by the token factory rather than by anybody's good
+      intentions.
+    </p>
+    <p>
+      We further present <b>Kevin</b>, who works the fryer, has WiFi, and is
+      confident that one of these is going to work out.
+    </p>
+    <p class="pull">A guy at a fryer<br>made a <em>coin</em>.</p>
+    <p>
+      Every number in the paragraph above is true and you can check all of them
+      in about ninety seconds. The second paragraph is also true, which is the
+      part people struggle with.
+    </p>
+  </div>
+</section>
+
+<!-- ====================== §2 WHAT IT IS ====================== -->
+<section class="section" id="what">
+  <div class="wrap doc">
+    <h2><span class="no">§2</span>What Kevin is, and is not</h2>
+    <div class="isnt">
+      <div class="card">
+        <h3>It is</h3>
+        <ul>
+          <li>A meme coin.</li>
+          <li>A character with a job, a name, and a shift he has not finished.</li>
+          <li>A website with no framework, no tracker and no cookie banner, because there are no cookies.</li>
+          <li>A Telegram bot that talks like him.</li>
+          <li>A billion tokens on chain 4663 that anybody can verify.</li>
+          <li>A sticker pack, several games, and a truly unreasonable amount of hand-drawn art.</li>
+        </ul>
+      </div>
+      <div class="card card--cream">
+        <h3>It is not</h3>
+        <ul>
+          <li>A company.</li>
+          <li>A product, a platform, or a protocol with a customer.</li>
+          <li>Yield. There is no yield. There is nowhere for yield to come from.</li>
+          <li>A security, an offer, or an investment.</li>
+          <li>Affiliated with any restaurant, brokerage, franchise or game — every real name here is parody and nothing else.</li>
+          <li>That other red guy. He is his own guy. This is the most important line on the page.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== §3 NUMBERS ====================== -->
+<section class="section section--cream" id="numbers">
+  <div class="wrap doc">
+    <h2><span class="no">§3</span>The numbers</h2>
+    <p>
+      These are launch mechanics enforced on chain by the factory, not promises
+      anybody here is making. Copy the address from the group, not from a DM,
+      and not from this page if you got to this page from a DM.
+    </p>
+    <div class="table-scroll">
+      <table class="spec">
+        <tr><th>Token</th><td><b>KEVIN</b> — "I am Kevin"</td></tr>
+        <tr><th>Contract</th><td><code id="ca">0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A</code></td></tr>
+        <tr><th>Chain</th><td>Robinhood Chain · id <code>4663</code></td></tr>
+        <tr><th>Total supply</th><td><span id="supply">1,000,000,000</span> · 18 decimals · fixed, no mint function</td></tr>
+        <tr><th>Sold at auction</th><td><span id="sold">40</span>% of supply</td></tr>
+        <tr><th>Locked liquidity</th><td><span id="lp">60</span>% of supply</td></tr>
+        <tr><th>Creator allocation</th><td><b><span id="creator">0</span>%</b> — the factory has no field for it</td></tr>
+        <tr><th>Auction</th><td>VRGDA · <span id="saleDays">4</span> days · <span id="perDay">10</span>% of supply released per day</td></tr>
+        <tr><th>Vesting</th><td>Linear over <span id="vest">30</span> days from settlement</td></tr>
+        <tr><th>Launchpad</th><td><a href="https://kekfun.xyz" target="_blank" rel="noopener">kekfun.xyz</a></td></tr>
+      </table>
+    </div>
+    <p class="stamp-note">
+      Creator allocation is zero. Not "zero for now", not "zero excluding
+      advisors". The launchpad contract does not have anywhere to put it.
+    </p>
+  </div>
+</section>
+
+<!-- ====================== §4 POOLS ====================== -->
+<section class="section" id="pools">
+  <div class="wrap">
+    <div class="doc">
+      <h2><span class="no">§4</span>The three pools</h2>
+      <p>
+        Liquidity is split three ways, and each way is a different argument. All
+        three are live and all three are indexed.
+      </p>
+    </div>
+    <div class="grid grid--3" id="pools-grid" style="margin-top:30px"></div>
+    <div class="doc">
+      <p class="stamp-note">
+        Three pools for one token means three prices for one token, which never
+        quite agree. Bots close the gap and keep the difference. That is the
+        job, it is not theft, and it is why a buy alert is sometimes followed
+        one block later by a stranger doing something that looks alarming and
+        is not about you. See <a href="#risk">§9.3</a>.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== §5 STACK ====================== -->
+<section class="section section--cream" id="stack">
+  <div class="wrap doc">
+    <h2><span class="no">§5</span>The stack</h2>
+    <p class="lead">
+      Kevin has more infrastructure than plan. This was never the goal. It is
+      simply where we are.
+    </p>
+    <div class="table-scroll">
+      <table class="spec">
+        <tr><th>The site</th><td>Static HTML and one stylesheet. No framework, no build step, no analytics, no cookie banner because there is nothing to consent to. It is the whole website. You are on it.</td></tr>
+        <tr><th>The bot</th><td>Telegram. Answers in his voice, stays quiet when there is nothing to say, and <b>never DMs first</b>. If Kevin slides into your DMs, that is not Kevin.</td></tr>
+        <tr><th>The art</th><td>Hand-drawn. Sticker pack, emoji pack, walk cycles cut frame by frame. Nobody asked for the walk cycles.</td></tr>
+        <tr><th>The games</th><td>A gym, a card game, and a DOS thing. He does not want to talk about how long the DOS thing took.</td></tr>
+        <tr><th>The contracts</th><td>Solidity, in the open, in <code>contracts/</code>, argued with at length and repeatedly found guilty.</td></tr>
+      </table>
+    </div>
+    <p class="stamp-note">
+      <b>Nothing in <code>contracts/</code> is deployed.</b> Not one of them has
+      an address. When one does, this section will say so and print the address
+      here. Until then it is a hobby with tests.
+    </p>
+    <p>
+      All of it is in one public repository. You can read every line, including
+      the comments where somebody was wrong and said so:
+      <a href="https://github.com/PettyMiggzy/kevin" target="_blank" rel="noopener"><b>github.com/PettyMiggzy/kevin</b></a>.
+    </p>
+  </div>
+</section>
+
+<!-- ====================== §6 GOVERNANCE ====================== -->
+<section class="section" id="governance">
+  <div class="wrap doc">
+    <h2><span class="no">§6</span>Governance</h2>
+    <p class="lead">There isn't any.</p>
+    <p>
+      No DAO. No token vote. No council. No multisig of anonymous advisors with
+      cartoon avatars and one shared opinion. No forum where a proposal goes to
+      be ignored politely for six weeks.
+    </p>
+    <p>
+      There is Kevin, and Kevin has a shift, and during the shift nothing
+      happens at all.
+    </p>
+  </div>
+</section>
+
+<!-- ====================== §7 RESERVED ====================== -->
+<section class="section section--ink" id="seven">
+  <div class="wrap">
+    <div class="reserved">
+      <h2 style="margin:0"><span class="no">§7</span>Reserved</h2>
+      <p>
+        This section is reserved. Kevin will discuss §7 when Kevin is ready to
+        discuss §7.
+      </p>
+      <p><b>Please do not ask about §7 in the group.</b></p>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== §8 PLAN ====================== -->
+<section class="section" id="plan">
+  <div class="wrap doc">
+    <h2><span class="no">§8</span>The plan</h2>
+    <p>The plan is four items long and has been on a whiteboard since 2009.</p>
+  </div>
+</section>
+<div class="tape">☑ LAUNCH · ☑ MOON · ☑ LAMBO · ☐ SLEEP — LATER</div>
+<section class="section section--cream">
+  <div class="wrap doc">
+    <ol class="rules">
+      <li><b>Launch.</b> Done. This one was done properly and in the correct order, which he would like noted.</li>
+      <li><b>Moon.</b> Ticked. He ticked it in advance. He describes this as "planning".</li>
+      <li><b>Lambo.</b> Also ticked in advance. Same reasoning. He is consistent.</li>
+      <li><b>Sleep.</b> Not ticked. Later. There is a shift on.</li>
+    </ol>
+    <p class="stamp-note">
+      Three of four boxes are complete. Two of the three were completed by
+      ticking them. The gap between what he has and what he is certain is about
+      to happen is the entire character. He is not deluded exactly. He is early.
+    </p>
+  </div>
+</section>
+
+<!-- ====================== §9 RISK ====================== -->
+<section class="section" id="risk">
+  <div class="wrap doc">
+    <p class="eyebrow">The section written in the other voice</p>
+    <h2><span class="no">§9</span>Risk factors</h2>
+    <p class="lead">
+      No jokes in this section. Nine things that are true.
+    </p>
+    <ol class="rules">
+      <li><b>It can go to zero.</b> Most meme coins do. Assume this one will and size accordingly. Only spend what you would be happy to set on fire for the bit, because that is the transaction you are doing.</li>
+      <li><b>Liquidity is thin.</b> There is not much depth in these pools. A large order moves the price a long way, and moves it back a long way when it unwinds. That is arithmetic, not sabotage, and it applies to your buy exactly as much as it applies to somebody else's sell.</li>
+      <li><b>Three pools means three prices.</b> They drift apart and bots close the gap for profit. If you buy in one pool and immediately see a stranger's transaction in another, that is usually a bot doing arbitrage one block later. It is not aimed at you and it did not take your money.</li>
+      <li><b>There is no floor.</b> No price is defended. No contract owes you a bid. Nobody is standing underneath this. Anybody who tells you there is a floor is either confused or selling you something.</li>
+      <li><b>Confidence is not a mechanism.</b> Kevin is certain. His certainty does not appear anywhere in the code and cannot be redeemed.</li>
+      <li><b>The GME airdrop is not confirmed.</b> No date, no amount, no snapshot has been taken. It is an idea. If anybody tells you to buy or hold to qualify for it, they are not speaking for this project.</li>
+      <li><b>Scammers will target you.</b> Fake groups, fake contracts, fake support. He does not DM first, there is no allocation for you, and the only real contract address is the one pinned in the official group. Check it character by character.</li>
+      <li><b>Nothing here is financial advice</b> and none of it is an offer to sell a security. It is a joke on the internet with a website attached.</li>
+      <li><b>Nobody is coming to fix it.</b> There is no support desk, no recovery, and no reversing a transaction. See <a href="#support">§12</a>, which is shorter than you would like.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ====================== §10 GLOSSARY ====================== -->
+<section class="section section--cream" id="glossary">
+  <div class="wrap doc">
+    <h2><span class="no">§10</span>Glossary</h2>
+    <div class="table-scroll">
+      <table class="spec">
+        <tr><th>The Click</th><td>3:41 PM, Thursday, 14 May 2009. He clocked in. He has not clocked out. The counter on the front page has never been reset and never will be.</td></tr>
+        <tr><th>The Shift</th><td>Ongoing.</td></tr>
+        <tr><th>The Void</th><td>Yellow.</td></tr>
+        <tr><th>The Plumbing</th><td>The WETH pool. The honest one. It does not believe in anything.</td></tr>
+        <tr><th>The Laugh</th><td>The KEK pool. The sound the walk-in makes at 2am when it agrees with you.</td></tr>
+        <tr><th>The Point</th><td>The GME pool. The smallest slice and the loudest joke. He is not discussing it.</td></tr>
+        <tr><th>McKevin's</th><td>The dream. Not a real restaurant. Legally, and this is important, an extremely not-real restaurant.</td></tr>
+        <tr><th>Employee of the Month</th><td>September. Self-awarded. Ran unopposed.</td></tr>
+        <tr><th>WAGMI</th><td>He believes this one completely and without irony, which is the whole problem.</td></tr>
+        <tr><th>Wen</th><td>After the shift.</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== §11 ERRATA ====================== -->
+<section class="section" id="errata">
+  <div class="wrap doc">
+    <h2><span class="no">§11</span>Errata</h2>
+    <p class="lead">
+      Things this project got wrong, kept in public, with the correction
+      attached. Deleting a mistake is not the same as fixing one.
+    </p>
+    <ol class="rules">
+      <li><b>The contract address was called the wrong token.</b> A comment in the config once asserted the address was an old token on a different chain. Nothing had been checked before that was written, and it was then repeated back to the owner as fact — twice — telling him his own contract address was wrong. Checked properly afterwards from two machines, the address was correct the entire time. The comment is still in the config with the correction underneath it.</li>
+      <li><b>Fifteen percent was written as eighteen.</b> The liquidity list said fifteen and the sentence under it said eighteen, spelled out in words, so nobody searching for "18" would ever have found it. Both now come from one place, so they cannot disagree again.</li>
+      <li><b>A contract could be tricked into raising the same number thirty times in one transaction.</b> Found by attacking it on purpose, reproduced for about a hundredth of an ether, fixed, and the attack kept as a test that now has to keep failing forever.</li>
+      <li><b>GTA 6 has been wrong four times.</b> Kevin does not consider these errors. Kevin considers these Rockstar's errors.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ====================== §12 SUPPORT ====================== -->
+<section class="section section--cream" id="support">
+  <div class="wrap doc">
+    <h2><span class="no">§12</span>Support</h2>
+    <div class="table-scroll">
+      <table class="spec">
+        <tr><th>Support hours</th><td>He is at work.</td></tr>
+        <tr><th>Response time</th><td>After the shift.</td></tr>
+        <tr><th>Escalation path</th><td>There is not one.</td></tr>
+        <tr><th>Service level agreement</th><td>No.</td></tr>
+        <tr><th>Where he actually is</th><td>
+          <a href="https://x.com/Iamkevinonrh" target="_blank" rel="noopener"><b>@Iamkevinonrh</b></a> on X and
+          <a href="https://t.me/kevinRBH" target="_blank" rel="noopener"><b>t.me/kevinRBH</b></a> on Telegram.
+          Those two, and nowhere else. Another group, another handle, or a
+          message about an early allocation is not him.
+        </td></tr>
+      </table>
+    </div>
+    <p class="pull">Launching as soon as<br>my <em>shift</em> is over.</p>
+  </div>
+</section>
+
+<!-- ====================== FOOTER ====================== -->
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer__top">
+      <div style="display:flex;align-items:center;gap:16px">
+        <img src="../assets/art/logo.svg" alt="" width="72" height="72" style="border:4px solid var(--void);border-radius:50%">
+        <div>
+          <div style="font-family:var(--display);font-size:34px;line-height:1">KEVIN</div>
+          <div style="font-size:13px;letter-spacing:.14em;text-transform:uppercase;opacity:.7">I work the fryer. I have WiFi.</div>
+        </div>
+      </div>
+      <div class="footer__links">
+        <a class="btn btn--sm btn--ghost" href="../">Site</a>
+        <a class="btn btn--sm btn--ghost" href="../memes.html">Memes</a>
+        <a class="btn btn--sm btn--ghost" href="https://t.me/kevinRBH" target="_blank" rel="noopener">Telegram</a>
+        <a class="btn btn--sm btn--ghost" href="https://x.com/Iamkevinonrh" target="_blank" rel="noopener">X</a>
+        <a class="btn btn--sm btn--ghost" href="https://github.com/PettyMiggzy/kevin" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+
+    <p class="footer__note">
+      <strong>Kevin is a meme coin.</strong> It has no utility, no yield, no
+      roadmap, no team allocation you'll find out about later, and no promise of
+      any kind that it will ever be worth anything. Nothing on this page is
+      financial advice or an offer to sell a security. Buying a joke on the
+      internet can and frequently does go to zero — assume it will, and only
+      spend what you'd happily set on fire for the bit. Verify the contract
+      address in the official group before you send anything anywhere; if you
+      found it somewhere else, it's a scam. Kevin is an original character, and
+      neither he nor this project is affiliated with, endorsed by, sponsored by
+      or connected to any existing game, franchise, restaurant, brokerage or
+      company — every real-world name and any resemblance to a real uniform or
+      logo appears here as parody and commentary, nothing more. Do your own
+      research.
+    </p>
+    <p class="footer__note" style="border:0;padding-top:8px">
+      You read the documentation. Genuinely, nobody does that. Noted — and respected.
+    </p>
+  </div>
+</footer>
+
+<script src="../js/config.js"></script>
+<script>
+/* Docs page hydration. Deliberately does NOT load js/main.js — that script is
+   built for the front page and reaches for elements that only exist there.
+   Everything below reads the same config the rest of the site reads, so a
+   number can never drift between this page and the front page. */
+(function () {
+  var K = window.KEVIN || {};
+
+  // ticker — duplicated so the CSS -50% translate loops seamlessly
+  var ticker = document.getElementById('ticker');
+  if (ticker && K.ticker) {
+    var once = K.ticker.map(function (t) { return '<span>' + t + '</span>'; }).join('');
+    ticker.innerHTML = once + once;
+  }
+
+  // §3 — every value here comes from config, never hand-typed twice
+  var m = K.mechanics || {};
+  var put = function (id, v) {
+    var el = document.getElementById(id);
+    if (el && v !== null && v !== undefined) el.textContent = v;
+  };
+  put('ca', K.contract);
+  put('supply', m.supply);
+  put('sold', m.sold);
+  put('lp', m.lockedLp);
+  put('creator', m.creator);
+  put('saleDays', m.saleDays);
+  put('perDay', m.perDay);
+  put('vest', m.vestDays);
+
+  // §4 — the pools, from config, in config order
+  var grid = document.getElementById('pools-grid');
+  if (grid && K.pools) {
+    grid.innerHTML = K.pools.map(function (p) {
+      return [
+        '<div class="card pool pool--' + p.key + '">',
+        '<div class="pool__bar"></div>',
+        '<img class="pool__coin" src="../assets/art/coin-' + p.key + '.svg" alt="' + p.ticker + '" width="110" height="110">',
+        '<h3>' + p.ticker + '</h3>',
+        '<div class="pool__nick">' + p.nickname + '</div>',
+        p.weight ? '<div class="pool__weight">' + p.weight + '%</div>' : '',
+        p.weight ? '<div class="pool__meter"><i style="width:' + p.weight + '%"></i></div>' : '',
+        '<div class="pool__body"><p>' + p.blurb + '</p><p style="opacity:.7;font-size:13px;margin:0">' + p.note + '</p></div>',
+        '</div>',
+      ].join('');
+    }).join('');
+  }
+})();
+</script>
+</body>
+</html>
