@@ -67,6 +67,10 @@
     margin: 22px 0; font-size: 15px;
   }
   .updated { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; opacity: .65; }
+
+  /* the stylesheet only gives scroll-margin to section[id]/header[id]; §8.1
+     hangs off a heading, so it needs its own or the sticky nav covers it. */
+  h2[id] { scroll-margin-top: 104px; }
 </style>
 </head>
 <body>
@@ -83,6 +87,7 @@
       <a href="#numbers">Numbers</a>
       <a href="#pools">Pools</a>
       <a href="#stack">Stack</a>
+      <a href="#exists">Built</a>
       <a href="#risk">Risk</a>
       <a href="#glossary">Glossary</a>
       <a href="#errata">Errata</a>
@@ -154,6 +159,7 @@
       <li><a href="#governance"><b>§6</b> Governance <span>none</span></a></li>
       <li><a href="#seven"><b>§7</b> Reserved <span>do not ask</span></a></li>
       <li><a href="#plan"><b>§8</b> The plan <span>¾ complete</span></a></li>
+      <li><a href="#exists"><b>§8.1</b> What actually exists <span>instead of a roadmap</span></a></li>
       <li><a href="#risk"><b>§9</b> Risk factors <span>read this one</span></a></li>
       <li><a href="#glossary"><b>§10</b> Glossary <span>required reading</span></a></li>
       <li><a href="#errata"><b>§11</b> Errata <span>growing</span></a></li>
@@ -353,6 +359,67 @@
       ticking them. The gap between what he has and what he is certain is about
       to happen is the entire character. He is not deluded exactly. He is early.
     </p>
+
+    <h3 style="margin-top:44px">On the subject of a roadmap</h3>
+    <p>
+      There isn't one, and there isn't going to be one. A roadmap is a list of
+      promises with dates attached, and every one of them is a thing somebody
+      can later be angry about. Kevin is not going to sell you a quarter.
+    </p>
+    <p>
+      What there is instead is a list of what already exists, which is the part
+      nobody can take back, and an equally plain list of what is not being
+      promised. Both are below. Both are checkable.
+    </p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="doc">
+      <p class="eyebrow">Instead of a roadmap</p>
+      <h2 id="exists">What actually exists</h2>
+    </div>
+    <div class="grid grid--3" style="margin-top:30px">
+      <div class="card">
+        <h3>Shipped</h3>
+        <p style="opacity:.7;font-size:13px">Live right now. Go and click it.</p>
+        <ul>
+          <li>This site, and this page.</li>
+          <li>A Telegram bot that answers in his voice and stays quiet when there is nothing to say.</li>
+          <li>20 stickers, 60 animated stickers and 40 custom emoji, all hand-drawn.</li>
+          <li>Four playable things: a gym, a card game, a DOS thing and a wall of memes.</li>
+          <li>Three pools, live and indexed.</li>
+        </ul>
+      </div>
+      <div class="card card--cream">
+        <h3>Built, not deployed</h3>
+        <p style="opacity:.7;font-size:13px">Written and tested. No addresses.</p>
+        <ul>
+          <li>Four contracts in the open repo.</li>
+          <li><b>227 tests, all passing.</b></li>
+          <li>Three of those tests are attacks that actually worked, found by trying to break the contracts on purpose, and kept forever as tests that now have to keep failing.</li>
+          <li><b>None of it is on chain.</b> Not one address. When that changes, this page prints the address.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Not promised</h3>
+        <p style="opacity:.7;font-size:13px">Said plainly so nobody has to guess.</p>
+        <ul>
+          <li>The GME airdrop. It is an idea. No date, no amount, no snapshot taken.</li>
+          <li>Any date for anything in the middle column.</li>
+          <li>Any price, any target, any outcome.</li>
+          <li>A roadmap.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="doc">
+      <p class="stamp-note">
+        If somebody tells you a date for anything in the middle column, they are
+        guessing, and if they tell you to buy because of it they are not
+        speaking for this project. See <a href="#risk">§9.6</a>.
+      </p>
+    </div>
   </div>
 </section>
 
