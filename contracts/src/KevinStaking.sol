@@ -248,6 +248,21 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
     // under `minStake`, and you keep every token of principal and forfeit the
     // rewards — which go straight back to the people who stayed.
 
+    /**
+     * @notice Reward tokens somebody forfeited and that have not been emitted
+     *         again yet. RESERVED FROM `recoverERC20`, so they can only ever
+     *         leave through a reward period — which is to say, to the stakers
+     *         who stayed.
+     *
+     * @dev Without this the owner could sweep forfeitures straight out, and a
+     *      treasury that PROFITS from people breaking their commitments has
+     *      exactly the wrong incentive: raise `minStake`, push a hundred people
+     *      under it, collect. The audit found it against a README that had
+     *      already promised forfeitures "do not go to the treasury". Now they
+     *      cannot.
+     */
+    uint256 public forfeitedPool;
+
     /// @notice Least you may hold and still earn. Zero disables it.
     uint256 public minStake;
 
@@ -631,6 +646,7 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
         uint256 forfeited = rewards[msg.sender];
         rewards[msg.sender] = 0;
         _releaseCommitment(forfeited);
+        forfeitedPool += forfeited;
 
         balanceOf[msg.sender] = 0;
         totalStaked -= amount;
@@ -761,6 +777,13 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
             _releaseCommitment(stale);
         }
 
+        // Emitting is how a forfeiture gets back to the people who stayed, so
+        // this is the one path that releases the reservation. Anything left in
+        // `forfeitedPool` stays out of the owner's reach until it is emitted.
+        if (forfeitedPool != 0) {
+            forfeitedPool = reward >= forfeitedPool ? 0 : forfeitedPool - reward;
+        }
+
         uint256 available = freeRewardBalance();
         if (reward > available) revert RewardNotFunded(reward, available);
 
@@ -782,6 +805,13 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
     function topUpCurrentPeriod(uint256 reward) external onlyOwner settle(address(0)) {
         if (reward == 0) revert ZeroAmount();
         if (block.timestamp >= periodFinish) revert PeriodNotFinished();
+
+        // Emitting is how a forfeiture gets back to the people who stayed, so
+        // this is the one path that releases the reservation. Anything left in
+        // `forfeitedPool` stays out of the owner's reach until it is emitted.
+        if (forfeitedPool != 0) {
+            forfeitedPool = reward >= forfeitedPool ? 0 : forfeitedPool - reward;
+        }
 
         uint256 available = freeRewardBalance();
         if (reward > available) revert RewardNotFunded(reward, available);
@@ -920,7 +950,7 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
     function recoverERC20(IERC20 token, uint256 amount) external onlyOwner {
         uint256 reserved;
         if (address(token) == address(stakingToken)) reserved += totalStaked;
-        if (address(token) == address(rewardToken)) reserved += rewardsCommitted;
+        if (address(token) == address(rewardToken)) reserved += rewardsCommitted + forfeitedPool;
 
         uint256 bal = token.balanceOf(address(this));
         uint256 available = bal > reserved ? bal - reserved : 0;
@@ -993,6 +1023,7 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
             if (forfeited != 0) {
                 rewards[msg.sender] = 0;
                 _releaseCommitment(forfeited);
+                forfeitedPool += forfeited;
             }
             // The promise is spent either way, so it does not survive to bind
             // whatever is left behind.

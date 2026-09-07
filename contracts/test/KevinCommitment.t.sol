@@ -478,6 +478,112 @@ contract KevinCommitmentTest is Test {
         assertFalse(s.needsSync(alice), "and settled");
     }
 
+    // --- forfeitures belong to whoever stayed, not to the treasury -----------
+
+    /// @dev A treasury that PROFITS from broken commitments has exactly the
+    ///      wrong incentive: raise the minimum, push people under it, collect.
+    ///      recoverERC20 could reach forfeited rewards, against a README that
+    ///      had already promised it could not.
+    function test_theOwnerCannotSweepForfeitedRewards() public {
+        vm.prank(alice);
+        s.stakeFor(MIN, 1);
+        vm.prank(bob);
+        s.stakeFor(MIN, 1);
+        vm.warp(block.timestamp + WARMUP + 1);
+        s.activate(alice);
+        s.activate(bob);
+        _fund();
+        vm.warp(block.timestamp + 10 days);
+
+        uint256 owed = s.earned(alice);
+        assertGt(owed, 0);
+        vm.prank(alice);
+        s.exit(); // breaks the term, forfeits
+
+        assertEq(s.forfeitedPool(), owed, "reserved the moment it was given up");
+        uint256 free = s.freeRewardBalance();
+        vm.prank(owner);
+        vm.expectRevert();
+        s.recoverERC20(IERC20(address(gme)), free);
+        assertEq(gme.balanceOf(owner), 0, "not one token to the treasury");
+    }
+
+    /// @dev And it is not stranded either — emitting it is what releases it,
+    ///      which means the only way out is through the stakers who stayed.
+    function test_forfeitedRewardsAreReleasedByEmittingThemAgain() public {
+        vm.prank(alice);
+        s.stakeFor(MIN, 1);
+        vm.prank(bob);
+        s.stakeFor(MIN, 1);
+        vm.warp(block.timestamp + WARMUP + 1);
+        s.activate(alice);
+        s.activate(bob);
+        _fund();
+        vm.warp(block.timestamp + 10 days);
+        vm.prank(alice);
+        s.exit();
+        assertGt(s.forfeitedPool(), 0);
+
+        vm.warp(block.timestamp + 21 days); // let the period finish
+        // Read it into a local FIRST — an external call inside the argument is
+        // evaluated after vm.prank arms and spends it on the wrong call. That
+        // is five times this session; it is always this shape.
+        uint256 free = s.freeRewardBalance();
+        vm.prank(owner);
+        s.notifyRewardAmount(free);
+        assertEq(s.forfeitedPool(), 0, "emitted again, so no longer reserved");
+
+        vm.warp(block.timestamp + 31 days);
+        vm.prank(bob);
+        s.exit();
+        assertGt(gme.balanceOf(bob), 0, "and it reached the staker who stayed");
+    }
+
+    // --- the two bounds worth keeping from the audit's scratch ---------------
+
+    /// @dev The NFT boost caps at +200% and the term boost at +100%, separately.
+    ///      Together that is the ceiling on how much one token can ever weigh,
+    ///      and it is what stops any configuration of tiers and terms from
+    ///      letting one staker take an arbitrary share of a fixed pot.
+    function test_noAccountCanEverWeighMoreThanFourTimesItsPrincipal() public {
+        vm.prank(alice);
+        s.stakeFor(MIN, 3); // the longest term, the biggest boost
+        vm.warp(block.timestamp + WARMUP + 1);
+        s.activate(alice);
+        assertLe(s.effectiveBalanceOf(alice), s.balanceOf(alice) * 4, "the combined ceiling");
+        assertEq(
+            s.MAX_BOOST_BPS() + s.MAX_TERM_BOOST_BPS() + 10_000,
+            40_000,
+            "and it is 4x by construction, not by luck"
+        );
+    }
+
+    /// @dev The keeper batches `activateMany` at 50 by default. If that ever
+    ///      stopped fitting comfortably in a block the bell would silently
+    ///      stop ringing and stakers would earn nothing, so the batch size the
+    ///      keeper actually uses is bounded here rather than assumed.
+    function test_theKeepersBatchSizeFitsInABlock() public {
+        uint256 n = 50;
+        address[] memory who = new address[](n);
+        for (uint256 i; i < n; ++i) {
+            address u = address(uint160(0x1000 + i));
+            who[i] = u;
+            kevin.mint(u, MIN);
+            vm.startPrank(u);
+            kevin.approve(address(s), type(uint256).max);
+            s.stakeFor(MIN, 1);
+            vm.stopPrank();
+        }
+        _fund();
+        vm.warp(block.timestamp + WARMUP + 1);
+
+        uint256 before = gasleft();
+        s.activateMany(who);
+        uint256 used = before - gasleft();
+        assertLt(used, 5_000_000, "one batch is well inside any sane block limit");
+        for (uint256 i; i < n; ++i) assertFalse(s.needsSync(who[i]), "and all fifty landed");
+    }
+
     // --- off unless it is turned on -----------------------------------------
 
     function test_withNothingConfiguredItBehavesExactlyAsBefore() public {

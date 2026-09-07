@@ -409,8 +409,16 @@ Two ways to break it, which are the two that were asked for:
 - selling down *under* the minimum while still holding some
 
 Both hand the whole accrued reward back to the pool, where it is emitted again
-to whoever stayed. It is not stranded and it does not go to the treasury.
-Leaving *completely* after your term is up costs nothing at all.
+to whoever stayed. Leaving *completely* after your term is up costs nothing.
+
+**It does not go to the treasury, and that is now enforced rather than
+promised.** Forfeitures land in `forfeitedPool`, which is reserved from
+`recoverERC20` — the audit found the owner could sweep them straight out,
+against a version of this paragraph that had already claimed otherwise. A
+treasury that profits from broken commitments has exactly the wrong incentive:
+raise the minimum, push a hundred people under it, collect. The reservation is
+released only by emitting the tokens again, so the one way out is through the
+stakers who stayed.
 
 **While your term is running you cannot claim.** `getReward()` reverts
 `StillLocked`. That is not an inconvenience bolted on — it is the only thing
