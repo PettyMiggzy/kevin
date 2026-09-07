@@ -46,3 +46,6 @@ out/
 
 # Keeper operator key — never commit this
 keeper/.operator.key
+
+# Buy watch cursor — local state, not source
+keeper/.buywatch.state

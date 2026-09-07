@@ -124,6 +124,30 @@ else
 EOF
 fi
 
+# --- the buy watch -----------------------------------------------------------
+# Reads the chain, posts with the bot token the bot already uses. It holds no
+# key that can spend anything.
+say "Buy watch"
+
+BUYWATCH_DROPIN=/etc/systemd/system/kevin-buywatch.service.d/local.conf
+install -m 644 keeper/kevin-buywatch.service /etc/systemd/system/kevin-buywatch.service
+ok "unit installed"
+
+BUYWATCH_READY=0
+if [ -s "$BUYWATCH_DROPIN" ] && grep -q BUY_CHAT_ID "$BUYWATCH_DROPIN"; then
+  BUYWATCH_READY=1
+  ok "configured: $BUYWATCH_DROPIN"
+  grep -q "LIVE=1" "$BUYWATCH_DROPIN" && ok "LIVE — it will post to the group" || bad "dry run — it will post nothing"
+else
+  bad "not configured, so not starting. Write $BUYWATCH_DROPIN:"
+  cat >&2 <<'EOF'
+        [Service]
+        Environment=BUY_CHAT_ID=-100...
+        Environment=ROBINHOOD_RPC_URL=https://rpc.mainnet.chain.robinhood.com
+        Environment=LIVE=1
+EOF
+fi
+
 # --- start them --------------------------------------------------------------
 say "Starting"
 systemctl daemon-reload
@@ -139,6 +163,10 @@ if [ "$ACTIVATE_READY" = "1" ]; then
   systemctl enable --now kevin-activate >/dev/null 2>&1 || true
   systemctl restart kevin-activate
 fi
+if [ "$BUYWATCH_READY" = "1" ]; then
+  systemctl enable --now kevin-buywatch >/dev/null 2>&1 || true
+  systemctl restart kevin-buywatch
+fi
 
 sleep 2
 
@@ -147,6 +175,7 @@ say "State"
 UNITS="kevin-scores kevin-bot"
 [ "$KEEPER_READY" = "1" ] && UNITS="$UNITS kevin-floor"
 [ "$ACTIVATE_READY" = "1" ] && UNITS="$UNITS kevin-activate"
+[ "$BUYWATCH_READY" = "1" ] && UNITS="$UNITS kevin-buywatch"
 for unit in $UNITS; do
   if systemctl is-active --quiet "$unit"; then ok "$unit running"; else
     bad "$unit is NOT running — journalctl -u $unit -n 30 --no-pager"
@@ -165,6 +194,7 @@ cat <<'EOF'
   journalctl -u kevin-scores -f     watch the scores service
   journalctl -u kevin-floor -f      watch the floor keeper
   journalctl -u kevin-activate -f   watch the warm-up bell
+  journalctl -u kevin-buywatch -f   watch the buy watch
 
   In Telegram: /link  -> the bot DMs you a code
   Then: /top and /shifts read the board.

@@ -1,0 +1,36 @@
+# The buy bot, as a service.
+#
+# It holds no key that can spend anything: it reads the chain and posts to
+# Telegram with the same bot token bot/index.mjs already uses. There is no
+# operator key here and nothing it can sign.
+#
+# STARTS IN DRY RUN. To make it post, add LIVE=1 and the chat to the drop-in:
+#   systemctl edit kevin-buywatch
+#   [Service]
+#   Environment=LIVE=1
+#   Environment=BUY_CHAT_ID=-100...
+[Unit]
+Description=Kevin buy watch
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/kevin
+ExecStart=/usr/bin/env node keeper/buywatch.mjs
+Environment=CHAIN_ID=4663
+Environment=KEVIN_TOKEN=0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A
+# Set these in a drop-in, so a git pull cannot wipe them:
+#   Environment=BUY_CHAT_ID=-100...
+#   Environment=LIVE=1
+#   Environment=MIN_ETH_WEI=1000000000000000     # 0.001, the announce floor
+Restart=always
+RestartSec=20
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kevin-buywatch
+
+[Install]
+WantedBy=multi-user.target
