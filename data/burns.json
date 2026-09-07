@@ -1,0 +1,20 @@
+{
+  "token": "0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A",
+  "note": "Every $KEVIN sent to an address nobody holds the key to. Open any hash in the explorer and check it.",
+  "explorer": "https://robinhoodchain.blockscout.com/tx/",
+  "burnAddresses": [
+    "0x000000000000000000000000000000000000dEaD",
+    "0x0000000000000000000000000000000000000000"
+  ],
+  "supply": 1000000000,
+  "watchedFrom": 56600000,
+  "lastBlock": 57168814,
+  "updatedAt": "2026-09-07T21:51:23.779Z",
+  "total": {
+    "raw": "0",
+    "tokens": 0,
+    "amount": "0",
+    "percentOfSupply": 0
+  },
+  "burns": []
+}

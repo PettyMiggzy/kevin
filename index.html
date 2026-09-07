@@ -181,17 +181,20 @@
       <div>
         <p class="lead">
           The protocol hands the creator <strong>zero tokens</strong>. That is
-          the factory contract's rule, not my generosity. So I bid in the same
-          four-day auction as you, from a wallet published before it opens, at
-          the same prices, with no advantage of any kind.
+          the factory contract's rule, not my generosity — there is no field in
+          it for a creator allocation. So I bought in the same auction as
+          everybody else, at the same prices, with no advantage of any kind.
         </p>
         <p class="lead">
-          Then I destroy every single token that wallet receives.
+          What gets burned goes to the dead address, in public, with the
+          transaction hash posted. Not a wallet I control and call a burn
+          wallet — <strong>the address nobody on earth holds the key to</strong>.
         </p>
         <p class="lead">
-          It vests over thirty days like everybody's does. So every day it
-          unlocks, it gets claimed and sent to the dead address, in public, with
-          the transaction hash posted. Thirty days of receipts.
+          The counter beside this is not a number I typed. It is read off the
+          chain: every transfer into a burn address, totalled, with each one
+          listed underneath so you can open it in the explorer and check the
+          arithmetic yourself.
         </p>
         <p class="lead" style="font-family:var(--display);font-size:clamp(20px,2.6vw,30px);line-height:1.15">
           I do not need an allocation.<br>I have a job.
@@ -202,11 +205,12 @@
         <div class="burn__stat">
           <span>Burned so far</span>
           <b id="burn-total">—</b>
+          <small id="burn-pct" style="display:block;font-size:13px;opacity:.7;font-weight:400">Reading the chain…</small>
         </div>
         <dl class="burn__meta">
           <div>
-            <dt>Bidding wallet</dt>
-            <dd id="burn-wallet">Published before the auction opens</dd>
+            <dt>Verified by</dt>
+            <dd>Reading the chain, not this page</dd>
           </div>
           <div>
             <dt>Destination</dt>
@@ -214,7 +218,7 @@
           </div>
           <div>
             <dt>Schedule</dt>
-            <dd>Claimed and burned daily across the 30-day vest</dd>
+            <dd>Whenever supply is burned — each one listed below</dd>
           </div>
           <div>
             <dt>Creator allocation from protocol</dt>
@@ -223,20 +227,19 @@
         </dl>
         <div class="burn__log" id="burn-log"></div>
         <p class="burn__honest">
-          Straight with you: until that wallet is published and those
-          transactions exist, this is a stated commitment and nothing more —
-          exactly as verifiable as any promise on any launch page, which is to
-          say not at all. The difference is that in four days it either has
-          hashes attached to it or it doesn't, and you get to check. Hold me to
-          it. Screenshot this page.
+          Straight with you: a burn counter that reads a number somebody typed
+          into a config file is worth exactly nothing, and most of them are
+          that. This one is a sum of the rows above it, and every row is a
+          transaction you can open. If the list is empty, nothing has been
+          burned yet and the page says so rather than rounding it up into a
+          promise.
         </p>
       </div>
     </div>
 
     <p style="margin-top:30px;font-size:15px;max-width:70ch">
-      You asked for a roadmap. That is the roadmap: thirty days, thirty
-      receipts, and a wallet that ends the month holding nothing. Then I go back
-      on the fryer.
+      Every burn is announced in the group as it happens, with its hash, by the
+      same bot that watches the pools. Nothing is announced that did not happen.
     </p>
   </div>
 </section>

@@ -5,6 +5,24 @@ and I'll do the writing for any of it.
 
 ---
 
+## 0 · Adam Sheldon — $350, YouTube + X
+
+The site is ready for an audience now: burn counter, fee receipts, docs page
+and roadmap are all live and all chain-verified.
+
+- [ ] **Burn some supply BEFORE the video goes out.** This is the sequencing
+      that matters. The counter is live and honest, which means right now it
+      reads **zero**, because zero is true. If his video says supply is being
+      burned and a viewer clicks through to a counter reading zero, that is
+      worse than having no counter at all. Burn first, let the row land, then
+      he films.
+- [ ] Send him `docs/BRIEF.md` — the one-page voice and rules sheet, including
+      the rule that protects him: **if he was paid in $KEVIN, he says so,
+      once, in the post.**
+- [ ] Send him `assets/png/kevin-gme-1080.png` for the thumbnail or the X post
+- [ ] Agree what he is NOT saying: no price, no targets, no floor, no airdrop
+      date. That list is in the brief — point at it rather than trusting memory.
+
 ## 1 · DEX Screener — finish the submission
 
 You were mid-form. Everything you need is in `docs/DEXSCREENER.md`.
@@ -57,6 +75,27 @@ compressed into something a stranger can repeat.
 - **Anyone offering a guaranteed CMC or CoinGecko listing for a fee.** Both
   applications are free and neither guarantees anything. That pitch shows up
   exactly when a founder starts asking this question.
+
+## 5 · The GME airdrop contract
+
+`contracts/src/KevinAirdrop.sol` is written with 22 passing tests. It is a
+Merkle distributor: publish one root, everyone claims their own share, anybody
+can verify their entry. Nothing is deployed.
+
+To actually airdrop GME, in order:
+
+- [ ] Deploy `KevinAirdrop`
+- [ ] Publish the snapshot block **in advance**, so it cannot look chosen
+      after the fact
+- [ ] Take the snapshot, excluding the pools, the factory escrow, the burn
+      addresses and the treasury — otherwise contracts get a share
+- [ ] Build the Merkle tree; publish the root **and** the full list
+- [ ] Fund the round with GME
+- [ ] Only then say anything publicly
+
+**Until it is funded and dated, `js/config.js` keeps `airdrop.confirmed:
+false`, and nobody — you, the bot, or Adam — says a date, an amount, or "hold
+to qualify". That last one is telling people to buy.**
 
 ## Still open from today
 

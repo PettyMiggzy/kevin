@@ -390,23 +390,50 @@
   // Everything here stays "TBA" until real values land in config.js. Nothing
   // on this page should ever claim a burn that hasn't happened.
   var burn = K.burn || {};
+  // The burn counter reads data/burns.json, which keeper/burnwatch.mjs writes
+  // from chain logs — every transfer of $KEVIN into an address nobody holds
+  // the key to. It is NOT a number typed into the config, because a burn
+  // counter somebody can type is the same sentence as "trust me".
   var burnTotal = document.getElementById('burn-total');
-  if (burnTotal) burnTotal.textContent = burn.burned ? burn.burned + ' KEVIN' : 'Nothing yet';
-
-  var burnWallet = document.getElementById('burn-wallet');
-  if (burnWallet && burn.wallet) burnWallet.textContent = burn.wallet;
-
   var burnAddr = document.getElementById('burn-addr');
+  var burnLog = document.getElementById('burn-log');
+  var burnPct = document.getElementById('burn-pct');
   if (burnAddr && burn.burnAddr) burnAddr.textContent = burn.burnAddr;
 
-  var burnLog = document.getElementById('burn-log');
-  if (burnLog && burn.receipts && burn.receipts.length) {
-    burnLog.innerHTML = burn.receipts
-      .map(function (r) {
-        var label = '<span>' + r.date + '</span><span>' + r.amount + '</span>';
-        return r.tx ? '<a href="' + r.tx + '" target="_blank" rel="noopener">' + label + '</a>' : '<a>' + label + '</a>';
+  if (burnTotal) {
+    var nf = function (v) {
+      var x = Number(v);
+      return isFinite(x) ? x.toLocaleString('en-GB', { maximumFractionDigits: 0 }) : v;
+    };
+    fetch('data/burns.json', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (d) {
+        var rows = d.burns || [];
+        var t = d.total || {};
+        burnTotal.textContent = rows.length ? nf(t.tokens) + ' KEVIN' : 'Nothing yet';
+        if (burnPct) {
+          burnPct.textContent = rows.length
+            ? t.percentOfSupply.toFixed(3) + '% of supply, gone'
+            : 'Checked against the chain, not typed here';
+        }
+        if (burnAddr && d.burnAddresses && d.burnAddresses.length) burnAddr.textContent = d.burnAddresses[0];
+        if (!burnLog) return;
+        if (!rows.length) {
+          burnLog.innerHTML = '<a><span>No burns yet</span><span>—</span></a>';
+          return;
+        }
+        var base = d.explorer || 'https://robinhoodchain.blockscout.com/tx/';
+        burnLog.innerHTML = rows.map(function (b) {
+          var label = '<span>' + String(b.at || '').slice(0, 10) + '</span><span>' + nf(b.amount) + ' KEVIN</span>';
+          return '<a href="' + base + b.tx + '" target="_blank" rel="noopener">' + label + '</a>';
+        }).join('');
       })
-      .join('');
+      .catch(function () {
+        // Never render a failure as zero. Zero is a claim, and it would be one
+        // nobody checked.
+        burnTotal.textContent = '—';
+        if (burnPct) burnPct.textContent = 'Could not reach the receipts just now.';
+      });
   }
 
   // --- gta 6 --------------------------------------------------------------

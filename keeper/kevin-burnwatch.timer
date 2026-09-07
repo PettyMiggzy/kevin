@@ -1,0 +1,14 @@
+# Checks for new burns every two minutes. A burn is a rare, deliberate act,
+# so there is nothing to gain from polling harder — and the public RPC
+# rate-limits, which a tighter loop would only make worse.
+[Unit]
+Description=Check for KEVIN burns
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=30s
+Unit=kevin-burnwatch.service
+
+[Install]
+WantedBy=timers.target

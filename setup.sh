@@ -148,6 +148,30 @@ else
 EOF
 fi
 
+# --- the burn watch ----------------------------------------------------------
+# A timer, not a daemon: a burn is a rare deliberate act and the public RPC
+# rate-limits, so polling harder buys nothing.
+say "Burn watch"
+
+BURNWATCH_DROPIN=/etc/systemd/system/kevin-burnwatch.service.d/local.conf
+install -m 644 keeper/kevin-burnwatch.service /etc/systemd/system/kevin-burnwatch.service
+install -m 644 keeper/kevin-burnwatch.timer /etc/systemd/system/kevin-burnwatch.timer
+ok "unit + timer installed"
+
+BURNWATCH_READY=0
+if [ -s "$BURNWATCH_DROPIN" ] && grep -q BURN_CHAT_ID "$BURNWATCH_DROPIN"; then
+  BURNWATCH_READY=1
+  ok "configured: $BURNWATCH_DROPIN"
+  grep -q "LIVE=1" "$BURNWATCH_DROPIN" && ok "LIVE — burns get announced" || bad "dry run — it will post nothing"
+else
+  bad "not configured, so not starting. Write $BURNWATCH_DROPIN:"
+  cat >&2 <<'EOF'
+        [Service]
+        Environment=BURN_CHAT_ID=-100...
+        Environment=LIVE=1
+EOF
+fi
+
 # --- start them --------------------------------------------------------------
 say "Starting"
 systemctl daemon-reload
@@ -166,6 +190,10 @@ fi
 if [ "$BUYWATCH_READY" = "1" ]; then
   systemctl enable --now kevin-buywatch >/dev/null 2>&1 || true
   systemctl restart kevin-buywatch
+fi
+if [ "$BURNWATCH_READY" = "1" ]; then
+  systemctl enable --now kevin-burnwatch.timer >/dev/null 2>&1 || true
+  systemctl restart kevin-burnwatch.timer
 fi
 
 sleep 2
@@ -195,6 +223,7 @@ cat <<'EOF'
   journalctl -u kevin-floor -f      watch the floor keeper
   journalctl -u kevin-activate -f   watch the warm-up bell
   journalctl -u kevin-buywatch -f   watch the buy watch
+  journalctl -u kevin-burnwatch -f  watch the burn watch
 
   In Telegram: /link  -> the bot DMs you a code
   Then: /top and /shifts read the board.

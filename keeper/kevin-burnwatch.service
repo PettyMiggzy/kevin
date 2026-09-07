@@ -1,0 +1,35 @@
+# The burn watch. A oneshot, fired by kevin-burnwatch.timer.
+#
+# It holds no key that can spend anything: it reads the chain and posts with
+# the same bot token bot/index.mjs already uses. It cannot burn anything —
+# it can only notice that somebody did.
+#
+# WRITE=1 updates data/burns.json on this machine, which is what makes the
+# announcement de-duplicate: a burn already in that file is never re-posted.
+# The FILE ON THE WEBSITE is a separate thing — it is committed to the repo,
+# because the site is static. So this announces immediately, and the site
+# updates when the receipts are committed.
+#
+# STARTS IN DRY RUN. To make it post:
+#   systemctl edit kevin-burnwatch
+#   [Service]
+#   Environment=LIVE=1
+#   Environment=BURN_CHAT_ID=-100...
+[Unit]
+Description=Kevin burn watch
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/kevin
+ExecStart=/usr/bin/env node keeper/burnwatch.mjs
+Environment=CHAIN_ID=4663
+Environment=KEVIN_TOKEN=0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A
+Environment=WRITE=1
+# Set these in a drop-in, so a git pull cannot wipe them:
+#   Environment=BURN_CHAT_ID=-100...
+#   Environment=LIVE=1
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kevin-burnwatch
