@@ -3,9 +3,103 @@
   "note": "LP fees claimed from the launchpad. Every row is a real transaction — open the hash in the explorer and check it. Only transfers sent by the pad's own contracts appear here.",
   "explorer": "https://robinhoodchain.blockscout.com/tx/",
   "watchedFrom": 57090885,
-  "lastBlock": 57093305,
-  "updatedAt": "2026-09-07T19:44:15.763Z",
-  "totals": {},
-  "claims": [],
+  "lastBlock": 57096452,
+  "updatedAt": "2026-09-07T19:49:33.939Z",
+  "totals": {
+    "KEK": {
+      "raw": "525169545832999303102525",
+      "amount": "525169.545832999303102525",
+      "decimals": 18
+    },
+    "KEVIN": {
+      "raw": "3410144344970634050394133",
+      "amount": "3410144.344970634050394133",
+      "decimals": 18
+    },
+    "GME": {
+      "raw": "79223153141012762",
+      "amount": "0.079223153141012762",
+      "decimals": 18
+    },
+    "WETH": {
+      "raw": "5134649754998816",
+      "amount": "0.005134649754998816",
+      "decimals": 18
+    }
+  },
+  "claims": [
+    {
+      "tx": "0xe6374297b150c072839718578ac7fd791febcacab1d3fb6b82020fdce3c1ba83",
+      "block": 57096207,
+      "token": "0x5a3544a0328afD50A9979e03404F35c555B88c00",
+      "symbol": "KEK",
+      "decimals": 18,
+      "raw": "525169545832999303102525",
+      "amount": "525169.545832999303102525",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "at": "2026-09-07T19:49:06.000Z"
+    },
+    {
+      "tx": "0xe6374297b150c072839718578ac7fd791febcacab1d3fb6b82020fdce3c1ba83",
+      "block": 57096207,
+      "token": "0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A",
+      "symbol": "KEVIN",
+      "decimals": 18,
+      "raw": "1912600905948022860133810",
+      "amount": "1912600.90594802286013381",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "at": "2026-09-07T19:49:06.000Z"
+    },
+    {
+      "tx": "0x52731fa4dd93d8566d2970b5b679aab97314210d73c6eb20ec49752010ebe94b",
+      "block": 57096051,
+      "token": "0x1b0E319c6A659F002271B69dB8A7df2F911c153E",
+      "symbol": "GME",
+      "decimals": 18,
+      "raw": "79223153141012762",
+      "amount": "0.079223153141012762",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "at": "2026-09-07T19:48:50.000Z"
+    },
+    {
+      "tx": "0x52731fa4dd93d8566d2970b5b679aab97314210d73c6eb20ec49752010ebe94b",
+      "block": 57096051,
+      "token": "0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A",
+      "symbol": "KEVIN",
+      "decimals": 18,
+      "raw": "114603175509811992067377",
+      "amount": "114603.175509811992067377",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "at": "2026-09-07T19:48:50.000Z"
+    },
+    {
+      "tx": "0x399adf8f1820424657949701ebc0856ff2a129c708b880cd0332b2bebbbd41ff",
+      "block": 57095852,
+      "token": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "symbol": "WETH",
+      "decimals": 18,
+      "raw": "5134649754998816",
+      "amount": "0.005134649754998816",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "at": "2026-09-07T19:48:30.000Z"
+    },
+    {
+      "tx": "0x399adf8f1820424657949701ebc0856ff2a129c708b880cd0332b2bebbbd41ff",
+      "block": 57095852,
+      "token": "0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A",
+      "symbol": "KEVIN",
+      "decimals": 18,
+      "raw": "1382940263512799198192946",
+      "amount": "1382940.263512799198192946",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "at": "2026-09-07T19:48:30.000Z"
+    }
+  ],
   "unpublished": 0
 }
