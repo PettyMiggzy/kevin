@@ -423,13 +423,32 @@ contract KevinStaking is Ownable2Step, ReentrancyGuard, ERC721Holder {
         return rewardRate * rewardsDuration;
     }
 
-    /// @notice Is this account earning right now?
-    /// @dev Three ways to not be: too small, still warming up, or nothing
-    ///      staked at all. Nothing here can be false because of anything the
-    ///      owner did after the stake was made — `minStake` and `warmup` are
-    ///      frozen into `lockOf.earnFrom` at stake time for the warm-up, and
-    ///      the minimum is checked live so that selling down genuinely does
-    ///      stop the earning, which is the point of having one.
+    /**
+     * @notice Would this account be earning, if it were synced right now?
+     *
+     * @dev PENDING, NOT APPLIED — the same distinction this contract already
+     *      draws between `pendingBoostBps` and `appliedBoostBps`, and it is
+     *      worth being exact about because the two can disagree.
+     *
+     *      What is actually being paid is `effectiveBalanceOf`, and that only
+     *      moves when something syncs the account. So if the owner RAISES
+     *      `minStake` above somebody's stake, this returns false immediately
+     *      while they keep earning until their next sync — which anybody can
+     *      force with `activate`.
+     *
+     *      That lag is the safe direction and it is deliberate: raising the bar
+     *      does not silently stop a hundred people mid-period, it stops each of
+     *      them the next time they are touched. The accumulator is not harmed
+     *      either way — `totalEffectiveSupply` and every `effectiveBalanceOf`
+     *      go stale together, so their sum still agrees at every block, which
+     *      is the invariant that actually matters.
+     *
+     *      Three ways to be false: too small, still warming up, nothing staked.
+     *      The warm-up is frozen into `lockOf.earnFrom` at stake time so a later
+     *      `setWarmup` cannot move somebody who has already started; the minimum
+     *      is read live, because selling down under it genuinely must stop the
+     *      earning and that is the whole point of having one.
+     */
     function qualifies(address account) public view returns (bool) {
         uint256 bal = balanceOf[account];
         if (bal == 0 || bal < minStake) return false;

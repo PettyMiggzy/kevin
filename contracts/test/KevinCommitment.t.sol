@@ -311,6 +311,49 @@ contract KevinCommitmentTest is Test {
         assertEq(kevin.balanceOf(alice), before + MIN, "principal is not the owner's to hold");
     }
 
+    /// @dev Raising the bar does not silently stop a hundred people mid-period.
+    ///      qualifies() flips at once because it is the PENDING predicate; the
+    ///      applied weight moves on the next sync, which anybody can force.
+    ///      The accumulator is unharmed either way, and that is the assertion
+    ///      that matters: total and the sum go stale together.
+    function test_raisingTheMinimumTakesEffectOnSyncNotInstantly() public {
+        vm.prank(alice);
+        s.stake(MIN);
+        vm.prank(bob);
+        s.stake(MIN * 4);
+        vm.warp(block.timestamp + WARMUP + 1);
+        s.activate(alice);
+        s.activate(bob);
+        _fund();
+        vm.warp(block.timestamp + 5 days);
+
+        vm.prank(owner);
+        s.setMinStake(MIN * 2); // above alice
+
+        assertFalse(s.qualifies(alice), "the predicate flips at once");
+        assertGt(s.effectiveBalanceOf(alice), 0, "the applied weight has not moved yet");
+        assertEq(
+            s.totalEffectiveSupply(),
+            s.effectiveBalanceOf(alice) + s.effectiveBalanceOf(bob),
+            "and the accumulator invariant holds throughout"
+        );
+
+        uint256 mid = s.earned(alice);
+        vm.warp(block.timestamp + 5 days);
+        assertGt(s.earned(alice), mid, "still earning until somebody syncs her");
+
+        s.activate(alice); // anybody
+        assertEq(s.effectiveBalanceOf(alice), 0, "now she is out");
+        uint256 after_ = s.earned(alice);
+        vm.warp(block.timestamp + 5 days);
+        assertEq(s.earned(alice), after_, "and earns nothing further");
+        assertEq(
+            s.totalEffectiveSupply(),
+            s.effectiveBalanceOf(alice) + s.effectiveBalanceOf(bob),
+            "invariant still holds after the sync"
+        );
+    }
+
     // --- off unless it is turned on -----------------------------------------
 
     function test_withNothingConfiguredItBehavesExactlyAsBefore() public {

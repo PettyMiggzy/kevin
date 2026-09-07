@@ -420,14 +420,30 @@ somebody already made or extend a lock they are already inside. Terms can only
 ever be strengthened by the staker: topping up may push the end date further out
 or raise the boost, never the reverse.
 
-### The warm-up needs a poke
+### The warm-up needs a poke, and `keeper/activate.mjs` is the poke
 
 The reward accumulator is global, so nothing fires by itself when one account's
 warm-up ends. `activate(address)` and `activateMany(address[])` are
 permissionless — anybody may call them, because the only account they can help
 is the one named. An account inside its warm-up counts for nothing, so calling
-late costs that staker and nobody else. **The keeper should call it** so no one
-has to remember.
+late costs that staker and nobody else.
+
+**Which is exactly why it has to be automatic.** Nobody is exploited by this
+going unrun; people who staked and waited their five days simply earn nothing
+and cannot tell why. That is a support disaster rather than a hack, and it is
+the kind of thing that stays unbuilt until it has already happened.
+
+`keeper/activate.mjs` indexes `Staked` events, checks
+`qualifies(a) && effectiveBalanceOf(a) == 0` — warmed up, not yet counted — and
+batches them into `activateMany`. Hourly, because a staker loses nothing by
+being brought in a few minutes late; they were earning nothing either way. It
+holds no money, cannot trade, and the only call it makes is one anybody could
+make. `keeper/kevin-activate.service` is the unit, and like the floor keeper it
+starts in dry run and `setup.sh` refuses to start it until it is configured.
+
+Driven end to end on anvil: quiet during the warm-up, then one `activateMany`
+the moment the five days were up, taking a 6m stake on a +25% term to 7.5m
+effective — and quiet again on the next tick rather than re-sending forever.
 
 ### Why this is also floor support
 

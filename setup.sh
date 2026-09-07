@@ -98,6 +98,32 @@ else
 EOF
 fi
 
+# --- the warm-up bell --------------------------------------------------------
+# Same shape as the floor keeper: installed always, started only once it knows
+# what to drive. It cannot trade and it cannot move anybody's tokens — the only
+# call it makes is activate(), which is permissionless and can only ever help
+# the account it names.
+say "Warm-up bell"
+
+ACTIVATE_DROPIN=/etc/systemd/system/kevin-activate.service.d/local.conf
+install -m 644 keeper/kevin-activate.service /etc/systemd/system/kevin-activate.service
+ok "unit installed"
+
+ACTIVATE_READY=0
+if [ -s "$ACTIVATE_DROPIN" ] && grep -q STAKING_ADDRESS "$ACTIVATE_DROPIN"; then
+  ACTIVATE_READY=1
+  ok "configured: $ACTIVATE_DROPIN"
+  grep -q "LIVE=1" "$ACTIVATE_DROPIN" && ok "LIVE" || bad "dry run — it will NOT ring the bell"
+else
+  bad "not configured, so not starting. Write $ACTIVATE_DROPIN:"
+  cat >&2 <<'EOF'
+        [Service]
+        Environment=STAKING_ADDRESS=0x...
+        Environment=ROBINHOOD_RPC_URL=https://...
+        Environment=LIVE=1
+EOF
+fi
+
 # --- start them --------------------------------------------------------------
 say "Starting"
 systemctl daemon-reload
@@ -109,6 +135,10 @@ if [ "$KEEPER_READY" = "1" ]; then
   systemctl enable --now kevin-floor >/dev/null 2>&1 || true
   systemctl restart kevin-floor
 fi
+if [ "$ACTIVATE_READY" = "1" ]; then
+  systemctl enable --now kevin-activate >/dev/null 2>&1 || true
+  systemctl restart kevin-activate
+fi
 
 sleep 2
 
@@ -116,6 +146,7 @@ sleep 2
 say "State"
 UNITS="kevin-scores kevin-bot"
 [ "$KEEPER_READY" = "1" ] && UNITS="$UNITS kevin-floor"
+[ "$ACTIVATE_READY" = "1" ] && UNITS="$UNITS kevin-activate"
 for unit in $UNITS; do
   if systemctl is-active --quiet "$unit"; then ok "$unit running"; else
     bad "$unit is NOT running — journalctl -u $unit -n 30 --no-pager"
@@ -133,6 +164,7 @@ cat <<'EOF'
   journalctl -u kevin-bot -f        watch the bot
   journalctl -u kevin-scores -f     watch the scores service
   journalctl -u kevin-floor -f      watch the floor keeper
+  journalctl -u kevin-activate -f   watch the warm-up bell
 
   In Telegram: /link  -> the bot DMs you a code
   Then: /top and /shifts read the board.
