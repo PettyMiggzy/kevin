@@ -1,0 +1,11 @@
+{
+  "wallet": "0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf",
+  "note": "LP fees claimed from the launchpad. Every row is a real transaction — open the hash in the explorer and check it. Only transfers sent by the pad's own contracts appear here.",
+  "explorer": "https://robinhoodchain.blockscout.com/tx/",
+  "watchedFrom": 57090885,
+  "lastBlock": 57093305,
+  "updatedAt": "2026-09-07T19:44:15.763Z",
+  "totals": {},
+  "claims": [],
+  "unpublished": 0
+}

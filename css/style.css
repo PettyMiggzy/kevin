@@ -733,3 +733,47 @@ section[id], header[id] { scroll-margin-top: 88px; }
   font-size: 13px; font-weight: 700; line-height: 1.4;
   color: var(--red);
 }
+
+/* --- LP fees ------------------------------------------------------------- */
+/* Fed by data/fees.json, which keeper/feewatch.mjs writes from chain logs.
+   Every row carries a transaction hash on purpose: the panel is only worth
+   anything if a stranger can leave it and verify the number themselves. */
+
+.fees { margin-top: 32px; }
+.fees__totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 26px;
+}
+.fees__total {
+  background: var(--white);
+  border: var(--edge) solid var(--ink);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 18px 20px;
+}
+.fees__total span {
+  display: block;
+  font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+  font-weight: 700; opacity: .65;
+}
+.fees__total b {
+  font-family: var(--display); font-size: 30px; line-height: 1.1;
+  word-break: break-all;
+}
+.fees table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.fees th, .fees td {
+  text-align: left; padding: 10px 12px;
+  border-bottom: 2px solid rgba(0, 0, 0, .18);
+}
+.fees th {
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase; opacity: .65;
+}
+.fees td.fees__amt { font-weight: 700; white-space: nowrap; }
+.fees a { word-break: break-all; }
+.fees__empty {
+  border: var(--edge) dashed var(--ink); border-radius: var(--radius);
+  padding: 26px; text-align: center; font-weight: 700; margin: 0;
+}
+.fees__when { font-size: 12px; opacity: .65; margin-top: 14px; }

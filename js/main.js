@@ -291,6 +291,79 @@
       .join('');
   }
 
+  // --- LP fees ------------------------------------------------------------
+  // Reads data/fees.json, which keeper/feewatch.mjs writes from chain logs.
+  // Nothing here computes a total: the file carries totals derived from the
+  // same rows the table prints, so the headline and the list cannot disagree.
+  // (They have disagreed before on this site, when a total was typed by hand.)
+  var feesPanel = document.getElementById('fees-panel');
+  if (feesPanel) {
+    var esc = function (v) {
+      return String(v).replace(/[&<>"]/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+      });
+    };
+    var short = function (h) { return h.slice(0, 10) + '…' + h.slice(-8); };
+    var day = function (iso) {
+      var d = new Date(iso);
+      return isNaN(d) ? '—' : d.toISOString().slice(0, 10);
+    };
+    var num = function (a) {
+      var n = Number(a);
+      if (!isFinite(n)) return a;
+      return n.toLocaleString('en-GB', { maximumFractionDigits: n < 1 ? 6 : 4 });
+    };
+
+    fetch('data/fees.json', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (d) {
+        var claims = d.claims || [];
+        var totals = d.totals || {};
+        var syms = Object.keys(totals);
+        var base = d.explorer || 'https://robinhoodchain.blockscout.com/tx/';
+
+        if (!claims.length) {
+          feesPanel.innerHTML =
+            '<p class="fees__empty">No fees have been claimed yet.<br>' +
+            'When they are, every one will be listed here with its transaction.</p>' +
+            '<p class="fees__when">Watching from block ' + esc(d.watchedFrom) +
+            '. Last checked block ' + esc(d.lastBlock) + '.</p>';
+          return;
+        }
+
+        var head = syms.map(function (k) {
+          return '<div class="fees__total"><span>' + esc(k) + '</span><b>' +
+            esc(num(totals[k].amount)) + '</b></div>';
+        }).join('');
+
+        var rows = claims.map(function (c) {
+          return '<tr>' +
+            '<td>' + esc(day(c.at)) + '</td>' +
+            '<td class="fees__amt">' + esc(num(c.amount)) + ' ' + esc(c.symbol) + '</td>' +
+            '<td>' + esc(c.source) + '</td>' +
+            '<td><a href="' + esc(base + c.tx) + '" target="_blank" rel="noopener">' +
+              esc(short(c.tx)) + ' ↗</a></td>' +
+          '</tr>';
+        }).join('');
+
+        feesPanel.innerHTML =
+          '<div class="fees__totals">' + head + '</div>' +
+          '<div class="table-scroll"><table>' +
+            '<thead><tr><th>Date</th><th>Amount</th><th>From</th><th>Transaction</th></tr></thead>' +
+            '<tbody>' + rows + '</tbody>' +
+          '</table></div>' +
+          '<p class="fees__when">' + claims.length + ' claim' + (claims.length === 1 ? '' : 's') +
+          ', watched from block ' + esc(d.watchedFrom) + ' to ' + esc(d.lastBlock) + '.</p>';
+      })
+      .catch(function () {
+        // A missing or unreadable file must never render as "zero fees" — that
+        // would be a claim, and it would be one nobody checked.
+        feesPanel.innerHTML =
+          '<p class="fees__empty">The fee receipts could not be loaded right now.<br>' +
+          'That is this page failing, not a statement about what has been collected.</p>';
+      });
+  }
+
   // --- the grudge clock ---------------------------------------------------
   // Counts up from The Click. It has never been reset and never will be.
   var clock = document.getElementById('grudge-clock');
