@@ -71,6 +71,40 @@
   /* the stylesheet only gives scroll-margin to section[id]/header[id]; §8.1
      hangs off a heading, so it needs its own or the sticky nav covers it. */
   h2[id] { scroll-margin-top: 104px; }
+
+  /* §8.2 — the road. one spine, one pin per stop, destination in the void. */
+  .road { position: relative; padding-left: 78px; margin-top: 34px; }
+  .road::before {
+    content: ''; position: absolute; left: 25px; top: 12px; bottom: 12px;
+    width: 12px; background: var(--ink); border-radius: 999px;
+  }
+  .stop { position: relative; margin-bottom: 24px; }
+  .stop:last-child { margin-bottom: 0; }
+  .stop__pin {
+    position: absolute; left: -78px; top: 6px;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--white); border: var(--edge) solid var(--ink);
+    display: grid; place-items: center;
+    font-family: var(--display); font-size: 24px; line-height: 1;
+    box-shadow: var(--shadow-sm); z-index: 1;
+  }
+  .stop--done .stop__pin { background: var(--kek); color: var(--white); }
+  .stop--now  .stop__pin { background: var(--red); color: var(--white); }
+  .stop--end  .stop__pin { background: var(--void); }
+  .stop__when {
+    font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+    font-weight: 700; opacity: .65; margin-bottom: 6px;
+  }
+  .stop h3 { margin: 0 0 12px; }
+  .stop ul { margin: 0; padding-left: 20px; }
+  .stop li { margin-bottom: 7px; }
+  .stop li:last-child { margin-bottom: 0; opacity: .6; }
+  .stop--end li:last-child { opacity: 1; }
+  @media (max-width: 640px) {
+    .road { padding-left: 0; }
+    .road::before { display: none; }
+    .stop__pin { position: static; margin-bottom: 12px; }
+  }
 </style>
 </head>
 <body>
@@ -88,6 +122,7 @@
       <a href="#pools">Pools</a>
       <a href="#stack">Stack</a>
       <a href="#exists">Built</a>
+      <a href="#roadmap">Roadmap</a>
       <a href="#risk">Risk</a>
       <a href="#glossary">Glossary</a>
       <a href="#errata">Errata</a>
@@ -160,6 +195,7 @@
       <li><a href="#seven"><b>§7</b> Reserved <span>do not ask</span></a></li>
       <li><a href="#plan"><b>§8</b> The plan <span>¾ complete</span></a></li>
       <li><a href="#exists"><b>§8.1</b> What actually exists <span>instead of a roadmap</span></a></li>
+      <li><a href="#roadmap"><b>§8.2</b> The roadmap <span>he caved</span></a></li>
       <li><a href="#risk"><b>§9</b> Risk factors <span>read this one</span></a></li>
       <li><a href="#glossary"><b>§10</b> Glossary <span>required reading</span></a></li>
       <li><a href="#errata"><b>§11</b> Errata <span>growing</span></a></li>
@@ -409,7 +445,7 @@
           <li>The GME airdrop. It is an idea. No date, no amount, no snapshot taken.</li>
           <li>Any date for anything in the middle column.</li>
           <li>Any price, any target, any outcome.</li>
-          <li>A roadmap.</li>
+          <li>A roadmap with dates on it. (§8.2 is a roadmap with no dates on it. He caved. See §8.2.)</li>
         </ul>
       </div>
     </div>
@@ -418,6 +454,131 @@
         If somebody tells you a date for anything in the middle column, they are
         guessing, and if they tell you to buy because of it they are not
         speaking for this project. See <a href="#risk">§9.6</a>.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== §8.2 THE ROADMAP ====================== -->
+<section class="section section--cream">
+  <div class="wrap">
+    <div class="doc">
+      <p class="eyebrow">He was asked eleven times</p>
+      <h2 id="roadmap">The roadmap</h2>
+      <p class="lead">
+        Kevin does not believe in roadmaps. Kevin was then asked for a roadmap
+        every day for a week, in three languages, and eventually wrote one on
+        the back of a docket.
+      </p>
+      <p>
+        It has <b>no dates on it</b>, because a date is a promise and he is not
+        making any. It goes in order, and the order is the only claim being
+        made. Everything already done is marked done. Everything not done says
+        so.
+      </p>
+    </div>
+
+    <div class="road">
+
+      <div class="stop stop--done">
+        <div class="stop__pin">✓</div>
+        <div class="card">
+          <div class="stop__when">Phase one · Clocked in</div>
+          <h3>The part that already happened</h3>
+          <ul>
+            <li><b>Launch.</b> Done, and done in the correct order, which he would like noted.</li>
+            <li><b>Three pools.</b> WETH, KEK and GME. All live, all indexed.</li>
+            <li><b>A website</b>, and then a documentation page for the website, which nobody asked for.</li>
+            <li><b>A bot</b> that talks like him and knows when to stay quiet.</li>
+            <li><b>120 hand-drawn stickers and emoji.</b> Also nobody asked.</li>
+            <li>☐ Sleep.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="stop stop--now">
+        <div class="stop__pin">2</div>
+        <div class="card">
+          <div class="stop__when">Phase two · Still on the shift</div>
+          <h3>Written, tested, no addresses</h3>
+          <p style="opacity:.75;font-size:14px;margin-top:0">
+            Four contracts, 227 passing tests, and <b>not one of them is
+            deployed.</b> This phase is finished when one of them has an
+            address printed on this page, and not before.
+          </p>
+          <ul>
+            <li><b>The lockbox.</b> A treasury that cannot be moved quickly. Taking anything out means announcing it publicly and then waiting 14 days while everyone watches.</li>
+            <li><b>The distributor.</b> A way to hand things to holders where anybody can check the list and check their own share, instead of trusting a screenshot.</li>
+            <li><b>The commitment layer.</b> You choose a term and hold to it. Leave early and you leave the rewards behind for the people who didn't. Entirely optional.</li>
+            <li><b>The keeper.</b> Spends the treasury by rules published in advance, capped per trade and per day, which nobody can change on the day — Kevin included. It is not a promise about the price. Nothing is.</li>
+            <li>☐ Sleep.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="stop">
+        <div class="stop__pin">3</div>
+        <div class="card">
+          <div class="stop__when">Phase three · After the shift</div>
+          <h3>Put an address on one of them</h3>
+          <ul>
+            <li>Any one of the four. That is the entire phase. There is nothing clever in it.</li>
+            <li>Turn the buy bot on, so the group sees what he sees at the same time he sees it.</li>
+            <li>☐ Sleep.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="stop">
+        <div class="stop__pin">4</div>
+        <div class="card">
+          <div class="stop__when">Phase four · His day off</div>
+          <h3>Redacted</h3>
+          <p>See <a href="#seven">§7</a>. Please stop asking about §7.</p>
+          <ul><li>☐ Sleep.</li></ul>
+        </div>
+      </div>
+
+      <div class="stop stop--end">
+        <div class="stop__pin">★</div>
+        <div class="card card--void">
+          <div class="stop__when">The destination</div>
+          <h3>McKevin's</h3>
+          <p>
+            This is the thing it is all pointed at, and it has never once
+            changed. Not a token. Not a chain. A fry station that he owns,
+            with his name over the door, where he decides when the shift ends.
+          </p>
+          <p>
+            Big dreams → McKevin's → freedom. In that order. He has had it
+            written on a whiteboard since 2009 and he will not be talked out
+            of it.
+          </p>
+          <p style="margin-bottom:0">
+            <b>☑ Sleep.</b> Finally. Later.
+          </p>
+          <p style="font-size:13px;opacity:.75;margin-bottom:0">
+            Legally: an extremely not-real restaurant.
+          </p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="doc" style="margin-top:36px">
+      <h3>Not on the roadmap</h3>
+      <ol class="rules">
+        <li><b>A quarter.</b> Any quarter. He does not know what quarter it is.</li>
+        <li><b>A tier-one exchange listing</b> that he cannot actually deliver and would be quoting at you to make you buy.</li>
+        <li><b>A partnership announcement</b> about an announcement.</li>
+        <li><b>An ecosystem.</b> There is a guy and a fryer.</li>
+        <li><b>A rebrand.</b> He has one look. He drew it himself.</li>
+        <li><b>The GME airdrop.</b> Deliberately not a phase. It is an idea, with no date, no amount and no snapshot taken, and it stays off this list until it is built and funded — see <a href="#risk">§9.6</a>.</li>
+      </ol>
+      <p class="stamp-note">
+        No item above has a date and none of them ever will. If you see this
+        roadmap quoted somewhere with dates added, somebody added them, and it
+        was not Kevin.
       </p>
     </div>
   </div>
