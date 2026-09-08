@@ -2,75 +2,315 @@
    Drop art into assets/memes/, run the script, commit. */
 window.KEVIN_MEMES = [
   {
-    "file": "billboard-city.jpg",
-    "title": "Billboard City",
-    "w": 1376,
-    "h": 768
+    "file": "buy.jpg",
+    "title": "Buy",
+    "w": 1448,
+    "h": 1086
   },
   {
-    "file": "courtroom.jpg",
-    "title": "Courtroom",
-    "w": 1376,
-    "h": 768
+    "file": "city.jpg",
+    "title": "City",
+    "w": 1280,
+    "h": 851
   },
   {
-    "file": "diner.jpg",
-    "title": "Diner",
-    "w": 1376,
-    "h": 768
+    "file": "claim.jpg",
+    "title": "Claim",
+    "w": 1254,
+    "h": 1254
   },
   {
-    "file": "getaway.jpg",
-    "title": "Getaway",
-    "w": 1376,
-    "h": 768
+    "file": "clean-house.jpg",
+    "title": "Clean House",
+    "w": 1403,
+    "h": 1121
   },
   {
-    "file": "gta-wait.jpg",
-    "title": "Gta Wait",
-    "w": 1376,
-    "h": 768
+    "file": "clouds.jpg",
+    "title": "Clouds",
+    "w": 1254,
+    "h": 1254
   },
   {
-    "file": "gym.jpg",
-    "title": "Gym",
-    "w": 1376,
-    "h": 768
+    "file": "cooking.jpg",
+    "title": "Cooking",
+    "w": 1254,
+    "h": 1254
   },
   {
-    "file": "pfp.jpg",
-    "title": "Pfp",
-    "w": 1024,
+    "file": "cope.jpg",
+    "title": "Cope",
+    "w": 1288,
+    "h": 1221
+  },
+  {
+    "file": "degen-fuel.jpg",
+    "title": "Degen Fuel",
+    "w": 1280,
+    "h": 720
+  },
+  {
+    "file": "face.jpg",
+    "title": "Face",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "graffiti-tall.jpg",
+    "title": "Graffiti Tall",
+    "w": 1122,
+    "h": 1402
+  },
+  {
+    "file": "graffiti-wide.jpg",
+    "title": "Graffiti Wide",
+    "w": 2172,
+    "h": 724
+  },
+  {
+    "file": "graffiti.jpg",
+    "title": "Graffiti",
+    "w": 1121,
+    "h": 1403
+  },
+  {
+    "file": "green-candles.jpg",
+    "title": "Green Candles",
+    "w": 1280,
     "h": 1024
   },
   {
-    "file": "receipts.jpg",
-    "title": "Receipts",
-    "w": 1376,
-    "h": 768
+    "file": "green-drink.jpg",
+    "title": "Green Drink",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "green-spray.jpg",
+    "title": "Green Spray",
+    "w": 1446,
+    "h": 1087
+  },
+  {
+    "file": "hello.jpg",
+    "title": "Hello",
+    "w": 1280,
+    "h": 720
+  },
+  {
+    "file": "hood-up.jpg",
+    "title": "Hood Up",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "hoodie.jpg",
+    "title": "Hoodie",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "just-launched.jpg",
+    "title": "Just Launched",
+    "w": 1536,
+    "h": 1024
+  },
+  {
+    "file": "kek.jpg",
+    "title": "Kek",
+    "w": 1536,
+    "h": 1024
+  },
+  {
+    "file": "king.jpg",
+    "title": "King",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "long-night.jpg",
+    "title": "Long Night",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "lying-down.jpg",
+    "title": "Lying Down",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "money-rain.jpg",
+    "title": "Money Rain",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "moon-chase.jpg",
+    "title": "Moon Chase",
+    "w": 640,
+    "h": 640
+  },
+  {
+    "file": "moon.jpg",
+    "title": "Moon",
+    "w": 1280,
+    "h": 960
+  },
+  {
+    "file": "mugshot.jpg",
+    "title": "Mugshot",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "neon.jpg",
+    "title": "Neon",
+    "w": 1280,
+    "h": 426
+  },
+  {
+    "file": "no-plan-b.jpg",
+    "title": "No Plan B",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "poker-night.jpg",
+    "title": "Poker Night",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "press-conference.jpg",
+    "title": "Press Conference",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "raid.jpg",
+    "title": "Raid",
+    "w": 2560,
+    "h": 1915
+  },
+  {
+    "file": "robin-hat.jpg",
+    "title": "Robin Hat",
+    "w": 1280,
+    "h": 1022
+  },
+  {
+    "file": "robin-never-fades.jpg",
+    "title": "Robin Never Fades",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "robin-plan.jpg",
+    "title": "Robin Plan",
+    "w": 1280,
+    "h": 960
+  },
+  {
+    "file": "robin.jpg",
+    "title": "Robin",
+    "w": 1254,
+    "h": 1254
   },
   {
     "file": "robinhood-hq.jpg",
     "title": "Robinhood Hq",
-    "w": 1376,
-    "h": 768
+    "w": 1280,
+    "h": 720
   },
   {
-    "file": "the-burn.jpg",
-    "title": "The Burn",
-    "w": 1376,
-    "h": 768
+    "file": "rocket.jpg",
+    "title": "Rocket",
+    "w": 1280,
+    "h": 960
   },
   {
-    "file": "the-no.jpg",
-    "title": "The No",
-    "w": 1376,
-    "h": 768
+    "file": "shocked.jpg",
+    "title": "Shocked",
+    "w": 1254,
+    "h": 1254
   },
   {
-    "file": "three-pools.jpg",
-    "title": "Three Pools",
-    "w": 1376,
-    "h": 768
+    "file": "small-bird-big-plays.jpg",
+    "title": "Small Bird Big Plays",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "soon-again.jpg",
+    "title": "Soon Again",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "soon.jpg",
+    "title": "Soon",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "spray.jpg",
+    "title": "Spray",
+    "w": 1450,
+    "h": 1085
+  },
+  {
+    "file": "the-bag.jpg",
+    "title": "The Bag",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "the-desk.jpg",
+    "title": "The Desk",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "throne.jpg",
+    "title": "Throne",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "tower.jpg",
+    "title": "Tower",
+    "w": 960,
+    "h": 1280
+  },
+  {
+    "file": "vault.jpg",
+    "title": "Vault",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "window.jpg",
+    "title": "Window",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "wojak.jpg",
+    "title": "Wojak",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "wordmark.jpg",
+    "title": "Wordmark",
+    "w": 2164,
+    "h": 727
+  },
+  {
+    "file": "you.jpg",
+    "title": "You",
+    "w": 2560,
+    "h": 2560
   }
 ];
