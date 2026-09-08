@@ -70,7 +70,12 @@ needed to.
 
 | What | Where | Use |
 |---|---|---|
-| Logo badge | `assets/art/logo.svg` | Avatars, favicons, nav |
+| Logo badge | `assets/png/favicon-512.png` | Avatars, favicons, nav |
+
+> The badge is cut from real Kevin art by `tools/make-favicon.mjs`.
+> `assets/art/logo.svg` and `assets/art/favicon.svg` are the old one — an
+> off-model head, cropped so the hood ran off one side and half the disc was
+> empty. They are kept for history and referenced by nothing. Do not use them.
 | Wordmark | `assets/art/wordmark.svg` | Headers, merch, end cards |
 | PFP | `assets/png/pfp-1000.png` | X / Telegram profile |
 | Banner | `assets/png/banner-1500x500.png` | X header |

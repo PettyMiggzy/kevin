@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>KEVIN — The World</title>
 <meta name="description" content="Walk around Kevin's town. His block, downtown, his street, and the insides of the places he actually goes. Early build.">
-<link rel="icon" href="../assets/art/favicon.svg" type="image/svg+xml">
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/png/favicon-32.png">
+<link rel="icon" type="image/png" sizes="512x512" href="../assets/png/favicon-512.png">
 <meta name="theme-color" content="#ffe500">
 <style>
   @font-face{font-family:'Luckiest Guy';src:url('../assets/fonts/luckiest-guy-400.woff2') format('woff2');font-display:swap}
@@ -111,6 +112,21 @@
 const cv = document.getElementById('stage');
 const ctx = cv.getContext('2d', { alpha: false });
 const boot = document.getElementById('boot');
+
+// ctx.roundRect landed in Safari 16.4, March 2023. Every sign, every exit
+// plate and every tray is drawn with it, so on an iPhone a version behind that
+// the very first frame throws and the world is a still image with a joystick.
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+    const k = Math.min(typeof r === 'number' ? r : (r && r[0]) || 0, w / 2, h / 2);
+    this.moveTo(x + k, y);
+    this.arcTo(x + w, y,     x + w, y + h, k);
+    this.arcTo(x + w, y + h, x,     y + h, k);
+    this.arcTo(x,     y + h, x,     y,     k);
+    this.arcTo(x,     y,     x + w, y,     k);
+    this.closePath();
+  };
+}
 
 /* ---------- assets ---------- */
 const ATLAS = { cols:9, rows:5, cw:158, ch:176,
@@ -440,10 +456,42 @@ function step(now){
 
 // Start now. The painting, the doors, the jobs and the walking are all ready
 // the moment this module runs.
-enter(ZONES[location.hash.slice(1)] ? location.hash.slice(1) : 'block');
-boot.remove();
-if (!spriteReady) note('Kevin is still loading. Everything else works.');
-requestAnimationFrame(step);
+//
+// AND COME OFF THE LOADING SCREEN WHATEVER HAPPENS. Anything thrown between
+// the top of this module and here used to leave "loading the world…" across
+// the whole page with no error, no console for a phone to show it in, and
+// nothing for the reader to do. A boot screen that can outlive its own boot is
+// worse than no boot screen: it reports a state that is not true and cannot
+// change. So: say what broke, and get out of the way.
+try {
+  if (!ZONES) throw new Error('zones.js did not load');
+  enter(ZONES[location.hash.slice(1)] ? location.hash.slice(1) : 'block');
+  boot.remove();
+  if (!spriteReady) note('Kevin is still loading. Everything else works.');
+  requestAnimationFrame(step);
+} catch (e) {
+  boot.innerHTML =
+    '<div style="max-width:30ch;font-size:19px;line-height:1.35">' +
+    'The world did not start.<br>' +
+    '<span style="font-family:monospace;font-size:12px;opacity:.7;word-break:break-word">' +
+    String(e && e.message || e).replace(/[<>&]/g, '') + '</span><br>' +
+    '<a href="../" style="font-size:13px">back to the site</a></div>';
+}
+
+// A last resort. If the module never reached either branch above — a syntax
+// error in an older engine takes the whole script, so no catch of mine runs —
+// the boot screen is still sitting there a few seconds later. Take it off and
+// say so, rather than leave somebody staring at a word.
+setTimeout(function () {
+  const b = document.getElementById('boot');
+  if (!b) return;
+  b.innerHTML =
+    '<div style="max-width:30ch;font-size:19px;line-height:1.35">' +
+    'This browser could not start the world.<br>' +
+    '<span style="font-size:13px;opacity:.75">Everything else on the site works — ' +
+    'the world needs a newer browser than this one.</span><br>' +
+    '<a href="../" style="font-size:13px">back to the site</a></div>';
+}, 6000);
 </script>
 </body>
 </html>
