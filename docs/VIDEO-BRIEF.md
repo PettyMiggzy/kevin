@@ -36,8 +36,20 @@ needs is in this file. Paste **Part 1** in as the brand/context prompt, then use
 >
 > **Look.** Hand-painted, slightly wonky 2D cartoon. Thick black outlines, flat
 > fills, visible brush texture — closer to a skate sticker than to corporate
-> vector art. Kevin is a young guy in a red-and-yellow crew uniform and a paper
-> hat.
+> vector art.
+>
+> **Kevin is not a human being.** He is a red cartoon creature: a rounded head
+> with a swept-back crest of thick red spikes, two very large white oval eyes
+> with small black pupils, a pale cream muzzle, and a simple black triangle of
+> a mouth. Flat red body, no visible clothing in the base form. He is drawn
+> deliberately crude — the wonkiness is the style, not a mistake.
+>
+> Do NOT draw him as a person, and do not put him in a crew uniform or a paper
+> hat. He works at a fast food restaurant, but he is a red cartoon creature who
+> works at a fast food restaurant. The reference images are
+> `assets/memes/face.jpg` (the canonical head) and `assets/video/kevin-promo.mp4`
+> (the animated, glossier version). Feed one of those in if the tool accepts an
+> image; describing him in words alone will not get you there.
 >
 > Brand colours, use these exactly:
 > - Background yellow `#FFE500`
