@@ -32,20 +32,22 @@
     }).join('');
     grid.addEventListener('click', function (e) {
       var fig = e.target.closest('.meme');
-      if (fig) loadByIndex(Number(fig.dataset.i));
+      if (fig) loadByIndex(Number(fig.dataset.i), true);
     });
     pick.innerHTML = MEMES.map(function (m, i) {
       return '<option value="' + i + '">' + m.title + '</option>';
     }).join('');
-    pick.addEventListener('change', function () { loadByIndex(Number(pick.value)); });
-    loadByIndex(0);
+    pick.addEventListener('change', function () { loadByIndex(Number(pick.value), true); });
+    // Hydrate the studio WITHOUT scrolling. Picking a meme should take you to
+    // it; arriving on the page should not take you past the top of it.
+    loadByIndex(0, false);
   } else {
     $('#meme-empty').style.display = '';
     pick.innerHTML = '<option>No art indexed yet</option>';
     pick.disabled = true;
   }
 
-  function loadByIndex(i) {
+  function loadByIndex(i, scroll) {
     var m = MEMES[i];
     if (!m) return;
     pick.value = String(i);
@@ -56,7 +58,7 @@
     var empty = $('#studio-empty');
     if (empty) empty.style.display = 'none';
     canvas.style.display = 'block';
-    document.getElementById('studio').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (scroll) document.getElementById('studio').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   // --- your own image -----------------------------------------------------

@@ -7,14 +7,21 @@
 <meta name="description" content="Check whether you are on the $KEVIN holder list, and claim your GME yourself. No wallet needed to look.">
 <link rel="icon" href="../assets/art/favicon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#ffe500">
+<!-- Both faces are used above the fold. Without these the browser only
+     discovers them after the stylesheet parses, swaps them in late, and the
+     hero reflows — 0.10 of layout shift on the front page, all of it the H1. -->
+<link rel="preload" href="../assets/fonts/luckiest-guy-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../assets/fonts/space-mono-700.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="../css/style.css">
 <style>
   .claim { max-width: 74ch; }
   /* The round panel is filled by a fetch. Without a floor under it the page
      reflows the moment the JSON lands and the buttons arrive under a thumb
      that was already moving. */
+  /* The panel is served with its real copy, so there is nothing to reserve
+     space for. The floor is only here so that swapping to the shorter
+     open-round copy cannot pull the page up under a moving thumb. */
   #round-state { min-height: 232px; }
-  @media (max-width: 620px) { #round-state { min-height: 330px; } }
   .box {
     background: var(--white); border: var(--edge) solid var(--ink);
     border-radius: var(--radius); box-shadow: var(--shadow);
@@ -63,7 +70,25 @@
 
 <section class="section section--cream">
   <div class="wrap claim">
-    <div id="round-state"><p class="lead">Loading the round…</p></div>
+    <div id="round-state">
+      <!-- This is the SERVED state, and it is the true one until a distributor
+           is deployed. The script below replaces it only when round.json says
+           the round is actually open. Injecting it instead meant the page
+           shipped "Loading the round…", grew by 700px when the JSON landed,
+           and told a reader with no JavaScript nothing at all. -->
+      <p class="lead"><b>The list is published. The round is not open yet.</b></p>
+      <p>The distributor is written and tested but <b>not deployed</b>, so there is
+      nothing to claim from and this page will not let you try. You can check whether
+      you are on the list now — that needs no wallet and costs nothing. When the round
+      opens it will be announced in the group. Nobody will ever DM you about it.</p>
+      <div class="stat">
+        <div><span>Addresses on the list</span><b id="s-holders">—</b></div>
+        <div><span>Minimum held</span><b id="s-min">—</b></div>
+        <div><span>Total in the round</span><b id="s-total">—</b></div>
+      </div>
+      <p class="muted" style="margin-top:18px">Merkle root <code id="s-root">loading…</code></p>
+      <p class="muted">Distributor <code id="s-airdrop">not deployed</code></p>
+    </div>
 
     <div class="box" id="lookup" hidden>
       <label class="muted" for="addr">Your address</label>
@@ -149,26 +174,27 @@
       round = d;
       var open = roundIsOpen(d);
       var sym = (d.payout && d.payout.symbol) || '';
-      state.innerHTML =
-        (open
-          ? '<p class="lead">One round is open. The full list and the root are below — ' +
-            'check them before you claim anything.</p>'
-          : '<p class="lead"><b>The list is published. The round is not open yet.</b></p>' +
-            '<p>The distributor is written and tested but <b>not deployed</b>, so there is ' +
-            'nothing to claim from and this page will not let you try. You can check whether ' +
-            'you are on the list now — that needs no wallet and costs nothing. When the round ' +
-            'opens it will be announced in the group. Nobody will ever DM you about it.</p>') +
-        '<div class="stat">' +
-          '<div><span>Addresses on the list</span><b>' + esc(d.holders) + '</b></div>' +
-          '<div><span>Minimum held</span><b>' + fmt(d.minBalance) + ' KEVIN</b></div>' +
-          '<div><span>Total in the round</span><b>' + fmt(d.total) + (sym ? ' ' + esc(sym) : '') + '</b></div>' +
-        '</div>' +
-        '<p class="muted" style="margin-top:18px">Merkle root <code>' + esc(d.root) + '</code></p>' +
-        (open ? '' : '<p class="muted">Distributor <code>not deployed</code></p>');
+      var set = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+      set('s-holders', d.holders);
+      set('s-min', fmt(d.minBalance) + ' KEVIN');
+      set('s-total', fmt(d.total) + (sym ? ' ' + sym : ''));
+      set('s-root', d.root);
+      set('s-airdrop', open ? d.airdrop : 'not deployed');
+      if (open) {
+        // The served copy says the round is closed, because it is. Replace the
+        // prose only when the file says otherwise, and leave the numbers where
+        // they are so nothing moves.
+        var lead = state.querySelector('.lead');
+        if (lead) lead.innerHTML = 'One round is open. The full list and the root are below — ' +
+          'check them before you claim anything.';
+        var body = lead && lead.nextElementSibling;
+        if (body && body.tagName === 'P') body.remove();
+      }
       lookup.hidden = false;
     })
     .catch(function () {
-      // No file, or an unreadable one, means no round. Never imply otherwise.
+      // No file, or an unreadable one, means no round. Never imply otherwise —
+      // and never leave the placeholder dashes standing as if they were data.
       state.innerHTML =
         '<p class="lead"><b>There is no open round right now.</b></p>' +
         '<p>When one opens it will appear here with its list and its root, and ' +

@@ -4,20 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KEVIN — I work the fryer. I have WiFi.</title>
-<meta name="description" content="Kevin works the fryer. He has WiFi, a whiteboard and a plan with three of four boxes already ticked. Launching on kekfun.xyz on Robinhood Chain with three pools: WETH, KEK, GME.">
+<meta name="description" content="Kevin works the fryer. He has WiFi, a whiteboard and a plan with three of four boxes already ticked. Live on Robinhood Chain with three pools: WETH, KEK and GME. Launched 7 September 2026 on kekfun.xyz.">
 <link rel="icon" href="assets/art/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/png/favicon-180.png">
 <link rel="canonical" href="https://iamkevin.lol/">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://iamkevin.lol/">
 <meta property="og:title" content="KEVIN — I work the fryer. I have WiFi.">
-<meta property="og:description" content="Minimum wage. Maximum conviction. Launching as soon as my shift is over. WETH / KEK / GME on Robinhood Chain.">
+<meta property="og:description" content="Minimum wage. Maximum conviction. The shift ended and it launched. WETH / KEK / GME, live on Robinhood Chain.">
 <meta property="og:image" content="https://iamkevin.lol/assets/png/og-1200x630.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@Iamkevinonrh">
 <meta name="twitter:creator" content="@Iamkevinonrh">
 <meta name="twitter:image" content="https://iamkevin.lol/assets/png/og-1200x630.png">
 <meta name="theme-color" content="#ffe500">
+<!-- Both faces are used above the fold. Without these the browser only
+     discovers them after the stylesheet parses, swaps them in late, and the
+     hero reflows — 0.10 of layout shift on the front page, all of it the H1. -->
+<link rel="preload" href="assets/fonts/luckiest-guy-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/space-mono-700.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -341,7 +346,7 @@
         conviction, and I genuinely cannot see why that is funny.
         <strong>One of these is going to work out.</strong>
       </p>
-      <p style="margin:18px 0 0"><a class="btn btn--sm btn--dark" href="docs/LORE.md">Read the full Book of Kevin →</a></p>
+      <p style="margin:18px 0 0"><a class="btn btn--sm btn--dark" href="docs/lore.html">Read the full Book of Kevin →</a></p>
     </div>
   </div>
 </section>
@@ -467,7 +472,7 @@
     <h2>Three pairs.<br>One launch.</h2>
     <p class="lead" style="max-width:62ch">
       One is the plumbing, one is the laugh, and one is a GME pool sitting on
-      Robinhood Chain at fifteen percent, which is the joke telling itself. I
+      Robinhood Chain at <span id="gme-words-lead">fifteen</span> percent, which is the joke telling itself. I
       need all three, and I am not going to explain the third one.
     </p>
 
@@ -498,11 +503,16 @@
     <div class="countdown" id="countdown"></div>
     <p style="font-size:13px;opacity:.7;margin-bottom:34px" id="countdown-note"></p>
 
+    <!-- Every number in here is read from js/config.js by js/main.js, the way
+         the docs page already does it. They used to be typed by hand in both
+         places, which is how the GME weight ended up with five copies and two
+         values. The markup keeps the real numbers as the served fallback, so a
+         reader with no JavaScript still sees the truth. -->
     <div class="numbers">
-      <div class="num"><b>1,000,000,000</b><span>Total supply · hard cap</span></div>
-      <div class="num"><b>40%</b><span>Sold in the auction</span></div>
-      <div class="num"><b>60%</b><span>Locked LP · forever</span></div>
-      <div class="num num--hero"><b>0%</b><span>Creator allocation</span></div>
+      <div class="num"><b id="m-supply">1,000,000,000</b><span>Total supply · hard cap</span></div>
+      <div class="num"><b id="m-sold">40%</b><span>Sold in the auction</span></div>
+      <div class="num"><b id="m-lp">60%</b><span>Locked LP · forever</span></div>
+      <div class="num num--hero"><b id="m-creator">0%</b><span>Creator allocation</span></div>
     </div>
     <p style="font-size:14px;opacity:.8;margin:14px 0 40px;max-width:72ch">
       That last one isn't a promise, a pledge, or a thing you have to take our
@@ -516,8 +526,8 @@
       <div class="step">
         <div class="step__n">1</div>
         <div>
-          <h3>Raise · 4 days</h3>
-          <p>10% of supply is released each day for four days. You deposit ETH into whichever day you like. Your share of that day's tokens is pro-rata to everyone else who deposited that day — so if bigger money shows up after you, your allocation shrinks. That's the mechanism, and it's the same for everybody.</p>
+          <h3>Raise · <span id="m-saledays">4</span> days</h3>
+          <p><span id="m-perday">10</span>% of supply is released each day for <span id="m-saledays2">four</span> days. You deposit ETH into whichever day you like. Your share of that day's tokens is pro-rata to everyone else who deposited that day — so if bigger money shows up after you, your allocation shrinks. That's the mechanism, and it's the same for everybody.</p>
         </div>
       </div>
       <div class="step">
@@ -537,8 +547,8 @@
       <div class="step">
         <div class="step__n">4</div>
         <div>
-          <h3>Claim · 30-day vest</h3>
-          <p>Your allocation unlocks linearly over 30 days from settle. Partial claims any time. Nobody — including whoever bought most — gets their bag in one lump on day one.</p>
+          <h3>Claim · <span id="m-vest">30</span>-day vest</h3>
+          <p>Your allocation unlocks linearly over <span id="m-vest2">30</span> days from settle. Partial claims any time. Nobody — including whoever bought most — gets their bag in one lump on day one.</p>
         </div>
       </div>
       <div class="step">
@@ -710,11 +720,11 @@
       </details>
       <details>
 <summary>How do I get a bounty?</summary>
-        <p>Make something and post it. In character, yours, not punching down. Sizes and the payout wallet get posted in the group once the auction settles.</p>
+        <p>Make something and post it. In character, yours, not punching down. Sizes and the payout wallet get posted in the group.</p>
       </details>
       <details>
-<summary>When is the launch, exactly?</summary>
-        <p>As soon as his shift is over. He is not being coy — that is genuinely how he has scheduled it. Dates go in the group and on <a data-link="x" href="https://x.com/Iamkevinonrh" target="_blank" rel="noopener">@Iamkevinonrh</a> first.</p>
+<summary>When did it launch?</summary>
+        <p>7 September 2026, as soon as his shift was over. He was not being coy — that was genuinely how he had scheduled it. The auction has closed and all three pools are open. Anything else that happens goes in the group and on <a data-link="x" href="https://x.com/Iamkevinonrh" target="_blank" rel="noopener">@Iamkevinonrh</a> first.</p>
       </details>
     </div>
   </div>

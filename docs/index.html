@@ -17,6 +17,11 @@
 <meta name="twitter:site" content="@Iamkevinonrh">
 <meta name="twitter:image" content="https://iamkevin.lol/assets/png/og-1200x630.png">
 <meta name="theme-color" content="#ffe500">
+<!-- Both faces are used above the fold. Without these the browser only
+     discovers them after the stylesheet parses, swaps them in late, and the
+     hero reflows — 0.10 of layout shift on the front page, all of it the H1. -->
+<link rel="preload" href="../assets/fonts/luckiest-guy-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../assets/fonts/space-mono-700.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="../css/style.css">
 <style>
   /* docs-only additions. everything else is the site's own stylesheet. */
@@ -784,7 +789,7 @@
     </p>
     <ol class="rules">
       <li><b>The contract address was called the wrong token.</b> A comment in the config once asserted the address was an old token on a different chain. Nothing had been checked before that was written, and it was then repeated back to the owner as fact — twice — telling him his own contract address was wrong. Checked properly afterwards from two machines, the address was correct the entire time. The comment is still in the config with the correction underneath it.</li>
-      <li><b>Fifteen percent was written as eighteen.</b> The liquidity list said fifteen and the sentence under it said eighteen, spelled out in words, so nobody searching for "18" would ever have found it. Both now come from one place, so they cannot disagree again.</li>
+      <li><b>Fifteen percent was written as eighteen.</b> The liquidity list said fifteen and the sentence under it said eighteen, spelled out in words, so nobody searching for "18" would ever have found it. They were made to come from one place — and then an audit found a fifth copy, hand-typed, in the lead paragraph of §VI on the front page, which the claim in this entry had already declared impossible. That one is read from config now too. The lesson kept: the sentence "they cannot disagree again" is a thing to go and check, not a thing to write.</li>
       <li><b>A contract could be tricked into raising the same number thirty times in one transaction.</b> Found by attacking it on purpose, reproduced for about a hundredth of an ether, fixed, and the attack kept as a test that now has to keep failing forever.</li>
       <li><b>GTA 6 has been wrong four times.</b> Kevin does not consider these errors. Kevin considers these Rockstar's errors.</li>
     </ol>

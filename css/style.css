@@ -314,8 +314,13 @@ p { margin: 0 0 1em; }
 .card--cream { background: var(--cream); }
 
 .grid { display: grid; gap: clamp(18px, 2.6vw, 30px); }
-.grid--3 { grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
-.grid--2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+/* min() on every track floor. A bare minmax(320px, 1fr) forces a 320px column
+   inside a wrap that is only 100% - 40px wide, so below about 345px the copy
+   overflows — and `overflow-x: clip` on html and body means there is no
+   scrollbar to reach it with. The text is simply cut off mid-word, on the
+   narrowest phones, which are the ones least likely to be tested on. */
+.grid--3 { grid-template-columns: repeat(auto-fit, minmax(min(270px, 100%), 1fr)); }
+.grid--2 { grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
 
 /* --- pools -------------------------------------------------------------- */
 
@@ -506,7 +511,7 @@ p { margin: 0 0 1em; }
 
 /* --- receipts wall ------------------------------------------------------- */
 
-.wall { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 20px; }
+.wall { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(290px, 100%), 1fr)); gap: 20px; }
 .receipt--wall { margin: 0; background: var(--white); }
 .receipt--wall:nth-child(2n) { transform: rotate(-0.8deg); }
 .receipt--wall:nth-child(3n) { transform: rotate(0.9deg); }
@@ -721,7 +726,7 @@ section[id], header[id] { scroll-margin-top: 88px; }
 .studio__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
 .studio__note { font-size: 13px; min-height: 20px; margin: 0; font-weight: 700; color: var(--red); }
 
-.memes { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+.memes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 18px; }
 .meme {
   margin: 0;
   border: var(--edge) solid var(--ink);

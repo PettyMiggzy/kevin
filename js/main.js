@@ -45,6 +45,12 @@
     return !K.contractLiveAt || Date.now() >= Date.parse(K.contractLiveAt);
   };
 
+  // If js/config.js did not load, K is {} and every line below asserts
+  // something it cannot know — "Fry cook · undefined · launching soon", and an
+  // auction state that overwrites the served "has closed" with "has not opened
+  // yet". The served HTML is already correct and already honest. Leave it.
+  if (!window.KEVIN) return;
+
   var heroState = $('#heroState');
   var chainVerb = $('#heroChainVerb');
   var caValue = $('#ca-value');
@@ -64,7 +70,7 @@
       var state = live
         ? (K.contract ? 'live now' : 'launching soon')
         : (when ? 'launches ' + when + ' \u00b7 not trading yet' : 'not trading yet');
-      heroState.textContent = 'Fry cook \u00b7 ' + K.chain + ' \u00b7 ' + state;
+      heroState.textContent = 'Fry cook' + (K.chain ? ' \u00b7 ' + K.chain : '') + ' \u00b7 ' + state;
     }
 
     // The hero's chain line carries the same truth. Hardcoding "Live on" in the
@@ -158,12 +164,35 @@
     if (heroWeight) heroWeight.textContent = gme.weight + '%';
     var gmeWords = $('#gme-words');
     if (gmeWords) gmeWords.textContent = inWords(gme.weight);
+    // §VI's lead carried a FIFTH hand-typed copy of this number, while the
+    // errata claimed both copies now come from one place so they cannot
+    // disagree again. Now they do.
+    var gmeLead = $('#gme-words-lead');
+    if (gmeLead) gmeLead.textContent = inWords(gme.weight);
     var share = $('#gme-share');
     if (share) {
       share.textContent = inWords(gme.weight).replace(/^./, function (c) { return c.toUpperCase(); })
         + ' percent of the liquidity. One hundred percent of the point.';
     }
   }
+
+  // The launch mechanics, from config, exactly as the docs page does it. The
+  // markup carries the same numbers as its no-JavaScript fallback; this stops
+  // the two copies drifting when config changes.
+  var m = K.mechanics || {};
+  var put = function (id, v) {
+    var el = $('#' + id);
+    if (el && v !== null && v !== undefined) el.textContent = v;
+  };
+  put('m-supply', m.supply);
+  if (m.sold !== undefined) put('m-sold', m.sold + '%');
+  if (m.lockedLp !== undefined) put('m-lp', m.lockedLp + '%');
+  if (m.creator !== undefined) put('m-creator', m.creator + '%');
+  put('m-saledays', m.saleDays);
+  if (m.saleDays !== undefined) put('m-saledays2', inWords(m.saleDays));
+  put('m-perday', m.perDay);
+  put('m-vest', m.vestDays);
+  put('m-vest2', m.vestDays);
 
   var order = $('#chain-order');
   if (order && K.pools) {

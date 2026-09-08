@@ -14,6 +14,11 @@
 <meta property="og:image" content="https://www.iamkevin.lol/assets/png/og-1200x630.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#ffe500">
+<!-- Both faces are used above the fold. Without these the browser only
+     discovers them after the stylesheet parses, swaps them in late, and the
+     hero reflows — 0.10 of layout shift on the front page, all of it the H1. -->
+<link rel="preload" href="../assets/fonts/luckiest-guy-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../assets/fonts/space-mono-700.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="../css/style.css">
 <style>
   .kit { max-width: 80ch; }
@@ -186,17 +191,22 @@
     <p class="eyebrow">Take them</p>
     <h2>Art &amp; assets</h2>
     <p class="lead">No permission needed, no attribution required. Right-click, save.</p>
+    <!-- Real intrinsic dimensions on every thumbnail. `.dl img { width:100% }`
+         makes them card-width, so without a height they collapse to 0px until
+         they decode and then shove the whole grid down — 1.25MB of PNG
+         arriving eagerly, one reflow each. `img { height:auto }` in the site
+         stylesheet keeps the ratio; these only reserve the box. -->
     <div class="dl">
       <a href="../assets/png/logo-512.png" target="_blank" rel="noopener">
-        <img src="../assets/png/logo-512.png" alt="">Logo<small>512×512 PNG</small></a>
+        <img src="../assets/png/logo-512.png" alt="" width="512" height="512" loading="lazy" decoding="async">Logo<small>512×512 PNG</small></a>
       <a href="../assets/png/header-1500x500.png" target="_blank" rel="noopener">
-        <img src="../assets/png/header-1500x500.png" alt="">Banner<small>1500×500, 3:1</small></a>
+        <img src="../assets/png/header-1500x500.png" alt="" width="1500" height="500" loading="lazy" decoding="async">Banner<small>1500×500, 3:1</small></a>
       <a href="../assets/png/kevin-gme-1080.png" target="_blank" rel="noopener">
-        <img src="../assets/png/kevin-gme-1080.png" alt="">GME art<small>1080×1080 square</small></a>
+        <img src="../assets/png/kevin-gme-1080.png" alt="" width="2160" height="2160" loading="lazy" decoding="async">GME art<small>1080×1080 square</small></a>
       <a href="../assets/png/roadmap.png" target="_blank" rel="noopener">
-        <img src="../assets/png/roadmap.png" alt="">The map<small>The road out of town</small></a>
+        <img src="../assets/png/roadmap.png" alt="" width="2360" height="1228" loading="lazy" decoding="async">The map<small>The road out of town</small></a>
       <a href="../assets/png/og-1200x630.png" target="_blank" rel="noopener">
-        <img src="../assets/png/og-1200x630.png" alt="">Social card<small>1200×630</small></a>
+        <img src="../assets/png/og-1200x630.png" alt="" width="1200" height="630" loading="lazy" decoding="async">Social card<small>1200×630</small></a>
       <a href="../world/">The world<small>Walk around it — six places, early build</small></a>
       <a href="../memes.html">Memes<small>The whole wall — take any of them</small></a>
       <a href="https://t.me/addstickers/kevin_by_Iamkevinzbot" target="_blank" rel="noopener">Sticker pack<small>Telegram, 20 stickers</small></a>

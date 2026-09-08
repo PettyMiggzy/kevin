@@ -12,6 +12,11 @@
 <meta property="og:image" content="https://iamkevin.lol/assets/png/og-1200x630.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#ffe500">
+<!-- Both faces are used above the fold. Without these the browser only
+     discovers them after the stylesheet parses, swaps them in late, and the
+     hero reflows — 0.10 of layout shift on the front page, all of it the H1. -->
+<link rel="preload" href="assets/fonts/luckiest-guy-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/space-mono-700.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
