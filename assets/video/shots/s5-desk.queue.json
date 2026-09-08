@@ -1,0 +1,6 @@
+{
+  "model": "kling-o3-pro-reference-to-video",
+  "queue_id": "01a08254-e90d-7865-977c-c2f52802296a",
+  "id": "s5-desk",
+  "prompt": "KEVIN is a physical 3D character present in the scene: the same red creature with the swept-back crest, huge white eyes and cream muzzle, but rendered with real volume, real lighting, contact shadows and reflections that match the room, like a practical puppet or a Pixar character shot on location.\n\nPhotorealistic live-action environment, real cinema camera, natural lighting, shallow depth of field, film grain, 35mm. The environment and every object in it is REAL and PHOTOGRAPHIC. Only the character is drawn.\n\nSHOT: A real desk in a dim room, a mechanical keyboard, a mug, two monitors showing dense scrolling data. A real human hand rests on the mouse at the edge of frame. @Element1 stands on the desk beside the monitor, arms folded, watching the screen with the human. Close, shallow focus."
+}

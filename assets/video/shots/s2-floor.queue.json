@@ -1,0 +1,6 @@
+{
+  "model": "kling-o3-pro-reference-to-video",
+  "queue_id": "01a08254-e328-720c-9de8-0e322aee80ec",
+  "id": "s2-floor",
+  "prompt": "KEVIN is a physical 3D character present in the scene: the same red creature with the swept-back crest, huge white eyes and cream muzzle, but rendered with real volume, real lighting, contact shadows and reflections that match the room, like a practical puppet or a Pixar character shot on location.\n\nPhotorealistic live-action environment, real cinema camera, natural lighting, shallow depth of field, film grain, 35mm. The environment and every object in it is REAL and PHOTOGRAPHIC. Only the character is drawn.\n\nSHOT: A real financial trading floor, a curved wall of monitors covered in charts, blue and amber glow, office chairs, a cold professional room. @Element1 stands small in the middle of the frame with his back to camera, looking up at the screens. Wide shot, camera slowly craning up."
+}

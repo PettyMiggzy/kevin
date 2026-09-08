@@ -1,0 +1,6 @@
+{
+  "model": "kling-o3-pro-reference-to-video",
+  "queue_id": "01a08254-ec63-7cf5-8c7a-ba67847d1f27",
+  "id": "s7-whiteboard",
+  "prompt": "KEVIN is a physical 3D character present in the scene: the same red creature with the swept-back crest, huge white eyes and cream muzzle, but rendered with real volume, real lighting, contact shadows and reflections that match the room, like a practical puppet or a Pixar character shot on location.\n\nPhotorealistic live-action environment, real cinema camera, natural lighting, shallow depth of field, film grain, 35mm. The environment and every object in it is REAL and PHOTOGRAPHIC. Only the character is drawn.\n\nSHOT: A real stockroom. A blank whiteboard on the wall, a marker on the tray, a mop bucket, metal shelving. @Element1 stands facing the blank whiteboard with his arms folded, entirely serious. Slow dolly in past the shelving. THE WHITEBOARD IS COMPLETELY BLANK, no writing of any kind."
+}

@@ -45,6 +45,43 @@ lighting, contact shadows and reflections that match the room, like a practical 
 character shot on location.`;
 
 const SETS = {
+  // The recipe p2 proved: ask for PHYSICAL realism everywhere and let the
+  // element references hold Kevin flat. Describing him as "flat 2D" flattens
+  // the whole room instead, which is what went wrong in p1 and p3.
+  main: [
+    { id: 's1-laptop', treat: KEVIN_3D, duration: '5s',
+      scene: `A real stockroom at night, metal shelving and cardboard boxes, one bare bulb. KEVIN \
+sits on an upturned crate hunched over a battered laptop, the screen throwing cold blue light \
+across his face. Slow push in.` },
+    { id: 's2-floor', treat: KEVIN_3D, duration: '5s',
+      scene: `A real financial trading floor, a curved wall of monitors covered in charts, blue and \
+amber glow, office chairs, a cold professional room. KEVIN stands small in the middle of the frame \
+with his back to camera, looking up at the screens. Wide shot, camera slowly craning up.` },
+    { id: 's3-street', treat: KEVIN_3D, duration: '5s',
+      scene: `A real city street at night after rain. Wet asphalt, reflected neon, traffic lights, \
+blurred headlights, steam from a grate. KEVIN walks toward camera through it, unhurried, \
+completely unbothered. Tracking shot at his height.` },
+    { id: 's4-servers', treat: KEVIN_3D, duration: '5s',
+      scene: `A real data centre aisle: rows of server racks, hundreds of small green and blue \
+status LEDs, cold light, cable trays overhead. KEVIN walks slowly down the aisle away from camera, \
+tiny against the racks. Locked-off wide shot.` },
+    { id: 's5-desk', treat: KEVIN_3D, duration: '5s',
+      scene: `A real desk in a dim room, a mechanical keyboard, a mug, two monitors showing dense \
+scrolling data. A real human hand rests on the mouse at the edge of frame. KEVIN stands on the \
+desk beside the monitor, arms folded, watching the screen with the human. Close, shallow focus.` },
+    { id: 's6-rooftop', treat: KEVIN_3D, duration: '5s',
+      scene: `A real rooftop at night, gravel and air-conditioning units, a real city skyline lit \
+up behind. KEVIN sits on the parapet edge with his legs hanging over, looking out at the city. \
+Wide, still, the city breathing behind him.` },
+    { id: 's7-whiteboard', treat: KEVIN_3D, duration: '5s',
+      scene: `A real stockroom. A blank whiteboard on the wall, a marker on the tray, a mop bucket, \
+metal shelving. KEVIN stands facing the blank whiteboard with his arms folded, entirely serious. \
+Slow dolly in past the shelving. THE WHITEBOARD IS COMPLETELY BLANK, no writing of any kind.` },
+    { id: 's8-fryer-wide', treat: KEVIN_3D, duration: '5s',
+      scene: `A real fast-food kitchen at the end of a shift, lights half off, stainless steel, \
+steam, an unbranded paper hat on a hook. KEVIN stands alone at the fryer, small in a wide frame, \
+completely calm. Static wide shot, no camera move.` },
+  ],
   preview: [
     { id: 'p1-fryer-2d', treat: KEVIN_2D, duration: '5s',
       scene: `A cramped, real fast-food kitchen at night. Stainless steel fryers, oil haze in the \
