@@ -49,7 +49,3 @@ keeper/.operator.key
 
 # Buy watch cursor — local state, not source
 keeper/.buywatch.state
-
-# Held back: other companies' registered marks and characters.
-# Not published; see the note in the meme commit.
-assets/memes-held/

@@ -2,6 +2,12 @@
    Drop art into assets/memes/, run the script, commit. */
 window.KEVIN_MEMES = [
   {
+    "file": "another-castle.jpg",
+    "title": "Another Castle",
+    "w": 1280,
+    "h": 960
+  },
+  {
     "file": "buy.jpg",
     "title": "Buy",
     "w": 1448,
@@ -50,8 +56,44 @@ window.KEVIN_MEMES = [
     "h": 720
   },
   {
+    "file": "drive-thru.jpg",
+    "title": "Drive Thru",
+    "w": 1448,
+    "h": 1086
+  },
+  {
+    "file": "employee-of-the-month.jpg",
+    "title": "Employee Of The Month",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "end-of-shift.jpg",
+    "title": "End Of Shift",
+    "w": 1448,
+    "h": 1086
+  },
+  {
     "file": "face.jpg",
     "title": "Face",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "first-day.jpg",
+    "title": "First Day",
+    "w": 1672,
+    "h": 941
+  },
+  {
+    "file": "fries-fuel-legends.jpg",
+    "title": "Fries Fuel Legends",
+    "w": 1448,
+    "h": 1086
+  },
+  {
+    "file": "good-fries-good-grains.jpg",
+    "title": "Good Fries Good Grains",
     "w": 1254,
     "h": 1254
   },
@@ -90,6 +132,12 @@ window.KEVIN_MEMES = [
     "title": "Green Spray",
     "w": 1446,
     "h": 1087
+  },
+  {
+    "file": "gym.jpg",
+    "title": "Gym",
+    "w": 1280,
+    "h": 720
   },
   {
     "file": "hello.jpg",
@@ -134,6 +182,12 @@ window.KEVIN_MEMES = [
     "h": 1254
   },
   {
+    "file": "lovin-it.jpg",
+    "title": "Lovin It",
+    "w": 1402,
+    "h": 1122
+  },
+  {
     "file": "lying-down.jpg",
     "title": "Lying Down",
     "w": 1254,
@@ -172,6 +226,12 @@ window.KEVIN_MEMES = [
   {
     "file": "no-plan-b.jpg",
     "title": "No Plan B",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "on-shift.jpg",
+    "title": "On Shift",
     "w": 1254,
     "h": 1254
   },
@@ -236,6 +296,12 @@ window.KEVIN_MEMES = [
     "h": 1254
   },
   {
+    "file": "shopping-run.jpg",
+    "title": "Shopping Run",
+    "w": 1280,
+    "h": 720
+  },
+  {
     "file": "small-bird-big-plays.jpg",
     "title": "Small Bird Big Plays",
     "w": 1254,
@@ -266,8 +332,38 @@ window.KEVIN_MEMES = [
     "h": 1254
   },
   {
+    "file": "the-bench.jpg",
+    "title": "The Bench",
+    "w": 1254,
+    "h": 1254
+  },
+  {
     "file": "the-desk.jpg",
     "title": "The Desk",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "the-mirror.jpg",
+    "title": "The Mirror",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "the-og.jpg",
+    "title": "The Og",
+    "w": 1536,
+    "h": 1024
+  },
+  {
+    "file": "the-original.jpg",
+    "title": "The Original",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "the-other-guy.jpg",
+    "title": "The Other Guy",
     "w": 1254,
     "h": 1254
   },
@@ -286,6 +382,12 @@ window.KEVIN_MEMES = [
   {
     "file": "vault.jpg",
     "title": "Vault",
+    "w": 1254,
+    "h": 1254
+  },
+  {
+    "file": "when-i-grow-up.jpg",
+    "title": "When I Grow Up",
     "w": 1254,
     "h": 1254
   },
