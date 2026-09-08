@@ -58,8 +58,16 @@ const cfg = {
   minHoldDays: Number(arg('min-hold-days', '1')),
   // Below this share of the payout, a row is not worth its own claim gas.
   minPayout: BigInt(arg('min-payout', '0')),
+  // Must still be holding at least this much AT THE END of the window, in the
+  // token's smallest unit. Time weighting alone would still pay somebody who
+  // held a large balance early and sold it all before the snapshot — which is
+  // exactly the person an airdrop for holders should not be paying.
+  minBalance: BigInt(arg('min-balance', '5000000000000000000000000')), // 5,000,000 KEVIN
   out: arg('out', null),
-  chunk: Number(arg('chunk', '9000')),
+  // Robinhood Chain does ~18 blocks/sec — about 856,000 blocks a DAY — so a
+  // 9,000-block chunk means ~95 requests per day of window and the public RPC
+  // rate-limits long before the scan finishes.
+  chunk: Number(arg('chunk', '150000')),
 };
 
 // Addresses that must never receive a drop: the pools hold the float, the
@@ -77,6 +85,7 @@ const EXCLUDE = new Set([
   '0x506200532B0a5A7B9d1e7C50D0014680FC3B5b13', // launchpad locker
   '0x06AfBA43Fd06227fA663b0DAecF536f6EaA6bf99', // universal router
   '0x000000000022D473030F116dDEE9F6B43aC78BA3', // permit2
+  '0x8876789976dEcBfCbBbe364623C63652db8C0904', // sell router — 36 wallets route sells through it
   // The treasury itself. It is the one address most obviously not entitled to
   // a share of its own airdrop, and the one an exclusion list built by looking
   // at the pools is most likely to forget.
@@ -91,15 +100,24 @@ async function rpcCall(to, data) {
   return rpc('eth_call', [{ to, data }, 'latest']);
 }
 
-async function rpc(method, params) {
-  const r = await fetch(cfg.rpc, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-  });
-  const j = await r.json();
-  if (j.error) throw new Error(`${method}: ${j.error.message}`);
-  return j.result;
+async function rpc(method, params, tries = 7) {
+  // The public RPC rate-limits bursts, and a full log replay is a burst by
+  // definition. Dying halfway through a snapshot is the worst outcome
+  // available here: the reconciliation check below would pass on a partial
+  // log if the run ever completed with one, so the scan must not silently
+  // give up on a 429.
+  for (let i = 0; i < tries; i++) {
+    const r = await fetch(cfg.rpc, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+    });
+    const j = await r.json().catch(() => ({ error: { message: `HTTP ${r.status}` } }));
+    if (!j.error) return j.result;
+    const rate = /429|Too Many|rate/i.test(j.error.message || '');
+    if (!rate || i === tries - 1) throw new Error(`${method}: ${j.error.message}`);
+    await new Promise((res) => setTimeout(res, 1000 * 2 ** i));
+  }
 }
 
 const hexToBig = (h) => BigInt(h);
@@ -383,7 +401,32 @@ async function main() {
   let rows = [...weight.entries()]
     .filter(([a, w]) => w > 0n && !EXCLUDE.has(a))
     .filter(([a]) => (heldFor.get(a) ?? 0n) >= minBlocks)
-    .map(([address, w]) => ({ address, weight: w, balance: bal.get(address) ?? 0n }));
+    .map(([address, w]) => ({ address, weight: w, balance: bal.get(address) ?? 0n }))
+    // Still holding, at the end of the window. Time weighting on its own would
+    // still pay somebody who held a lot early and sold the whole lot before the
+    // snapshot, which is the exact person a holder airdrop must not pay.
+    .filter((r) => r.balance >= cfg.minBalance);
+  console.error(`min-balance ${cfg.minBalance} leaves ${rows.length} addresses`);
+
+  // EVERY remaining address is checked for bytecode. The hardcoded EXCLUDE list
+  // above only catches contracts somebody thought of; this catches the ones
+  // nobody did — a new router, an aggregator, a bridge, a vault. Tokens sent to
+  // a contract that has no way to claim them are burnt by accident, and tokens
+  // sent to a router are paid to whoever happens to use it next.
+  const contracts = [];
+  for (const r of rows) {
+    const code = await rpc('eth_getCode', [r.address, 'latest']);
+    if (code && code !== '0x') contracts.push(r.address);
+    await new Promise((res) => setTimeout(res, 40)); // the public RPC rate-limits
+  }
+  if (contracts.length) {
+    console.error(`dropping ${contracts.length} CONTRACT address(es), none of which can claim:`);
+    for (const a of contracts) console.error(`  ${a}`);
+    const isContract = new Set(contracts);
+    rows = rows.filter((r) => !isContract.has(r.address));
+  } else {
+    console.error('no contract addresses among the qualifiers');
+  }
 
   const totalWeight = rows.reduce((n, r) => n + r.weight, 0n);
   if (totalWeight === 0n) {
@@ -410,6 +453,8 @@ async function main() {
     minHoldDays: cfg.minHoldDays,
     holders: rows.length,
     excluded: [...EXCLUDE],
+    minBalance: cfg.minBalance.toString(),
+    contractsDropped: contracts,
     generatedFrom: 'Transfer log only.',
     // Run this and you must get the same root. That is what turns "this list
     // hashes to this root" — which a fabricated list also satisfies — into
