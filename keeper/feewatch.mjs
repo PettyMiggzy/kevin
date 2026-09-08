@@ -61,6 +61,14 @@ const TOKENS = {
 // The allowlist. Only a transfer whose SENDER is one of these is published.
 // Every entry is a contract that has been checked on chain, with a note saying
 // what it is — an address nobody can explain does not belong here.
+//
+// THE SENDER IS NOT PROOF OF ANYTHING ON ITS OWN. The pool manager pays out to
+// whatever recipient a swap names, and the launchpad factory holds the vesting
+// escrow, so "it came from the pool manager" also describes the treasury's own
+// swap proceeds and a vesting release. Both used to be published as LP fee
+// claims. They are still recognised — the run counts them — but the published
+// panel needs a second fact: the transaction was sent BY the treasury, which is
+// what claiming a fee actually looks like.
 const PAD = {
   '0xE4AcdB51b6554246Da8488d1e68E8FAd1b93f383': 'launchpad factory',
   '0x506200532B0a5A7B9d1e7C50D0014680FC3B5b13': 'launchpad locker',
@@ -68,6 +76,28 @@ const PAD = {
   '0x8366a39CC670B4001A1121B8F6A443A643e40951': 'uniswap v4 pool manager',
   '0xcae82a0059cb441d263170743b82a62e2499c378': 'launchpad router',
 };
+// WHAT A FEE CLAIM ACTUALLY LOOKS LIKE, as a call rather than as a hunch.
+// Keyed `<to>:<selector>`, read off the three claims the owner really made:
+//
+//   0x399adf8f… 0x52731fa4… 0xe6374297…  ->  locker.0xac68a748
+//
+// all three delivering WETH/KEVIN/KEK/GME into the treasury through the pool
+// manager. Requiring this instead of trusting the sender is the difference
+// between "the pool manager paid this wallet" — which is also true of every
+// swap the treasury ever makes, and of anything a stranger chooses to route
+// here — and "somebody claimed the LP fees".
+//
+// Note what it correctly refuses: 0xd651b82d…, the treasury calling the
+// launchpad factory with 0x1e83409a. That is a real transfer into the treasury
+// and it is not a fee claim, so it does not belong on a page headed LP fees.
+// A sender-only rule published it and held the three real ones; a signer-only
+// rule did exactly the same, because the real claims were relayed by
+// 0xa424c64a… and not signed by the treasury at all.
+const FEE_CALLS = {
+  '0x506200532b0a5a7b9d1e7c50d0014680fc3b5b13:0xac68a748': 'launchpad locker, claim',
+};
+const feeCallOf = (to, input) =>
+  FEE_CALLS[`${(to || '').toLowerCase()}:${(input || '').slice(0, 10).toLowerCase()}`] ?? null;
 const padOf = (addr) => {
   const hit = Object.keys(PAD).find((k) => k.toLowerCase() === addr.toLowerCase());
   return hit ? PAD[hit] : null;
@@ -125,6 +155,11 @@ export function totalsOf(claims) {
 
 /** Turn one Transfer log into a claim row, or null if it is not publishable. */
 export function classify(log, tokens = TOKENS, padLookup = padOf) {
+  // Belt as well as braces: even with the address filter above, a log that is
+  // not a three-topic ERC-20 Transfer with a 32-byte value is not something
+  // this function can read, and throwing here aborts the whole run.
+  if (!Array.isArray(log.topics) || log.topics.length !== 3) return null;
+  if (typeof log.data !== 'string' || log.data.length !== 66) return null;
   const token = getAddress(log.address);
   const from = getAddress('0x' + log.topics[1].slice(26));
   const meta = Object.entries(tokens).find(([k]) => k.toLowerCase() === token.toLowerCase())?.[1];
@@ -141,14 +176,17 @@ export function classify(log, tokens = TOKENS, padLookup = padOf) {
     amount: formatUnits(raw, meta?.decimals ?? 18),
     from,
     source,                                     // null => not from the pad
-    publish: Boolean(source && meta),           // named token AND known sender
+    // `call` is filled in by the runner, which is the only part that can see
+    // the transaction the log came from. A row is not publishable until then.
+    call: null,
+    publish: false,
   };
 }
 
 async function main() {
   const pub = createPublicClient({ chain, transport: http(cfg.rpc) });
 
-  const head = await pub.getBlockNumber();
+  const head = await withRetry(() => pub.getBlockNumber(), 'head');
   const safe = head - cfg.confirmations;
   say(`head ${head}, scanning ${cfg.fromBlock} -> ${safe} for transfers into ${cfg.wallet}`);
 
@@ -163,6 +201,13 @@ async function main() {
       params: [{
         fromBlock: '0x' + from.toString(16),
         toBlock: '0x' + to.toString(16),
+        // Pinned to the four tokens we can name. Without this the filter is
+        // "topic0 == Transfer", which every ERC-721 on the chain also emits —
+        // and an ERC-721 Transfer indexes all three parameters, so its `data`
+        // is empty and BigInt('0x') throws. One NFT airdropped at this wallet
+        // used to kill every run from then on, silently freezing the published
+        // fee panel at whatever it last said.
+        address: Object.keys(TOKENS),
         topics: [TRANSFER, null, pad32(cfg.wallet)],
       }],
     }), `logs ${from}-${to}`);
@@ -183,23 +228,44 @@ async function main() {
   }
   rows.forEach((r) => { r.at = times.get(r.block); });
 
+  // WHAT CALL PRODUCED IT. One getTransaction per distinct transaction whose
+  // sender is on the pad — a handful per run — and the row is published only
+  // if that transaction is a fee claim.
+  const candidates = [...new Set(rows.filter((r) => r.source && r.symbol).map((r) => r.tx))];
+  const calls = new Map();
+  for (const h of candidates) {
+    const tx = await withRetry(() => pub.getTransaction({ hash: h }), `tx ${h}`);
+    calls.set(h, { call: feeCallOf(tx?.to, tx?.input), to: tx?.to ?? null, sel: (tx?.input ?? '').slice(0, 10) });
+    await sleep(cfg.paceMs);
+  }
+  for (const r of rows) {
+    const c = calls.get(r.tx);
+    r.call = c?.call ?? null;
+    r.calledSel = c?.sel ?? null;
+    r.calledTo = c?.to ?? null;
+    r.publish = Boolean(r.source && r.symbol && r.call);
+  }
+
   const claims = rows.filter((r) => r.publish).sort((a, b) => b.block - a.block);
   const held = rows.filter((r) => !r.publish);
 
   for (const c of claims) say(`  FEE   ${c.amount} ${c.symbol}  from ${c.source}  ${c.tx}`);
   for (const h of held) {
-    say(`  held  ${h.amount} ${h.symbol ?? h.token} from ${h.from} — sender not on the pad allowlist, NOT published`);
+    const why = h.source
+      ? `from ${h.source}, but ${h.calledTo || 'that transaction'} ${h.calledSel || ''} is not a fee claim call`
+      : 'sender not on the pad allowlist';
+    say(`  held  ${h.amount} ${h.symbol ?? h.token} from ${h.from} — ${why}, NOT published`);
   }
 
   const doc = {
     wallet: cfg.wallet,
-    note: 'LP fees claimed from the launchpad. Every row is a real transaction — open the hash in the explorer and check it. Only transfers sent by the pad\'s own contracts appear here.',
+    note: 'LP fees claimed from the launchpad. Every row is a real transaction — open the hash in the explorer and check it. A row appears only if the transaction that produced it is a fee-claim call on the launchpad locker — not merely a transfer that arrived from a launchpad contract, which is also what a swap or a vesting release looks like.',
     explorer: 'https://robinhoodchain.blockscout.com/tx/',
     watchedFrom: Number(cfg.fromBlock),
     lastBlock: Number(safe),
     updatedAt: new Date().toISOString(),
     totals: totalsOf(claims),
-    claims: claims.map(({ publish, ...c }) => c),
+    claims: claims.map(({ publish, calledSel, calledTo, ...c }) => c),
     unpublished: held.length,
   };
 

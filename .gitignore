@@ -47,5 +47,10 @@ out/
 # Keeper operator key — never commit this
 keeper/.operator.key
 
-# Buy watch cursor — local state, not source
+# Buy watch cursor and seen-transaction set — local state, not source
 keeper/.buywatch.state
+
+# Which burns have actually been announced. Local state, and NOT the same file
+# as data/burns.json: the receipts are published, the ledger is per-deployment.
+data/.burnwatch.announced
+*.tmp

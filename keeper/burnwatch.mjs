@@ -13,7 +13,7 @@
 // there are gone, because nobody holds the key to either. Nothing else counts —
 // a "burn wallet" somebody controls is not a burn, it is a wallet.
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPublicClient, http, defineChain, formatUnits, getAddress } from 'viem';
@@ -32,10 +32,20 @@ const cfg = {
   chunk: BigInt(process.env.CHUNK || 200_000),
   paceMs: Number(process.env.PACE_MS || 300),
   confirmations: BigInt(process.env.CONFIRMATIONS || 2),
+  // A burn of a millionth of a token is not a burn. Without a floor, anybody
+  // can spend gas to put unlimited rows on the site's receipt list, every one
+  // rendering as "0 KEVIN". The total still counts every wei — the floor is
+  // about what gets its own row and its own announcement.
+  minBurn: BigInt(process.env.MIN_BURN_WEI || 1_000_000_000_000_000_000n), // 1 KEVIN
   write: process.env.WRITE === '1',
   live: process.env.LIVE === '1',
   chat: process.env.BURN_CHAT_ID || process.env.BUY_CHAT_ID,
   out: join(ROOT, 'data', 'burns.json'),
+  // The announced-transaction ledger, kept SEPARATE from the published
+  // receipts. They used to be the same file, so a burn was recorded as known
+  // the instant it was written — before it was posted — and one Telegram
+  // failure suppressed it forever.
+  ledger: join(ROOT, 'data', '.burnwatch.announced'),
 };
 
 // The only two destinations that are actually unspendable.
@@ -49,6 +59,13 @@ const pad32 = (a) => '0x' + a.toLowerCase().replace(/^0x/, '').padStart(64, '0')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const stamp = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
 const say = (...a) => console.log(stamp(), ...a);
+
+/** Write through a temp file, so a half-written file is never read back. */
+function writeAtomic(path, text) {
+  const tmp = path + '.tmp';
+  writeFileSync(tmp, text);
+  renameSync(tmp, path);
+}
 
 const chain = defineChain({
   id: cfg.chainId, name: 'Robinhood Chain',
@@ -136,8 +153,9 @@ async function main() {
     }
   }
 
+  const dust = logs.filter((l) => BigInt(l.data) > 0n && BigInt(l.data) < cfg.minBurn);
   const burns = logs
-    .filter((l) => BigInt(l.data) > 0n)
+    .filter((l) => BigInt(l.data) >= cfg.minBurn)
     .map((l) => ({
       tx: l.transactionHash,
       block: Number(BigInt(l.blockNumber)),
@@ -154,7 +172,14 @@ async function main() {
   }
   burns.sort((a, b) => b.block - a.block);
 
-  const total = totalOf(burns, cfg.supply);
+  // The total counts every wei that went to a burn address, dust included —
+  // the floor decides what gets a row, not what gets counted.
+  const dustRaw = dust.reduce((n, l) => n + BigInt(l.data), 0n);
+  const total = totalOf(
+    [...burns, ...(dustRaw > 0n ? [{ raw: dustRaw.toString() }] : [])],
+    cfg.supply,
+  );
+  if (dust.length) say(`${dust.length} burn(s) under ${formatUnits(cfg.minBurn, 18)} KEVIN counted in the total but not listed`);
   say(`${burns.length} burn${burns.length === 1 ? '' : 's'}, ${total.amount} KEVIN (${total.percentOfSupply.toFixed(4)}% of supply)`);
   for (const b of burns) say(`  ${b.amount} from ${b.from}  ${b.tx}`);
 
@@ -163,6 +188,8 @@ async function main() {
     note: 'Every $KEVIN sent to an address nobody holds the key to. Open any hash in the explorer and check it.',
     explorer: 'https://robinhoodchain.blockscout.com/tx/',
     burnAddresses: BURN_ADDRESSES,
+    minListed: cfg.minBurn.toString(),
+    unlistedDust: { count: dust.length, raw: dustRaw.toString() },
     supply: cfg.supply,
     watchedFrom: Number(cfg.fromBlock),
     lastBlock: Number(head),
@@ -175,13 +202,36 @@ async function main() {
     mkdirSync(dirname(cfg.out), { recursive: true });
     // Announce only what is new since the last write, so a rescan does not
     // re-post the whole history into the group.
+    // The ledger of what has actually been POSTED. It used to be the receipts
+    // file, which is written before anything is announced — so a burn counted
+    // as "already announced" the moment it was published, and one failed
+    // Telegram call meant it was never announced at all. A truncated file also
+    // used to mean "nothing is known", which re-announces the whole history.
     let known = new Set();
-    if (existsSync(cfg.out)) {
-      try { known = new Set((JSON.parse(readFileSync(cfg.out, 'utf8')).burns || []).map((b) => b.tx)); }
-      catch { /* a corrupt file must not stop the write; it just means nothing is "known" */ }
+    if (existsSync(cfg.ledger)) {
+      const raw = readFileSync(cfg.ledger, 'utf8');
+      const hashes = raw.split(/\s+/).filter((h) => /^0x[0-9a-fA-F]{64}$/.test(h));
+      known = new Set(hashes);
+      if (!hashes.length && raw.trim()) {
+        say('the announced-burn ledger is unreadable. Refusing to re-announce history.');
+        known = new Set(burns.map((b) => b.tx));
+      }
+    } else {
+      // First run after this change: everything already published counts as
+      // announced, so upgrading does not repost the back catalogue. Seeded
+      // ONCE and written immediately — if this fell back to burns.json on
+      // every run, a burn whose post failed would be "known" again the moment
+      // it was published and would never be retried, which is the bug this
+      // ledger exists to fix.
+      if (existsSync(cfg.out)) {
+        try { known = new Set((JSON.parse(readFileSync(cfg.out, 'utf8')).burns || []).map((b) => b.tx)); }
+        catch { known = new Set(burns.map((b) => b.tx)); }
+      }
+      writeAtomic(cfg.ledger, [...known].join('\n') + '\n');
+      say(`seeded the announced-burn ledger with ${known.size} already-published burn(s)`);
     }
     const fresh = burns.filter((b) => !known.has(b.tx));
-    writeFileSync(cfg.out, JSON.stringify(doc, null, 2) + '\n');
+    writeAtomic(cfg.out, JSON.stringify(doc, null, 2) + '\n');
     say(`wrote ${cfg.out}${fresh.length ? ` (${fresh.length} new)` : ''}`);
 
     if (cfg.live && fresh.length) {
@@ -189,8 +239,16 @@ async function main() {
       const key = existsSync(p) ? readFileSync(p, 'utf8').trim() : null;
       if (!key) { say('no bot/.telegram.key — cannot announce'); return; }
       for (const b of fresh.reverse()) {
-        await tg(key, 'sendMessage', { chat_id: cfg.chat, text: announce(b, total, cfg.supply) });
-        say(`announced ${b.tx}`);
+        // Announce FIRST, record after. One failed post must not silence that
+        // burn forever, and must not stop the ones behind it either.
+        try {
+          await tg(key, 'sendMessage', { chat_id: cfg.chat, text: announce(b, total, cfg.supply) });
+          known.add(b.tx);
+          writeAtomic(cfg.ledger, [...known].join('\n') + '\n');
+          say(`announced ${b.tx}`);
+        } catch (e) {
+          say(`FAILED to announce ${b.tx}: ${e.message} — it stays unannounced and will be retried`);
+        }
       }
     } else if (fresh.length) {
       say('new burns found. LIVE=1 would have announced them:');

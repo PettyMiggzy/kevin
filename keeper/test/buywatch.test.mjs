@@ -22,7 +22,10 @@ const check = (name, got, want) => {
   const w = JSON.stringify(want, (_, v) => (typeof v === 'bigint' ? v.toString() : v));
   (g === w ? ok : fail).push(`${g === w ? 'ok  ' : 'FAIL'} ${name}${g === w ? '' : `\n       got  ${g}\n       want ${w}`}`);
 };
-const run = (k) => netTransaction(TX[k].logs, KEVIN, WETH, BigInt(TX[k].value));
+// The transaction's `from` is part of the fixture because it is part of the
+// answer: only the wallet that actually sent the ETH may be credited with
+// having paid it. See section 5.
+const run = (k) => netTransaction(TX[k].logs, KEVIN, WETH, BigInt(TX[k].value), TX[k].from);
 
 // --- 1. THE ARBITRAGE BOT MUST NOT BE ANNOUNCED -----------------------------
 // It bought 5,733,486 KEVIN in the WETH pool and sold every one into the KEK
@@ -87,5 +90,44 @@ const run = (k) => netTransaction(TX[k].logs, KEVIN, WETH, BigInt(TX[k].value));
 }
 
 for (const l of [...ok, ...fail]) console.log('  ' + l);
+
+// --- 5. A STRANGER'S ETH IS NOT YOUR BUY ------------------------------------
+// `paid` used to be the transaction's native value, handed to every wallet
+// whose KEVIN balance went up. So a contract that moves one wei of KEVIN to a
+// bystander and refunds its own msg.value produces a headline "somebody bought
+// 10 ETH of KEVIN" for the price of gas — and there is no cheaper way to fake
+// a buy bot than one that quotes a number nobody spent.
+{
+  const T = (from, to, v, token) => ({
+    address: token,
+    topics: [
+      '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+      '0x' + from.slice(2).padStart(64, '0'),
+      '0x' + to.slice(2).padStart(64, '0'),
+    ],
+    data: '0x' + v.toString(16).padStart(64, '0'),
+  });
+  const attacker = '0x1111111111111111111111111111111111111111';
+  const bystander = '0x2222222222222222222222222222222222222222';
+  const logs = [T(attacker, bystander, 1n, KEVIN)];
+
+  const spoof = netTransaction(logs, KEVIN, WETH, 10n * 10n ** 18n, attacker);
+  const credited = spoof.buyers.find((b) => b.who.toLowerCase() === bystander.toLowerCase());
+  check('the bystander is not credited with the sender\'s ETH', credited?.paid ?? 0n, 0n);
+
+  // And the sender, who really did send it, still is — as long as tokens
+  // actually reached them.
+  const real = netTransaction([T(bystander, attacker, 10n ** 19n, KEVIN)],
+    KEVIN, WETH, 10n * 10n ** 18n, attacker);
+  check('the wallet that sent the ETH keeps it', real.buyers[0].paid, 10n * 10n ** 18n);
+
+  // WETH given up always wins over native value, because that is what the
+  // wallet actually parted with.
+  const viaWeth = netTransaction(
+    [T(bystander, attacker, 10n ** 19n, KEVIN), T(attacker, bystander, 5n * 10n ** 17n, WETH)],
+    KEVIN, WETH, 10n * 10n ** 18n, attacker);
+  check('WETH out beats the transaction value', viaWeth.buyers[0].paid, 5n * 10n ** 17n);
+}
+
 console.log(`\n${ok.length} passed, ${fail.length} failed`);
 process.exit(fail.length ? 1 : 0);

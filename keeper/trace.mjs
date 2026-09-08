@@ -38,9 +38,23 @@ const cfg = {
   // 0x8876...C0904 is the sell router on this chain: a contract holding zero
   // KEVIN that 36 unrelated wallets have sent tokens to, every one of which
   // it forwarded straight into the pools. Sending to it IS selling.
-  routers: (process.env.SELL_ROUTERS || '0x8876789976dEcBfCbBbe364623C63652db8C0904')
+  // ...and there is more than one of them. This repo already names two others
+  // in keeper/buywatch.mjs and keeper/feewatch.mjs; trace knew about neither,
+  // so a wallet that sold everything through the Universal Router came back as
+  // "Nothing here was ever sold", which is the most damaging thing this tool
+  // can get wrong.
+  routers: (process.env.SELL_ROUTERS || [
+    '0x8876789976dEcBfCbBbe364623C63652db8C0904', // sell router — 36 wallets route sells through it
+    '0x06AfBA43Fd06227fA663b0DAecF536f6EaA6bf99', // Universal Router
+    '0xcae82a0059cb441d263170743b82a62e2499c378', // launchpad router
+  ].join(','))
     .split(',').filter(Boolean).map((a) => getAddress(a.trim())),
-  span: BigInt(process.env.SPAN || 1_800_000),
+  // The token's first block. A rolling window is worse than useless here: at
+  // ~18 blocks a second, 1,800,000 blocks is about a day, while `held` is a
+  // live balanceOf — so the two halves of every row described different
+  // periods and old sells read as no sells.
+  fromBlock: BigInt(process.env.FROM_BLOCK || 53_285_633),
+  span: BigInt(process.env.SPAN || 0),
   chunk: BigInt(process.env.CHUNK || 200_000),
   paceMs: Number(process.env.PACE_MS || 300),
   maxWallets: Number(process.env.MAX_WALLETS || 12),
@@ -48,6 +62,24 @@ const cfg = {
 
 const TRANSFER = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const ZERO = '0x0000000000000000000000000000000000000000';
+// Contracts that are plumbing, not people — the same set keeper/buywatch.mjs
+// maintains. Crawling outward from any of these stops tracing a cluster and
+// starts tracing the whole chain, which is how a shared router's throughput
+// gets reported as one person's holdings.
+const PLUMBING = new Set([
+  '0x0000000000000000000000000000000000000000',
+  '0x000000000000000000000000000000000000dead',
+  '0x8366a39cc670b4001a1121b8f6a443a643e40951', // v4 PoolManager
+  '0x58daec3116aae6d93017baaea7749052e8a04fa7', // v4 PositionManager
+  '0x06afba43fd06227fa663b0daecf536f6eaa6bf99', // Universal Router
+  '0xcae82a0059cb441d263170743b82a62e2499c378', // launchpad router
+  '0xeb0226f992f959b7fa2ac7c3dafc712915310fea', // launchpad liquidity
+  '0x506200532b0a5a7b9d1e7c50d0014680fc3b5b13', // launchpad locker
+  '0x000000000022d473030f116ddee9f6b43ac78ba3', // permit2
+  '0xe4acdb51b6554246da8488d1e68e8fad1b93f383', // launchpad factory
+  '0x8876789976decbfcbbbe364623c63652db8c0904', // sell router
+]);
+const isPlumbing = (a) => PLUMBING.has(a.toLowerCase());
 const pad32 = (a) => '0x' + a.toLowerCase().replace(/^0x/, '').padStart(64, '0');
 const partyOf = (log, side) => getAddress('0x' + log.topics[side].slice(26));
 const amountOf = (log) => Number(formatUnits(BigInt(log.data), 18));
@@ -121,7 +153,7 @@ export async function inspect(wallet, from, head) {
     // through one stops tracing a cluster and starts tracing the whole chain —
     // which is how a shared router's throughput gets misread as one person's dump.
     counterparties: [...new Set([...out, ...into].flatMap((l) => [partyOf(l, 1), partyOf(l, 2)]))]
-      .filter((a) => !isVenue(a) && a !== ZERO && a !== wallet),
+      .filter((a) => !isVenue(a) && !isPlumbing(a) && a !== ZERO && a !== wallet),
   };
 }
 
@@ -129,8 +161,16 @@ async function main() {
   const seed = getAddress(process.argv[2] || '');
   const cluster = process.argv.includes('--cluster');
   const head = await pub.getBlockNumber();
-  const from = head - cfg.span;
-  console.log(`token ${cfg.token}\nscanning blocks ${from} -> ${head}${cluster ? ' (following the cluster)' : ''}\n`);
+  // SPAN is still there for a deliberately short look, but the default is the
+  // token's whole life, because "bought" and "sold" have to cover the same
+  // period as "held" or the row is three numbers about three different things.
+  const from = cfg.span > 0n ? head - cfg.span : cfg.fromBlock;
+  const whole = from <= cfg.fromBlock;
+  console.log(`token ${cfg.token}`);
+  console.log(`scanning blocks ${from} -> ${head}` +
+    (whole ? '  (the token\'s whole life)' : `  (a WINDOW — anything before ${from} is invisible)`) +
+    `${cluster ? ', following the cluster' : ''}`);
+  console.log(`venues counted as a sale: pool manager + ${cfg.routers.length} router(s)\n`);
 
   const seen = new Set(), queue = [seed], rows = [];
   while (queue.length && rows.length < (cluster ? cfg.maxWallets : 1)) {
@@ -150,8 +190,13 @@ async function main() {
   console.log(`bought from pools : ${fmt(t('bought'))}`);
   console.log(`SOLD to pools     : ${fmt(t('sold'))}`);
   console.log(`still holding     : ${fmt(t('held'))}  = ${(t('held') / 1e9 * 100).toFixed(2)}% of supply`);
-  if (t('sold') === 0) {
-    console.log(`\nNothing here was ever sold — into a pool or through a router.`);
+  if (t('sold') === 0 && !whole) {
+    console.log(`\nNo sale in blocks ${from}-${head}. That is a window, not a history —`);
+    console.log(`re-run without SPAN to cover the token's whole life before saying more.`);
+  } else if (t('sold') === 0) {
+    console.log(`\nNothing here was ever sold into the pool manager or through any of the`);
+    console.log(`${cfg.routers.length} routers this tool knows about. A venue it has never seen would not`);
+    console.log(`be counted, so this is "no sale through a known venue", not a character reference.`);
     if (t('movedOut') > 0) {
       console.log(`But ${fmt(t('movedOut'))} did leave for other wallets. Whether THOSE sold is`);
       console.log(`a separate question: re-run with --cluster, or trace them directly.`);

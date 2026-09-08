@@ -1,10 +1,10 @@
 {
   "wallet": "0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf",
-  "note": "LP fees claimed from the launchpad. Every row is a real transaction — open the hash in the explorer and check it. Only transfers sent by the pad's own contracts appear here.",
+  "note": "LP fees claimed from the launchpad. Every row is a real transaction — open the hash in the explorer and check it. A row appears only if the transaction that produced it is a fee-claim call on the launchpad locker — not merely a transfer that arrived from a launchpad contract, which is also what a swap or a vesting release looks like.",
   "explorer": "https://robinhoodchain.blockscout.com/tx/",
   "watchedFrom": 57090885,
-  "lastBlock": 57096452,
-  "updatedAt": "2026-09-07T19:49:33.939Z",
+  "lastBlock": 57434240,
+  "updatedAt": "2026-09-08T05:20:36.091Z",
   "totals": {
     "KEK": {
       "raw": "525169545832999303102525",
@@ -38,6 +38,7 @@
       "amount": "525169.545832999303102525",
       "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
       "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
       "at": "2026-09-07T19:49:06.000Z"
     },
     {
@@ -50,6 +51,7 @@
       "amount": "1912600.90594802286013381",
       "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
       "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
       "at": "2026-09-07T19:49:06.000Z"
     },
     {
@@ -62,6 +64,7 @@
       "amount": "0.079223153141012762",
       "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
       "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
       "at": "2026-09-07T19:48:50.000Z"
     },
     {
@@ -74,6 +77,7 @@
       "amount": "114603.175509811992067377",
       "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
       "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
       "at": "2026-09-07T19:48:50.000Z"
     },
     {
@@ -86,6 +90,7 @@
       "amount": "0.005134649754998816",
       "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
       "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
       "at": "2026-09-07T19:48:30.000Z"
     },
     {
@@ -98,8 +103,9 @@
       "amount": "1382940.263512799198192946",
       "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
       "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
       "at": "2026-09-07T19:48:30.000Z"
     }
   ],
-  "unpublished": 0
+  "unpublished": 1
 }

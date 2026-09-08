@@ -70,9 +70,15 @@ const addrOf = (topic) => '0x' + topic.slice(26).toLowerCase();
  * @param token  the token we care about ($KEVIN)
  * @param weth   the quote token, for working out what was paid
  * @param value  the transaction's native ETH value
+ * @param sender the transaction's `from` — the only address that can be
+ *               credited with having sent `value`. Without it the ETH figure
+ *               is attributed to whoever the tokens landed on, and a contract
+ *               that moves one wei of KEVIN to a stranger while refunding its
+ *               own msg.value produces a headline buy alert for the price of
+ *               gas.
  * @returns {{buyers: Array<{who,tokens,paid}>, sellers: Array}}
  */
-export function netTransaction(logs, token, weth, value = 0n) {
+export function netTransaction(logs, token, weth, value = 0n, sender = null) {
   const tok = token.toLowerCase();
   const wet = weth.toLowerCase();
   const dTok = new Map();
@@ -95,12 +101,17 @@ export function netTransaction(logs, token, weth, value = 0n) {
 
   const buyers = [];
   const sellers = [];
+  const from = (sender || '').toLowerCase();
   for (const [who, net] of dTok) {
     if (PLUMBING.has(who)) continue;
     if (net === 0n) continue; // an arb: in and straight back out
-    // What this wallet paid: the native value it sent, or the WETH it gave up.
+    // What this wallet paid: the WETH IT gave up, and the transaction's native
+    // value only when this wallet is the one that sent it. Crediting `value` to
+    // anybody whose balance happened to rise means the ETH number in the alert
+    // is not the ETH that wallet spent.
     const wethOut = -(dWeth.get(who) ?? 0n);
-    const paid = value > 0n ? value : (wethOut > 0n ? wethOut : 0n);
+    const ownValue = from && who === from ? value : 0n;
+    const paid = wethOut > 0n ? wethOut : ownValue;
     if (net > 0n) buyers.push({ who: getAddress(who), tokens: net, paid });
     else sellers.push({ who: getAddress(who), tokens: -net, got: wethOut < 0n ? -wethOut : (dWeth.get(who) ?? 0n) });
   }
@@ -119,6 +130,9 @@ const cfg = {
   everyMs: Number(process.env.TICK_MS || 20_000),
   chunk: Number(process.env.CHUNK || 2000),
   minEth: BigInt(process.env.MIN_ETH_WEI || 1_000_000_000_000_000n), // 0.001
+  // A buy of a fraction of a token is not a buy, and pairing a dust amount with
+  // a headline ETH figure is how a cheap transaction becomes a loud alert.
+  minTokens: BigInt(process.env.MIN_TOKENS_WEI || 1_000_000_000_000_000_000n), // 1 KEVIN
   confirmations: Number(process.env.CONFIRMATIONS || 2),
   state: join(HERE, '.buywatch.state'),
 };
@@ -187,11 +201,42 @@ async function main() {
   say('  chain   ', cfg.chainId, cfg.rpc);
   say('  chat    ', cfg.chat || '(none — dry run)');
   say('  mode    ', cfg.live ? 'LIVE, it will post' : 'DRY RUN, it will post nothing');
-  say('  floor   ', formatEther(cfg.minEth), 'ETH — smaller buys are not announced');
+  say('  floor   ', formatEther(cfg.minEth), 'ETH and',
+      formatUnits(cfg.minTokens, 18), 'KEVIN — smaller buys are not announced');
 
+  // The cursor alone is not enough. It only advances when a whole chunk has
+  // been processed, so a single RPC hiccup mid-chunk replays every transaction
+  // in it — and every buy in it gets announced a second time. Remember which
+  // transactions have actually been posted.
   let cursor = 0n;
-  if (existsSync(cfg.state)) cursor = BigInt(readFileSync(cfg.state, 'utf8').trim() || '0');
+  let seen = new Set();
+  if (existsSync(cfg.state)) {
+    const raw = readFileSync(cfg.state, 'utf8').trim();
+    try {
+      const j = JSON.parse(raw);
+      cursor = BigInt(j.cursor || 0);
+      seen = new Set(j.seen || []);
+    } catch {
+      cursor = BigInt(raw || '0');   // the old format was a bare block number
+    }
+  }
   if (cursor === 0n) cursor = (await pub.getBlockNumber()) - 200n;
+  const SEEN_MAX = 4000;
+  const saveState = () => {
+    const keep = [...seen].slice(-SEEN_MAX);
+    seen = new Set(keep);
+    writeFileSync(cfg.state, JSON.stringify({ cursor: String(cursor), seen: keep }));
+  };
+
+  // The receipt and transaction fetches had no retry at all, and a throw here
+  // aborted the chunk before the cursor moved.
+  const tries = async (fn, what) => {
+    let last;
+    for (let i = 0; i < 4; i++) {
+      try { return await fn(); } catch (e) { last = e; await new Promise((r) => setTimeout(r, 400 * 2 ** i)); }
+    }
+    throw new Error(`${what}: ${last?.shortMessage || last?.message}`);
+  };
 
   for (;;) {
     try {
@@ -208,11 +253,14 @@ async function main() {
           byTx.get(l.transactionHash).push(l);
         }
         for (const [hash] of byTx) {
-          const rc = await pub.getTransactionReceipt({ hash });
-          const tx = await pub.getTransaction({ hash });
-          const { buyers } = netTransaction(rc.logs, cfg.token, cfg.weth, tx.value);
+          if (seen.has(hash)) continue;
+          const rc = await tries(() => pub.getTransactionReceipt({ hash }), 'receipt');
+          const tx = await tries(() => pub.getTransaction({ hash }), 'transaction');
+          const { buyers } = netTransaction(rc.logs, cfg.token, cfg.weth, tx.value, tx.from);
+          seen.add(hash);
           for (const b of buyers) {
             if (b.paid < cfg.minEth) continue;
+            if (b.tokens < cfg.minTokens) continue;
             const text = announce(b);
             say(`BUY  ${formatEther(b.paid)} ETH -> ${formatUnits(b.tokens, 18)} KEVIN  ${b.who}  ${hash.slice(0, 18)}`);
             if (!cfg.live) { console.log(text.split('\n').map((l) => '      ' + l).join('\n')); continue; }
@@ -222,7 +270,7 @@ async function main() {
           }
         }
         cursor = to + 1n;
-        writeFileSync(cfg.state, String(cursor));
+        saveState();
       }
     } catch (e) {
       warn('tick failed:', e.shortMessage || e.message);

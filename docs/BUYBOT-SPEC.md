@@ -72,10 +72,22 @@ For each new block (or block range):
    burn            0x000000000000000000000000000000000000dEaD  and  0x0
    ```
 
-6. Anything left with a **positive** net is a buyer. What they paid is
-   `tx.value` if it was native ETH, otherwise the WETH they gave up.
+6. Anything left with a **positive** net is a buyer. What they paid is the
+   **WETH that wallet gave up**, and `tx.value` only when that wallet is the
+   transaction's `from`.
+
+   > Read that twice. Crediting `tx.value` to whoever the tokens landed on is
+   > the cheapest way in the world to fake a buy alert: deploy a contract that
+   > moves one wei of KEVIN to a bystander and refunds its own `msg.value`,
+   > send it 10 ETH, and the bot announces a 10 ETH buy for the price of gas.
+   > The ETH was never spent and the wallet named never bought anything. Our
+   > own watcher shipped with this bug and there is a regression test for it in
+   > `keeper/test/buywatch.test.mjs`.
+
 7. Anything left with a **negative** net is a seller.
-8. Below a minimum size, say nothing. 0.001 ETH is a sane floor.
+8. Below a minimum size, say nothing — **on both axes**. 0.001 ETH is a sane
+   ETH floor, and 1 whole token is a sane token floor. A dust token amount
+   paired with a headline ETH figure is the same fake buy wearing a hat.
 
 ---
 
