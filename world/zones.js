@@ -40,7 +40,8 @@ window.KEVIN_ZONES = {
       { x:776,  y:340, r:205, signY:150, name:'THE STOREROOM',
         tip:'The storeroom. Four contracts written and tested. None deployed.' },
       { x:995,  y:380, r:150, signY:212, name:"KEVIN'S GYM",
-        tip:'The gym.', href:'../gym/' },
+        tip:'The gym. No pain, only Kevin.',
+        to:'gym', at:{ x:768, y:700 } },
       { x:1270, y:452, r:160, signY:300, name:'THE CARD ROOM',
         tip:'The card room. He is not good at it.', href:'../poker/' },
     ],
@@ -67,7 +68,8 @@ window.KEVIN_ZONES = {
         tip:'The brokerage. The swap is at the desk.',
         to:'brokerage', at:{ x:790, y:760 } },
       { x:905,  y:356, r:165, signY:130, name:"KEVIN'S GYM",
-        tip:'The gym.', href:'../gym/' },
+        tip:'The gym. No pain, only Kevin.',
+        to:'gym', at:{ x:768, y:700 } },
     ],
     exits: [ { x:140, y:780, r:130, label:'← THE BLOCK', to:'block', at:{ x:1300, y:720 } } ],
   },
@@ -156,6 +158,27 @@ window.KEVIN_ZONES = {
         tip:'The lift only goes to floors that exist. So far: this one.' },
     ],
     exits: [ { x:790, y:848, r:110, label:'↓ OUT TO DOWNTOWN', to:'downtown', at:{ x:716, y:470 } } ],
+  },
+
+  gym: {
+    name: "Kevin's Gym",
+    art: '../assets/png/world/gym.jpg?v=92c9055f',
+    spawn: { x: 768, y: 700 },
+    floor: [[460,500],[1120,500],[1290,650],[1500,860],[60,860],[540,720],[500,560]],
+    spots: [
+      // The rack is the way into the workout itself — the 3D gym, which is a
+      // whole game and stays a whole game. This room is how you get to it from
+      // the street without the street and the game looking like two projects.
+      { x:900, y:470, r:210, flat:true, name:'THE RACK',
+        tip:'Five reps to a set, every rep a timing hit. Press E.', href:'../gym/' },
+      { x:610, y:440, r:180, flat:true, name:'THE DUMBBELLS',
+        tip:'He starts at the light end and works up. He is on the light end.' },
+      { x:1200, y:470, r:180, flat:true, name:'THE BAG',
+        tip:'The bag. It has never hit back, which he counts as a winning record.' },
+      { x:1330, y:520, r:170, flat:true, name:'THE COOLER',
+        tip:'Water. Free. The only thing in here that is.' },
+    ],
+    exits: [ { x:768, y:848, r:110, label:'↓ OUT TO DOWNTOWN', to:'downtown', at:{ x:905, y:470 } } ],
   },
 
   house: {

@@ -39,7 +39,7 @@ const open = async (z, tag) => {
 };
 
 // --- every zone renders --------------------------------------------------
-const ZONES = ['block','downtown','neighbourhood','mckevins','gameshop','brokerage','house'];
+const ZONES = ['block','downtown','neighbourhood','mckevins','gameshop','brokerage','house','gym'];
 for (const z of ZONES) {
   await open(z, 'r');
   const name = await page.evaluate(() => document.getElementById('where').firstChild.textContent);

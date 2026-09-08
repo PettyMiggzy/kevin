@@ -90,6 +90,14 @@ const ZONES = {
     'ticker board. The MIDDLE and BOTTOM is OPEN, EMPTY, WALKABLE polished ' +
     'floor with a mirror sheen. Tall windows on one side.',
 
+  gym:
+    'The INSIDE of a small back-street gym, THREE-QUARTER OVERHEAD VIEW, ' +
+    'drawn like a game map. Along the TOP, a long mirrored wall with a rack of ' +
+    'dumbbells in front of it and a barbell on a squat rack. Down the LEFT and ' +
+    'RIGHT edges, a bench press, a rowing machine, a punching bag on a chain, a ' +
+    'water cooler, a stack of weight plates, a chalk bucket. The MIDDLE and ' +
+    'BOTTOM is OPEN, EMPTY, WALKABLE rubber matting. Strip lighting overhead.',
+
   house:
     'The INSIDE of a small tidy living room, THREE-QUARTER OVERHEAD VIEW, ' +
     'drawn like a game map. Along the TOP, a large WHITEBOARD on the wall ' +
@@ -115,7 +123,7 @@ async function main() {
   if (!SITUATION) { console.error(`no zone "${zone}". have: ${Object.keys(ZONES).join(', ')}`); continue; }
   // An interior has no sky, so it gets a palette sentence of its own rather
   // than a yellow ceiling and a note apologising for it.
-  const INSIDE = ['mckevins', 'gameshop', 'brokerage', 'house'].includes(zone);
+  const INSIDE = ['mckevins', 'gameshop', 'brokerage', 'house', 'gym'].includes(zone);
   const PALETTE = INSIDE
     ? 'The camera is INSIDE the room at standing height, looking at the back ' +
       'wall. The room FILLS THE WHOLE FRAME edge to edge: the floor runs off ' +
