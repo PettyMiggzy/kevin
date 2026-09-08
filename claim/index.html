@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KEVIN — Claim</title>
+<meta name="description" content="Check whether you qualify for a $KEVIN holder round, and claim it yourself.">
+<link rel="icon" href="../assets/art/favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#ffe500">
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  .claim { max-width: 74ch; }
+  .box {
+    background: var(--white); border: var(--edge) solid var(--ink);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: clamp(22px, 4vw, 40px); margin-top: 30px;
+  }
+  .amt { font-family: var(--display); font-size: clamp(38px, 7vw, 68px); line-height: 1; margin: 6px 0 4px; }
+  .muted { font-size: 14px; opacity: .72; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+  input[type=text] {
+    width: 100%; font-family: var(--body); font-size: 15px; padding: 13px 14px;
+    border: 3px solid var(--ink); border-radius: 10px; background: var(--cream);
+  }
+  .bad  { border-left: var(--edge) solid var(--red); padding-left: 16px; }
+  .good { border-left: var(--edge) solid var(--kek); padding-left: 16px; }
+  code { word-break: break-all; }
+  .stat { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-top:22px }
+  .stat div { background:var(--cream); border:3px solid var(--ink); border-radius:12px; padding:14px }
+  .stat span { display:block; font-size:11px; letter-spacing:.16em; text-transform:uppercase; font-weight:700; opacity:.6 }
+  .stat b { font-family:var(--display); font-size:24px; word-break:break-word }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap nav__inner">
+    <a class="nav__brand" href="../"><img src="../assets/art/logo.svg" alt="" width="46" height="46"><span>KEVIN</span></a>
+    <div class="nav__links">
+      <a href="../">Site</a><a href="../docs/">Docs</a><a href="../#burn">Burns</a><a href="../#fees">Fees</a>
+    </div>
+    <div class="nav__social">
+      <a class="btn btn--sm btn--ghost" href="https://t.me/kevinRBH" target="_blank" rel="noopener">Telegram</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap claim">
+    <p class="eyebrow">Holder round</p>
+    <h1>Claim.</h1>
+    <p class="hero__sub">
+      Paste your address, or connect. If you are on the list, you claim it
+      yourself — nobody sends it to you and nobody can send it anywhere else.
+    </p>
+  </div>
+</header>
+
+<section class="section section--cream">
+  <div class="wrap claim">
+    <div id="round-state"><p class="lead">Loading the round…</p></div>
+
+    <div class="box" id="lookup" hidden>
+      <label class="muted" for="addr">Your address</label>
+      <input type="text" id="addr" placeholder="0x…" spellcheck="false" autocomplete="off">
+      <div class="row">
+        <button class="btn" id="check">Check</button>
+        <button class="btn btn--ghost" id="connect">Connect wallet</button>
+      </div>
+      <div id="result" style="margin-top:22px"></div>
+    </div>
+
+    <div class="box" id="how">
+      <h3 style="margin-top:0">How this works, and why it is done this way</h3>
+      <p>
+        The list is built from the token's own transfer log — every address,
+        how much it held, and for how long — and then reduced to a single
+        32-byte fingerprint stored in the contract. Your claim carries a proof
+        that your row is part of that fingerprint.
+      </p>
+      <p>
+        That means <b>nobody can add a row after the fact</b>, including us. It
+        also means the full list is published beside the root, so you can
+        re-run the tool yourself and check the two match. A list that hashes to
+        the right root is the only kind worth trusting, because a made-up list
+        would not.
+      </p>
+      <p style="margin-bottom:0">
+        You pay the gas for your own claim. That is deliberate: a round that
+        pushes tokens out to everybody costs the treasury a transaction per
+        person, and it sends tokens to addresses that never asked for them.
+      </p>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <p class="footer__note">
+      <strong>Kevin is a meme coin.</strong> A round existing now is not a
+      promise of another one. Nothing here is financial advice. Verify the
+      contract address in the official group before signing anything, and if
+      you found this page from a DM, close it.
+    </p>
+  </div>
+</footer>
+
+<script>
+/* The round file is the same artefact published for verification, so this page
+   cannot show a number the published list does not contain. If it is missing,
+   the page says there is no round rather than inventing one. */
+(function () {
+  var CHAIN_ID = 4663;
+  var EXPLORER = 'https://robinhoodchain.blockscout.com/tx/';
+  var state = document.getElementById('round-state');
+  var lookup = document.getElementById('lookup');
+  var result = document.getElementById('result');
+  var round = null;
+
+  var esc = function (v) {
+    return String(v).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  };
+  var fmt = function (raw, dp) {
+    dp = dp || 18;
+    var s = String(raw).padStart(dp + 1, '0');
+    var whole = s.slice(0, -dp).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    var frac = s.slice(-dp).replace(/0+$/, '').slice(0, 6);
+    return frac ? whole + '.' + frac : whole;
+  };
+
+  fetch('round.json', { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function (d) {
+      round = d;
+      state.innerHTML =
+        '<p class="lead">One round is open. The full list and the root are below — ' +
+        'check them before you claim anything.</p>' +
+        '<div class="stat">' +
+          '<div><span>Eligible addresses</span><b>' + esc(d.holders) + '</b></div>' +
+          '<div><span>Minimum held</span><b>' + fmt(d.minBalance) + ' KEVIN</b></div>' +
+          '<div><span>Total in the round</span><b>' + fmt(d.total) + '</b></div>' +
+        '</div>' +
+        '<p class="muted" style="margin-top:18px">Merkle root <code>' + esc(d.root) + '</code></p>';
+      lookup.hidden = false;
+    })
+    .catch(function () {
+      // No file, or an unreadable one, means no round. Never imply otherwise.
+      state.innerHTML =
+        '<p class="lead"><b>There is no open round right now.</b></p>' +
+        '<p>When one opens it will appear here with its list and its root, and ' +
+        'it will be announced in the group. Nobody will ever DM you about it.</p>';
+    });
+
+  function show(addr) {
+    if (!round) return;
+    var key = Object.keys(round.claims || {}).filter(function (a) {
+      return a.toLowerCase() === addr.toLowerCase();
+    })[0];
+    if (!key) {
+      result.innerHTML =
+        '<div class="bad"><p><b>That address is not on this list.</b></p>' +
+        '<p class="muted">The round needed at least ' + fmt(round.minBalance) +
+        ' KEVIN still held at block ' + esc(round.window.toBlock) +
+        '. Contract addresses were excluded, because a contract has no way to claim.</p></div>';
+      return;
+    }
+    var c = round.claims[key];
+    result.innerHTML =
+      '<div class="good">' +
+      '<p class="muted">You are on the list</p>' +
+      '<div class="amt">' + fmt(c.amount) + '</div>' +
+      '<p class="muted">index ' + esc(c.index) + ' · held ' + fmt(c.balance) + ' KEVIN</p>' +
+      '<div class="row"><button class="btn" id="doclaim">Claim it</button></div>' +
+      '<p class="muted" style="margin-top:14px">You pay the gas. Nothing moves until you sign.</p>' +
+      '</div>';
+    document.getElementById('doclaim').onclick = function () { send(c, key); };
+  }
+
+  async function send(c, addr) {
+    if (!window.ethereum) {
+      result.insertAdjacentHTML('beforeend',
+        '<p class="bad" style="margin-top:16px">No wallet found in this browser. ' +
+        'Open this page inside your wallet\'s browser, or claim from the contract directly.</p>');
+      return;
+    }
+    try {
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      var chain = await window.ethereum.request({ method: 'eth_chainId' });
+      if (parseInt(chain, 16) !== CHAIN_ID) {
+        result.insertAdjacentHTML('beforeend',
+          '<p class="bad" style="margin-top:16px">Wrong network — switch to Robinhood Chain (' +
+          CHAIN_ID + ') and try again.</p>');
+        return;
+      }
+      result.insertAdjacentHTML('beforeend',
+        '<p class="muted" style="margin-top:16px">Building the transaction…</p>');
+      var data = encodeClaim(round.roundId || 0, c.index, addr, c.amount, c.proof);
+      var tx = await window.ethereum.request({
+        method: 'eth_sendTransaction',
+        params: [{ from: (await window.ethereum.request({ method: 'eth_accounts' }))[0],
+                   to: round.airdrop, data: data }],
+      });
+      result.insertAdjacentHTML('beforeend',
+        '<p class="good" style="margin-top:16px">Sent. <a href="' + EXPLORER + tx +
+        '" target="_blank" rel="noopener">' + tx.slice(0, 18) + '…</a></p>');
+    } catch (e) {
+      result.insertAdjacentHTML('beforeend',
+        '<p class="bad" style="margin-top:16px">' + esc(e.message || 'Cancelled.') + '</p>');
+    }
+  }
+
+  /* Minimal ABI encoder for exactly one function. Pulling in a library to
+     encode a single call would be a much bigger attack surface than the
+     forty lines it replaces. */
+  function encodeClaim(roundId, index, account, amount, proof) {
+    // Verified against `cast sig`, not guessed. The first selector written
+    // here by hand was wrong, which would have produced a transaction that
+    // reverted for every single claimant.
+    var SEL = '0x5d4df3bf'; // claim(uint256,uint256,address,uint256,bytes32[])
+    var w = function (v) { return BigInt(v).toString(16).padStart(64, '0'); };
+    var head =
+      w(roundId) + w(index) +
+      account.toLowerCase().replace(/^0x/, '').padStart(64, '0') +
+      w(amount) + w(5 * 32);
+    var tail = w(proof.length) + proof.map(function (p) {
+      return p.replace(/^0x/, '').padStart(64, '0');
+    }).join('');
+    return SEL + head + tail;
+  }
+
+  document.getElementById('check').onclick = function () {
+    var v = document.getElementById('addr').value.trim();
+    if (!/^0x[0-9a-fA-F]{40}$/.test(v)) {
+      result.innerHTML = '<p class="bad">That is not an address. It should be 0x followed by 40 characters.</p>';
+      return;
+    }
+    show(v);
+  };
+  document.getElementById('connect').onclick = async function () {
+    if (!window.ethereum) {
+      result.innerHTML = '<p class="bad">No wallet in this browser. Paste your address instead — checking the list needs no wallet at all.</p>';
+      return;
+    }
+    var a = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    document.getElementById('addr').value = a[0];
+    show(a[0]);
+  };
+})();
+</script>
+</body>
+</html>
