@@ -160,11 +160,14 @@ contract RatchetGrief is Test {
         }
         uint160 markAfter = floor.floorSqrtPriceX96();
 
-        // One step of ratchetBps (500 = 5% of PRICE), and not thirty of them.
-        // Better means a SMALLER sqrtPrice here, so measure the price ratio.
-        uint256 r = (uint256(markBefore) * 1e18) / uint256(markAfter);
-        uint256 movedBps = (((r * r) / 1e18) - 1e18) * 10_000 / 1e18;
-        assertApproxEqAbs(movedBps, 500, 2, "one 5% step for thirty calls");
+        // NOT ONE STEP EITHER — NONE. The floor now needs the level to survive
+        // a SECOND reading a cooldown later before it becomes permanent, so a
+        // pump and thirty calls inside a single block move the mark not at all.
+        // The attack this test was written for cost 0.0153 ETH and killed the
+        // sell side forever; it now buys a proposal that the next honest
+        // reading throws away.
+        assertEq(markAfter, markBefore, "thirty calls in one block moved nothing");
+        assertTrue(floor.pendingFloor() != 0, "it only got as far as a proposal");
 
         // Sanity: the price really was manipulated, so the cap is what stopped
         // it and not a lack of room.

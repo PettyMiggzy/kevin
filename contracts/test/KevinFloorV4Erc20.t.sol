@@ -178,16 +178,42 @@ contract KevinFloorV4Erc20Test is Test {
     ///      quote token itself removed the backing while leaving the number
     ///      untouched — after which every bid reverted trying to settle tokens
     ///      the contract no longer held.
-    function test_sweepingTheQuoteDebitsTheWarChest() public {
+    /// @dev TAKING A PROFIT IS NOT THE SAME ACT AS CANCELLING THE BUYBACK.
+    ///
+    ///      A sale leaves ALL of its proceeds here and earmarks only
+    ///      `buybackBps` of them. This used to debit the chest by the full
+    ///      swept amount, so sweeping the unreserved share — money the buyback
+    ///      was never entitled to — silently killed the bid side while its own
+    ///      backing was still sitting in the contract.
+    function test_sweepingTheFreeProfitLeavesTheWarChestFunded() public {
         _arm(1_500);
         vm.prank(operator);
         floor.poke(type(uint256).max);
         uint256 chest = floor.warChest();
         assertGt(chest, 0);
+        uint256 bal = quote.balanceOf(address(floor));
+        uint256 free = bal - chest;
+        assertGt(free, 0, "a sale leaves more here than it reserves");
 
         vm.prank(owner);
-        floor.sweep(address(quote), owner, chest);
-        assertEq(floor.warChest(), 0, "the money went, so the number went with it");
+        floor.sweep(address(quote), owner, free);
+        assertEq(floor.warChest(), chest, "the chest is untouched by taking the profit");
+        assertEq(quote.balanceOf(address(floor)), chest, "and it is still fully backed");
+    }
+
+    /// @dev Past the free money it does come out of the chest, and the number
+    ///      follows the money exactly.
+    function test_sweepingPastTheProfitDoesDebitTheWarChest() public {
+        _arm(1_500);
+        vm.prank(operator);
+        floor.poke(type(uint256).max);
+        uint256 chest = floor.warChest();
+        uint256 bal = quote.balanceOf(address(floor));
+
+        vm.prank(owner);
+        floor.sweep(address(quote), owner, bal); // take the lot
+        assertEq(floor.warChest(), 0, "swept to nothing, so the chest is nothing");
+        assertGt(chest, 0, "and there was something to lose");
     }
 
     function test_sweepingStrayEthLeavesTheWarChestAlone() public {

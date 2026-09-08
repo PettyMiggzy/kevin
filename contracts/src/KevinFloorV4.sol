@@ -77,9 +77,16 @@ import {StateLibrary} from "v4-core/src/libraries/StateLibrary.sol";
  *       So the floor is a HIGH-WATER MARK, not a promise. While the price is
  *       under it, it waits `patience`, and then eases toward the market at
  *       `decayBpsPerDay` a day, never further than `maxDecayBps` below the
- *       high-water mark. The moment the price is back at the floor, the wait
- *       resets and the floor is at full height again — waiting only counts
- *       while the market is actually gone.
+ *       high-water mark.
+ *
+ *       WAITING IS TIME SOMEBODY WATCHED, not time that passed. The clock is
+ *       an accumulator advanced by `observe()`, which anyone may call and a
+ *       pause does not block, and no single observation may move it by more
+ *       than `MAX_OBSERVATION`. Time nobody looked at is worth nothing to
+ *       either side, so an outage cannot quietly spend the allowance, and a
+ *       price pushed to the floor for one block cannot wipe it. Coming back
+ *       unwinds the clock at the rate it was earned rather than resetting it,
+ *       because an instant reset is a thing an attacker can buy.
  *
  *       That does not weaken the "never wreck my chart" guarantee, because
  *       `sellStopBps` is a separate limit on every individual sale. What it
@@ -123,6 +130,15 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
     uint256 public constant MAX_RATCHET_BPS = 2_000;
     uint256 public constant MAX_BUY_BAND_BPS = 3_000;
     uint256 public constant MIN_COOLDOWN = 60;
+    /// @notice The most time one observation may add to or take off the
+    ///         underwater clock. Bounds what a gap in watching is worth to
+    ///         either side. The keeper ticks every few minutes, so normal
+    ///         operation is never clipped by this.
+    uint256 public constant MAX_OBSERVATION = 1 hours;
+    /// @notice Ceiling on how far the floor may ever be allowed to yield.
+    ///         setPatience() was the one policy dial with no bytecode ceiling,
+    ///         and it is the dial that sets the floor's own hard bottom.
+    uint256 public constant MAX_FLOOR_DECAY_BPS = 3_000;
     uint256 private constant DAY = 1 days;
     /// @dev v4's own bounds on a price limit, from TickMath.
     uint160 private constant MIN_SQRT = 4_295_128_739;
@@ -179,18 +195,42 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
     // `effectiveFloorSqrtPriceX96()`, which is that mark eased toward a market
     // that has walked away from it.
 
-    /// @notice How long the price may sit under the floor before it starts to
-    ///         yield. Zero disables the yielding entirely.
+    /// @notice How long the price must be seen under the floor before it starts
+    ///         to yield. ZERO MEANS NO WAIT AT ALL — the floor begins yielding
+    ///         immediately. It is `decayBpsPerDay = 0` that disables yielding;
+    ///         this comment said the opposite, which is a dangerous way round
+    ///         to be wrong about the dial that holds the floor up.
     uint256 public patience;
     /// @notice How far the floor eases per day of waiting, in price bps.
     uint256 public decayBpsPerDay;
     /// @notice The most the floor may ever sit below its high-water mark.
     ///         The hard bottom: past this it stops chasing and just waits.
     uint256 public maxDecayBps;
-    /// @notice The last time the price was at or above the floor. Waiting is
-    ///         measured from here, so an outage or a quiet market with a
-    ///         healthy price costs nothing.
-    uint256 public floorHeldSince;
+    /// @notice Seconds the price has been SEEN under the floor, accumulated.
+    ///
+    /// THIS USED TO BE A SINGLE TIMESTAMP AND IT WAS WRONG IN BOTH DIRECTIONS.
+    /// `floorHeldSince` was only ever written by a privileged call, and the
+    /// decay was `now - floorHeldSince` with no knowledge of what the price
+    /// had actually done in between. So a month in which the chart was
+    /// perfectly healthy but nobody called still counted as a month of
+    /// waiting, and the first dip afterwards released the entire allowance at
+    /// once — the published "decayBpsPerDay a day" bound was not a bound at
+    /// all. `pause()`, the advertised emergency stop, guaranteed that state,
+    /// because it blocks the only two functions that could have reset it.
+    ///
+    /// And it was equally broken the other way: because ANY single call
+    /// finding spot at the floor reset the whole thing to zero, one swap
+    /// round-trip timed against the keeper's tick pinned it at zero forever
+    /// and the floor could never yield, which kills the sell side permanently.
+    ///
+    /// So the clock now counts only time somebody actually WATCHED, in either
+    /// direction, and no observation may credit or debit more than
+    /// MAX_OBSERVATION at once. Time nobody looked at is worth nothing to
+    /// either side: an outage costs at most an hour, and a manipulated tick
+    /// buys at most an hour.
+    uint256 public underwaterSeconds;
+    /// @notice When the accumulator was last advanced.
+    uint256 public lastObservedAt;
 
     // --- the rails ----------------------------------------------------------
 
@@ -203,12 +243,29 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
     uint256 public lastTradeAt;
     /// @notice When the floor last moved up. The ratchet's own rate limit.
     uint256 public lastRatchetAt;
+    /// @notice A floor level sighted once and waiting to be confirmed by a
+    ///         second reading before it can become permanent. Zero if none.
+    uint160 public pendingFloor;
+    /// @notice When that sighting was taken.
+    uint256 public pendingFloorAt;
     /// @notice How long the floor must wait between upward moves, so that
     ///         `ratchetBps` is a rate rather than a per-call constant.
     uint256 public ratchetCooldown;
-    uint256 public windowStart;
-    uint256 public tokensSoldInWindow;
-    uint256 public quoteSpentInWindow;
+    /// @notice A LEAKY BUCKET, not a calendar window.
+    ///
+    /// This was a tumbling window: a counter reset to zero the moment a day had
+    /// passed since the last reset. The published claim is "capped per day",
+    /// and a tumbling window does not deliver that — spend the whole cap in the
+    /// last minute before the boundary, spend it again in the first minute
+    /// after, and twice the daily cap has gone out inside two minutes without
+    /// either check failing.
+    ///
+    /// The bucket instead drains continuously at exactly `cap` per day, so the
+    /// limit holds over EVERY window rather than over the particular ones the
+    /// contract happened to draw. There is no boundary to sit on.
+    uint256 public tokensInBucket;
+    uint256 public quoteInBucket;
+    uint256 public bucketDrainedAt;
 
     struct Job {
         bool selling;
@@ -218,6 +275,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
 
     event OperatorSet(address indexed operator);
     event FloorMoved(uint160 from, uint160 to, uint160 spot);
+    event FloorProposed(uint160 from, uint160 to, uint160 spot);
     event PolicySet(
         uint256 floorGapBps,
         uint256 ratchetBps,
@@ -289,7 +347,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         maxDecayBps = 3_000; // and never more than 30% under the high-water mark
         cooldown = 5 minutes;
         ratchetCooldown = 5 minutes;
-        windowStart = block.timestamp;
+        bucketDrainedAt = block.timestamp;
     }
 
     // --- what it is looking at ----------------------------------------------
@@ -314,7 +372,11 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
     ///         more often.
     function floorDecayBps() public view returns (uint256) {
         if (floorSqrtPriceX96 == 0 || decayBpsPerDay == 0) return 0;
-        uint256 held = block.timestamp - floorHeldSince;
+        // Observed time only. Time since the last observation is deliberately
+        // NOT counted: it has not been watched, so nobody can say what the
+        // price did, and guessing in the permissive direction is what made the
+        // old version's rate bound meaningless.
+        uint256 held = underwaterSeconds;
         if (held <= patience) return 0;
         uint256 d = ((held - patience) * decayBpsPerDay) / DAY;
         return d > maxDecayBps ? maxDecayBps : d;
@@ -330,12 +392,51 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         return d == 0 ? f : _worseBy(f, d); // _scale keeps it inside v4's bounds
     }
 
-    /// @dev The price being back at the floor is the end of waiting. Called on
-    ///      every path that changes state, so a keeper outage cannot quietly
-    ///      run the clock down while the chart was fine the whole time.
-    function _touchFloor() internal {
+    /// @notice Record what the price is doing right now.
+    ///
+    /// @dev PERMISSIONLESS AND NOT PAUSABLE, both deliberately. It moves no
+    ///      money and grants nothing, so there is nothing to gain by calling
+    ///      it; and the old version could only be advanced by `poke` and
+    ///      `ratchet`, which meant an outage, a pause, or simply a `poke` that
+    ///      reverted (routine now that no lock drips inventory in — the
+    ///      revert rolls the write back) all left the clock unattended while
+    ///      the decay kept counting. Anyone can now keep it honest.
+    function observe() public {
+        _observe();
+    }
+
+    /// @dev Advance the underwater clock by the time since the last look,
+    ///      capped at MAX_OBSERVATION, in whichever direction the price is.
+    ///      Symmetric on purpose: a momentary spike to the floor now buys back
+    ///      only the time it actually covers instead of wiping the clock, so
+    ///      pinning it at zero costs an attacker the whole period rather than
+    ///      one well-timed block.
+    function _observe() internal {
         if (floorSqrtPriceX96 == 0) return;
-        if (!_isBetter(floorSqrtPriceX96, spotSqrtPriceX96())) floorHeldSince = block.timestamp;
+        uint256 last = lastObservedAt;
+        lastObservedAt = block.timestamp;
+        if (last == 0 || block.timestamp <= last) return;
+        uint256 elapsed = block.timestamp - last;
+        if (elapsed > MAX_OBSERVATION) elapsed = MAX_OBSERVATION;
+
+        uint256 held = underwaterSeconds;
+        if (_isBetter(floorSqrtPriceX96, spotSqrtPriceX96())) {
+            // The floor is a better price than spot, i.e. spot is under it.
+            uint256 cap = _underwaterCap();
+            held += elapsed;
+            underwaterSeconds = held > cap ? cap : held;
+        } else {
+            underwaterSeconds = elapsed >= held ? 0 : held - elapsed;
+        }
+    }
+
+    /// @dev The most the accumulator can usefully hold: past this the decay is
+    ///      already pinned at maxDecayBps, so letting it grow further would
+    ///      only mean the price has to be back for longer before the floor
+    ///      recovers, which is not a promise this contract makes.
+    function _underwaterCap() internal view returns (uint256) {
+        if (decayBpsPerDay == 0) return patience;
+        return patience + (maxDecayBps * DAY) / decayBpsPerDay;
     }
 
     /// @notice Is `a` a better price for $KEVIN than `b`?
@@ -383,7 +484,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         if (floorSqrtPriceX96 == 0) revert NoFloorYet();
         // Before deciding anything: if the price is back at the floor, the
         // waiting is over and the floor is at full height again.
-        _touchFloor();
+        _observe();
         (bool sell, bool buy,,) = reading();
         if (sell) {
             _sell(size);
@@ -425,16 +526,54 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         // Returns rather than reverts: the keeper calls this every tick and a
         // revert would be indistinguishable from a real failure in its log.
         if (block.timestamp < lastRatchetAt + ratchetCooldown) return;
-        // Permissionless and cheap, so the keeper calls it every tick — which
-        // makes it the reliable place to notice that the price came back and
-        // stop the floor from yielding any further.
-        _touchFloor();
+        // The keeper calls this every tick, so it is the reliable place to
+        // keep the underwater clock current as well.
+        _observe();
+
         uint160 target = _worseBy(spot, floorGapBps);
-        if (!_isBetter(target, was)) return; // the floor never comes down
+        if (!_isBetter(target, was)) {
+            // Spot has fallen back below what was already proposed. Drop the
+            // proposal rather than letting a stale high reading ripen.
+            if (pendingFloor != 0) {
+                pendingFloor = 0;
+                pendingFloorAt = 0;
+            }
+            return; // the floor never comes down
+        }
+
+        // TWO READS, ratchetCooldown APART, AND THE FLOOR TAKES THE WORSE ONE.
+        //
+        // The mark this sets is PERMANENT — it never comes down — and it used
+        // to be derived from one instantaneous `slot0` read. Anyone willing to
+        // spend a swap could push spot up in the block the keeper's tick
+        // landed and leave the floor parked above the honest market, which
+        // freezes selling and then turns every later poke into a forced
+        // above-market bid. A price that has to hold across two separate
+        // observations, with the lower of the two winning, cannot be faked by
+        // one block: the attacker has to hold the price up for the whole
+        // cooldown against everyone arbitraging them.
+        if (pendingFloor == 0 || _isBetter(pendingFloor, target)) {
+            // First sighting, or the proposal was optimistic — record the
+            // conservative one and make it wait.
+            pendingFloor = target;
+            pendingFloorAt = block.timestamp;
+            emit FloorProposed(was, target, spot);
+            return;
+        }
+        if (block.timestamp < pendingFloorAt + ratchetCooldown) return;
+
+        uint160 sustained = pendingFloor; // already the worse of the two reads
+        pendingFloor = 0;
+        pendingFloorAt = 0;
+
         uint160 ceiling = _betterBy(was, ratchetBps);
-        uint160 next = _isBetter(target, ceiling) ? ceiling : target;
+        uint160 next = _isBetter(sustained, ceiling) ? ceiling : sustained;
+        if (!_isBetter(next, was)) return;
         floorSqrtPriceX96 = next;
-        floorHeldSince = block.timestamp;
+        // A higher floor means more of the market is under it, so the clock
+        // starts again from nothing rather than carrying the old level's debt.
+        underwaterSeconds = 0;
+        lastObservedAt = block.timestamp;
         lastRatchetAt = block.timestamp;
         emit FloorMoved(was, next, spot);
     }
@@ -474,7 +613,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         // per-trade maximum — so it started reverting OverDailyCap once the
         // window was within one trade of the cap, whatever the actual fill
         // would have been, and handed the keeper a revert instead of a sale.
-        uint256 room = dailyTokenCap > tokensSoldInWindow ? dailyTokenCap - tokensSoldInWindow : 0;
+        uint256 room = dailyTokenCap > tokensInBucket ? dailyTokenCap - tokensInBucket : 0;
         if (amountIn > room) amountIn = room;
         if (amountIn == 0) revert OverDailyCap();
 
@@ -494,7 +633,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
 
         uint256 reserved = (got * buybackBps) / BPS;
         warChest += reserved;
-        tokensSoldInWindow += spent;
+        tokensInBucket += spent;
         lastTradeAt = block.timestamp;
         emit Sold(spent, got, reserved, spotSqrtPriceX96());
     }
@@ -504,7 +643,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         uint256 amountIn = size < warChest ? size : warChest;
         if (amountIn > maxQuotePerTrade) amountIn = maxQuotePerTrade;
         if (amountIn == 0) revert NothingToDo();
-        uint256 room = dailyQuoteCap > quoteSpentInWindow ? dailyQuoteCap - quoteSpentInWindow : 0;
+        uint256 room = dailyQuoteCap > quoteInBucket ? dailyQuoteCap - quoteInBucket : 0;
         if (amountIn > room) amountIn = room;
         if (amountIn == 0) revert OverDailyCap();
 
@@ -514,17 +653,23 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         if (spent == 0) revert NothingToDo();
 
         warChest -= spent;
-        quoteSpentInWindow += spent;
+        quoteInBucket += spent;
         lastTradeAt = block.timestamp;
         emit Bought(spent, got, spotSqrtPriceX96());
     }
 
     function _tick() internal {
         if (lastTradeAt != 0 && block.timestamp < lastTradeAt + cooldown) revert TooSoon();
-        if (block.timestamp >= windowStart + DAY) {
-            windowStart = block.timestamp;
-            tokensSoldInWindow = 0;
-            quoteSpentInWindow = 0;
+        // Drain by exactly cap-per-day of elapsed time. Rounds DOWN, so the
+        // rounding costs the contract its own allowance rather than handing it
+        // extra room.
+        uint256 dt = block.timestamp - bucketDrainedAt;
+        if (dt != 0) {
+            bucketDrainedAt = block.timestamp;
+            uint256 tOut = (dailyTokenCap * dt) / DAY;
+            tokensInBucket = tOut >= tokensInBucket ? 0 : tokensInBucket - tOut;
+            uint256 qOut = (dailyQuoteCap * dt) / DAY;
+            quoteInBucket = qOut >= quoteInBucket ? 0 : quoteInBucket - qOut;
         }
     }
 
@@ -614,7 +759,10 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         if (sqrtPriceX96 <= MIN_SQRT || sqrtPriceX96 >= MAX_SQRT) revert BadParam();
         emit FloorMoved(floorSqrtPriceX96, sqrtPriceX96, spotSqrtPriceX96());
         floorSqrtPriceX96 = sqrtPriceX96;
-        floorHeldSince = block.timestamp;
+        underwaterSeconds = 0;
+        lastObservedAt = block.timestamp;
+        pendingFloor = 0;
+        pendingFloorAt = 0;
     }
 
     /// @notice Put the floor a set distance under the current price, in one call.
@@ -624,7 +772,10 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         uint160 next = _worseBy(spot, gapBps);
         emit FloorMoved(floorSqrtPriceX96, next, spot);
         floorSqrtPriceX96 = next;
-        floorHeldSince = block.timestamp;
+        underwaterSeconds = 0;
+        lastObservedAt = block.timestamp;
+        pendingFloor = 0;
+        pendingFloorAt = 0;
     }
 
     function setPolicy(
@@ -661,7 +812,11 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         external
         onlyOwner
     {
-        if (maxDecayBps_ >= BPS) revert BadParam();
+        // The ceilings block above argues that a stolen owner key cannot turn
+        // the policy into no policy, because the limits are constants in the
+        // bytecode. That enumeration had a hole exactly where the floor's own
+        // hard bottom lives: this was the one dial with no ceiling at all.
+        if (maxDecayBps_ > MAX_FLOOR_DECAY_BPS) revert BadParam();
         // A day of decay that could exceed the whole allowance is not a rate,
         // it is a switch, and it would make the bottom unreachable by degrees.
         if (decayBpsPerDay_ > maxDecayBps_) revert BadParam();
@@ -735,7 +890,21 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         // leaving `warChest` claiming money that had gone, after which every
         // bid reverted trying to settle tokens the contract no longer held.
         if (asset == Currency.unwrap(_quote())) {
-            warChest = amount > warChest ? 0 : warChest - amount;
+            // ONLY DEBIT WHAT ACTUALLY CAME OUT OF THE CHEST.
+            //
+            // This debited the full amount, so sweeping the UNRESERVED share
+            // of sale proceeds — the profit the buyback was never entitled to
+            // — silently zeroed the bid side while its own backing was still
+            // sitting in the contract. Taking a profit is not the same act as
+            // cancelling the buyback, and the accounting should not conflate
+            // them. What is free is balance minus the chest; only past that
+            // does a sweep start eating the chest itself.
+            uint256 bal = asset == address(0)
+                ? address(this).balance
+                : IERC20(asset).balanceOf(address(this));
+            uint256 free = bal > warChest ? bal - warChest : 0;
+            uint256 fromChest = amount > free ? amount - free : 0;
+            warChest = fromChest > warChest ? 0 : warChest - fromChest;
         }
 
         if (asset == address(0)) {
@@ -753,6 +922,13 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
     ///         than a setting the owner can walk back the moment it binds.
     function setLockbox(address lockbox_) external onlyOwner {
         if (lockbox != address(0) || lockbox_ == address(0)) revert BadParam();
+        // ONE SHOT, PERMANENT, AND IT SURVIVES OWNER ROTATION, so a mistyped
+        // address here pins every future $KEVIN sweep at somewhere nothing can
+        // receive it, forever. Requiring code at the target will not catch a
+        // wrong contract, but it does catch the case this is actually exposed
+        // to — a typo, or an EOA pasted where a lockbox belongs — and there is
+        // no second attempt to fall back on.
+        if (lockbox_.code.length == 0) revert BadParam();
         lockbox = lockbox_;
         emit LockboxSet(lockbox_);
     }

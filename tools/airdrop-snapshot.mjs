@@ -358,6 +358,24 @@ async function verify(path) {
     if (sum > r.total) {
       problems.push(`the list pays ${sum} but the round is only funded with ${r.total}`);
     }
+    // THE TOKEN. This was decoded, printed, and never compared to anything.
+    //
+    // AIRDROP.md tells strangers that running this command proves the on-chain
+    // round matches the published list, and names the token as one of the
+    // things it checks. It did not check it: the file could declare a payout in
+    // GME while the round on chain paid out something worthless, and this
+    // printed OK. That single command is the whole anti-rug story for the
+    // round, so the one claim it makes that nobody can verify by eye is
+    // exactly the one it has to actually make.
+    const declared = j.payout && j.payout.token;
+    if (!declared) {
+      problems.push('the file declares no payout token, so there is nothing to check the round against');
+    } else if (r.token.toLowerCase() !== declared.toLowerCase()) {
+      problems.push(
+        `THE ROUND PAYS ${r.token} BUT THIS FILE DECLARES ${declared}`
+        + (j.payout.symbol ? ` (${j.payout.symbol})` : ''),
+      );
+    }
     if (j.token && r.token.toLowerCase() === j.token.toLowerCase()) {
       // Normal for a memecoin round, and the contract explicitly allows it. It
       // used to go into `problems`, which printed "DO NOT open a round against

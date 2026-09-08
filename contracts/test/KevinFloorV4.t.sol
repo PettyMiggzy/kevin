@@ -163,6 +163,21 @@ contract KevinFloorV4Test is Test {
         vm.warp(block.timestamp + 61);
     }
 
+    /// @dev Let `secs` pass WITH SOMEBODY WATCHING, which is what the keeper
+    ///      does. The underwater clock now only counts observed time, so a
+    ///      bare vm.warp is an outage, not a wait — that distinction is the
+    ///      whole point of the fix and these tests have to make it explicitly.
+    function _watch(uint256 secs) internal {
+        uint256 step = floor.MAX_OBSERVATION();
+        uint256 gone;
+        while (gone < secs) {
+            uint256 d = secs - gone < step ? secs - gone : step;
+            vm.warp(block.timestamp + d);
+            floor.observe();
+            gone += d;
+        }
+    }
+
     function _arm(uint256 gapBps) internal {
         vm.prank(owner);
         floor.setFloorFromSpot(gapBps);
@@ -259,10 +274,35 @@ contract KevinFloorV4Test is Test {
         vm.warp(block.timestamp + 1 hours); // past the ratchet's own cooldown
         uint160 before = floor.floorSqrtPriceX96();
         _buyPressure(60 ether); // a big move up
+
+        // TWO READINGS NOW, ratchetCooldown APART. The first only proposes:
+        // the mark this sets is permanent, and deriving it from one
+        // instantaneous slot0 read let anyone park it above the honest market
+        // for the price of a swap in the keeper's block.
+        _ratchet();
+        assertEq(floor.floorSqrtPriceX96(), before, "one reading proposes, it does not move");
+        assertTrue(floor.pendingFloor() != 0, "and it is on the clock");
+
+        vm.warp(block.timestamp + 1 hours);
         _ratchet();
         // ratchetBps is 500 — five percent of the $KEVIN PRICE, which in this
         // inverted pool is a sqrt-price step of sqrt(1/1.05), not of 0.95.
         assertApproxEqAbs(_betterByBps(floor.floorSqrtPriceX96(), before), 500, 1, "one 5% step");
+    }
+
+    /// @dev A price that only existed for one block must not become permanent.
+    function test_ratchetIgnoresALevelThatDoesNotSurviveTheSecondReading() public {
+        _arm(1_500);
+        vm.warp(block.timestamp + 1 hours);
+        uint160 before = floor.floorSqrtPriceX96();
+
+        _buyPressure(60 ether); // the manipulation
+        _ratchet(); // proposes off the fake print
+        _sellPressure(400_000 ether); // and it is gone again
+        vm.warp(block.timestamp + 1 hours);
+        _ratchet();
+
+        assertEq(floor.floorSqrtPriceX96(), before, "a one-block print set no permanent mark");
     }
 
     function test_ratchet_needsAFloorFirst() public {
@@ -491,8 +531,9 @@ contract KevinFloorV4Test is Test {
         vm.prank(owner);
         floor.setRails(5_000_000 ether, 50 ether, 50_000_000 ether, 200 ether, 60);
 
-        // A month of nothing. Without the yielding this is a permanent stall.
-        vm.warp(block.timestamp + 30 days);
+        // A month under the floor, watched. Without the yielding this is a
+        // permanent stall.
+        _watch(30 days);
         (bool sell,,,) = floor.reading();
         assertTrue(sell, "it found the market rather than waiting forever");
 
@@ -504,17 +545,20 @@ contract KevinFloorV4Test is Test {
 
     function test_nothingYieldsWhilePatienceLasts() public {
         _marketWalksAway();
-        vm.warp(block.timestamp + floor.patience());
+        _watch(floor.patience());
         assertEq(floor.floorDecayBps(), 0, "still holding at full height");
         assertEq(floor.effectiveFloorSqrtPriceX96(), _mark(), "not a basis point");
 
-        vm.warp(block.timestamp + 1 days);
+        _watch(1 days);
         assertEq(floor.floorDecayBps(), 150, "and then a day is a day");
     }
 
     function test_theYieldingHasAHardBottom() public {
         _marketWalksAway();
-        vm.warp(block.timestamp + 3650 days); // ten years of nothing
+        // patience + maxDecay/rate = 3 + 20 days is all it takes to spend the
+        // whole allowance; the accumulator caps there, so watching for longer
+        // cannot buy another basis point.
+        _watch(30 days);
         assertEq(floor.floorDecayBps(), floor.maxDecayBps(), "it stops chasing");
         assertApproxEqAbs(
             _worseByBps(floor.effectiveFloorSqrtPriceX96(), _mark()),
@@ -524,14 +568,30 @@ contract KevinFloorV4Test is Test {
         );
     }
 
-    function test_thePriceComingBackPutsTheFloorStraightBackUp() public {
+    /// @dev RECOVERY IS SYMMETRIC NOW, AND THAT IS THE FIX.
+    ///
+    /// This used to assert that one tick with spot at the floor wiped the
+    /// whole clock — "one tick at the floor and it is whole again". That
+    /// single-read reset was the attack: anyone could push spot to the floor
+    /// in the block the keeper's tick landed, for the price of one swap
+    /// round-trip, and hold the clock at zero forever. The floor then never
+    /// yields, the contract never sells, and 20% of supply has nowhere to go.
+    ///
+    /// Coming back now buys back exactly the time it covers, so a momentary
+    /// spike is worth a moment and a real recovery is worth a real recovery.
+    function test_thePriceComingBackUnwindsTheClockAtTheRateItEarnedIt() public {
         _marketWalksAway();
-        vm.warp(block.timestamp + 20 days);
-        assertGt(floor.floorDecayBps(), 0, "it had started to yield");
+        _watch(20 days);
+        uint256 yielded = floor.floorDecayBps();
+        assertGt(yielded, 0, "it had started to yield");
 
         _buyPressure(120 ether); // the market comes back over the floor
         _ratchet();
-        assertEq(floor.floorDecayBps(), 0, "one tick at the floor and it is whole again");
+        assertGt(floor.floorDecayBps(), 0, "one tick cannot wipe twenty days");
+        assertLe(floor.floorDecayBps(), yielded, "but it is unwinding, not growing");
+
+        _watch(30 days); // and a real recovery does restore it
+        assertEq(floor.floorDecayBps(), 0, "sustained recovery puts the floor back up");
     }
 
     function test_waitingIsNotCountedWhileThePriceIsHealthy() public {
@@ -544,18 +604,58 @@ contract KevinFloorV4Test is Test {
     }
 
     /// @dev A keeper that was down for a fortnight must not come back and sell
-    ///      into a decayed floor when the chart was fine the whole time. The
-    ///      first call it makes puts the floor back before it decides anything.
+    ///      into a decayed floor.
+    ///
+    ///      THIS TEST USED TO ASSERT THE BUG. It said
+    ///      `assertGt(floorDecayBps(), 0, "the clock ran, because nothing
+    ///      touched it")` — writing down as expected behaviour that a
+    ///      fortnight nobody watched had been charged to the floor — and then
+    ///      only proved the benign branch where the price happens to still be
+    ///      healthy when the keeper returns, so the next call resets it. The
+    ///      loss case is an outage followed by a DIP, where nothing resets and
+    ///      the whole allowance is already spent. Time nobody observed is now
+    ///      worth nothing, so the clock reads zero either way.
     function test_anOutageDoesNotCostTheFloorAnything() public {
         _arm(1_500);
         vm.warp(block.timestamp + 14 days); // nobody called anything
-        assertGt(floor.floorDecayBps(), 0, "the clock ran, because nothing touched it");
+        assertEq(floor.floorDecayBps(), 0, "unwatched time is not waiting");
 
         uint160 mark = _mark();
         vm.prank(operator);
         floor.poke(type(uint256).max); // the keeper wakes up
-        assertEq(floor.floorDecayBps(), 0, "and the first thing it does is notice");
+        assertEq(floor.floorDecayBps(), 0, "and it is still zero afterwards");
         assertLe(_spot(), mark, "so the sale was against the full floor");
+    }
+
+    /// @dev The loss case the old test never reached: an outage, and THEN the
+    ///      price dips. Nothing resets the clock on the way in, so under the
+    ///      old code the first poke found the entire maxDecayBps already
+    ///      spent and could walk the chart 30% in one sitting.
+    function test_anOutageFollowedByADipDoesNotUnlockTheWholeAllowance() public {
+        _arm(1_500);
+        vm.warp(block.timestamp + 30 days); // nobody watching, chart fine
+        _sellPressure(400_000 ether); // now it dips under the floor
+        vm.prank(operator);
+        try floor.poke(type(uint256).max) {} catch {}
+        assertLt(
+            floor.floorDecayBps(),
+            floor.maxDecayBps(),
+            "a month nobody watched must not cash out as a month of waiting"
+        );
+    }
+
+    /// @dev `pause()` is the advertised emergency stop. It blocks poke and
+    ///      ratchet, which under the old clock were the only two things that
+    ///      could reset the timer — so pausing GUARANTEED the floor decayed
+    ///      while it was switched off. observe() is deliberately not pausable.
+    function test_pauseDoesNotBurnTheClock() public {
+        _arm(1_500);
+        vm.prank(owner);
+        floor.pause();
+        vm.warp(block.timestamp + 30 days);
+        vm.prank(owner);
+        floor.unpause();
+        assertEq(floor.floorDecayBps(), 0, "a pause must not spend the floor's allowance");
     }
 
     /// @dev THE RATE CLAIM, and the reason the yielding is safe to have.
@@ -577,7 +677,7 @@ contract KevinFloorV4Test is Test {
 
         bool everSold;
         for (uint256 day = 0; day < 40; day++) {
-            vm.warp(block.timestamp + 1 days);
+            _watch(1 days); // a day passing, with the keeper watching it
             uint256 held = kevin.balanceOf(address(floor));
             // Offer it everything, over and over, with no cooldown in the way.
             for (uint256 i = 0; i < 6; i++) {
@@ -612,9 +712,15 @@ contract KevinFloorV4Test is Test {
     function test_theHighWaterMarkItselfNeverMoves() public {
         _marketWalksAway();
         uint160 mark = _mark();
-        vm.warp(block.timestamp + 60 days);
+        _watch(60 days);
         assertEq(_mark(), mark, "the floor of record is untouched; only what it defends bends");
         assertTrue(_isWorse(floor.effectiveFloorSqrtPriceX96(), mark), "and it has bent");
+    }
+
+    /// @dev A throwaway contract to stand in for a lockbox. setLockbox refuses
+    ///      an address with no code, because it can never be corrected.
+    function _box() internal returns (address) {
+        return address(new MockERC20("Box", "BOX", 18));
     }
 
     function _isWorse(uint160 a, uint160 b) internal pure returns (bool) {
@@ -653,21 +759,36 @@ contract KevinFloorV4Test is Test {
     ///      turning a limit meaning "never below this" into one meaning "sell
     ///      into anything". No real pool goes near these numbers, which is
     ///      precisely why nobody would ever catch it happening.
+    /// @dev A bare uint160 cast in _scale would wrap a price near the top of
+    ///      the range around to a tiny one — turning "never go below this" into
+    ///      "sell into anything" — so the clamp is load bearing.
+    ///
+    ///      The old version of this test drove it by parking the floor at the
+    ///      top of the range and letting the clock run. That only worked
+    ///      because the clock counted wall time blindly: with a floor at
+    ///      MAX_SQRT-1 the spot price can never be WORSE than the floor, so
+    ///      the market is never under it and no decay can honestly accrue.
+    ///      Now that the clock only counts observed underwater time, that
+    ///      configuration is unreachable, so this checks the two things that
+    ///      are: the clamp holds at the edge, and it holds under a real yield.
     function test_theArithmeticCannotWrapAtTheEdgeOfTheRange() public {
         uint160 nearTheTop = 1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_341;
-        vm.startPrank(owner);
+        vm.prank(owner);
         floor.setFloor(nearTheTop);
-        floor.setPatience(0, 3_000, 3_000); // yield the maximum immediately
-        vm.stopPrank();
-        _sellPressure(12 ether); // put the price under it so the clock runs
-        vm.warp(block.timestamp + 40 days);
-
-        assertEq(floor.floorDecayBps(), 3_000, "it is asking for the full easing");
         assertEq(
             floor.effectiveFloorSqrtPriceX96(),
             nearTheTop,
-            "and gets the top of the range, not a wrapped number near zero"
+            "the top of the range, not a wrapped number near zero"
         );
+
+        // And the same helper under a decay that IS reachable.
+        _marketWalksAway();
+        uint160 mark = _mark();
+        _watch(30 days);
+        assertEq(floor.floorDecayBps(), floor.maxDecayBps(), "the full easing");
+        uint160 eff = floor.effectiveFloorSqrtPriceX96();
+        assertTrue(_isWorse(eff, mark), "it eased in the right direction");
+        assertLt(eff, 1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_342, "inside the range");
     }
 
     // --- the parameters mean what the documentation says they mean ----------
@@ -712,7 +833,9 @@ contract KevinFloorV4Test is Test {
     // --- the lockbox, and what sweep may no longer do -----------------------
 
     function test_kevinCanOnlyBeSweptBackToTheLockboxOnceOneIsNamed() public {
-        address lockbox = address(0x10CC);
+        // Must be a contract now — setLockbox is one shot and permanent, so a
+        // pasted EOA would pin every future $KEVIN sweep at a dead end.
+        address lockbox = address(new MockERC20("Box", "BOX", 18));
         vm.prank(owner);
         floor.setLockbox(lockbox);
 
@@ -728,14 +851,19 @@ contract KevinFloorV4Test is Test {
     /// @dev One shot. A lockbox the owner can re-point the day after publishing
     ///      it is not a commitment, it is a setting.
     function test_theLockboxCanBeNamedOnceAndNeverAgain() public {
+        // Deploy BOTH stand-ins first. _box() is a state-changing call, and
+        // vm.expectRevert arms the very next one — and inside a prank it would
+        // spend the prank as well.
+        address first = _box();
+        address second = _box();
         vm.startPrank(owner);
-        floor.setLockbox(address(0x10CC));
+        floor.setLockbox(first);
         vm.expectRevert(KevinFloorV4.BadParam.selector);
-        floor.setLockbox(address(0xBEEF));
+        floor.setLockbox(second);
         vm.expectRevert(KevinFloorV4.BadParam.selector);
         floor.setLockbox(address(0));
         vm.stopPrank();
-        assertEq(floor.lockbox(), address(0x10CC));
+        assertTrue(floor.lockbox() != address(0), "named once");
     }
 
     function test_beforeALockboxIsNamedSweepIsUnrestricted() public {
@@ -746,8 +874,9 @@ contract KevinFloorV4Test is Test {
 
     /// @dev Everything that is not $KEVIN stays sweepable wherever.
     function test_theLockboxDoesNotTrapAnythingElse() public {
+        address box = _box(); // before the prank, or the deploy consumes it
         vm.prank(owner);
-        floor.setLockbox(address(0x10CC));
+        floor.setLockbox(box);
         vm.deal(address(floor), 1 ether);
         vm.prank(owner);
         floor.sweep(address(0), owner, 1 ether);
@@ -797,12 +926,17 @@ contract KevinFloorV4Test is Test {
 
         vm.prank(operator);
         floor.poke(type(uint256).max);
-        assertEq(floor.tokensSoldInWindow(), 1 ether, "the first trade took its fill");
+        assertEq(floor.tokensInBucket(), 1 ether, "the first trade took its fill");
 
         _tock();
         vm.prank(operator);
         floor.poke(type(uint256).max); // used to revert OverDailyCap here
-        assertEq(floor.tokensSoldInWindow(), 1.5 ether, "and the half left over is usable");
+        // The bucket drains continuously, so 61 seconds of a 1.5/day allowance
+        // has already leaked back out by the time the second poke lands. It is
+        // ~1.06e15 wei of slack, not a rounding artefact to paper over.
+        assertApproxEqAbs(
+            floor.tokensInBucket(), 1.5 ether, 0.002 ether, "and the half left over is usable"
+        );
     }
 
     function test_theDailyCapStillBinds() public {
@@ -815,7 +949,10 @@ contract KevinFloorV4Test is Test {
             vm.prank(operator);
             try floor.poke(type(uint256).max) {} catch {}
         }
-        assertEq(floor.tokensSoldInWindow(), 1.5 ether, "a day is still a day");
+        // A leaky bucket has no boundary to sit on: the cap holds over every
+        // window, so the most that can ever be outstanding is the cap itself.
+        assertLe(floor.tokensInBucket(), 1.5 ether, "a day is still a day");
+        assertGt(floor.tokensInBucket(), 1.4 ether, "and it did keep selling up to it");
     }
 
     // --- fuzz ---------------------------------------------------------------
