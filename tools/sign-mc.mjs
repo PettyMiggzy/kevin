@@ -114,15 +114,51 @@ bx0,by0,bx1,by1 = ${JSON.stringify(found.box)}
 fill = tuple(${JSON.stringify(found.fill)})
 wide = ${WIDE ? 'True' : 'False'}
 from PIL import ImageDraw
+import numpy as np
 d = ImageDraw.Draw(plate)
 if wide:
     # a longer board, extended left along the fascia — the building's corner is
     # hard up against the right edge, so there is nowhere to go that way
     d.rounded_rectangle([bx0-24, by0-3, bx1+2, by1+3], radius=3, fill=fill, outline=(72,8,0), width=3)
     bx0 -= 22
-d.rectangle([bx0, by0, bx1, by1], fill=fill)
+    d.rectangle([bx0, by0, bx1, by1], fill=fill)
+else:
+    # ERASE THE MARK, NOT THE BOARD.
+    #
+    # Filling the whole rectangle also filled the board's own hand-painted
+    # outline, which wobbles in and out of any rectangle you draw around it:
+    # measured against the pre-edit plate, the right border lost 70% of its ink,
+    # the bottom 47%, the left 38%. At play size it read as a smudge; at any
+    # size it read as a rectangle stuck over a painting.
+    #
+    # So the wipe follows the mark instead. Flood out from the red letterform
+    # through everything red or inked that touches it — which is the mark and
+    # its outline, and nothing else, because the board's border is separated
+    # from the mark by a band of cream on every side.
+    a = np.asarray(plate).astype(int)
+    sub = a[by0:by1+1, bx0:bx1+1]
+    red  = (sub[:,:,0] > 150) & (sub[:,:,1] < 110) & (sub[:,:,2] < 110)
+    inked = red | ((sub[:,:,0] < 140) & (sub[:,:,1] < 120) & (sub[:,:,2] < 120))
+    keep = red.copy()
+    # grow the red seed through connected ink until it stops growing
+    for _ in range(200):
+        g = keep.copy()
+        g[1:,:]  |= keep[:-1,:]; g[:-1,:] |= keep[1:,:]
+        g[:,1:]  |= keep[:,:-1]; g[:,:-1] |= keep[:,1:]
+        g &= inked
+        if (g == keep).all(): break
+        keep = g
+    # one pixel of feather, so no dark halo survives around the erased strokes
+    grow = keep.copy()
+    grow[1:,:] |= keep[:-1,:]; grow[:-1,:] |= keep[1:,:]
+    grow[:,1:] |= keep[:,:-1]; grow[:,:-1] |= keep[:,1:]
+    sub[grow] = fill
+    a[by0:by1+1, bx0:bx1+1] = sub
+    plate = Image.fromarray(a.astype('uint8'))
 w,h = mark.size
-plate.paste(mark, ((bx0+bx1)//2 - w//2, (by0+by1)//2 - h//2 + 1), mark)
+# The board's cream sits a little low inside its own border, so centring on
+# the rect leaves more space under the letters than over them.
+plate.paste(mark, ((bx0+bx1)//2 - w//2, (by0+by1)//2 - h//2 + 3), mark)
 plate.save(${JSON.stringify(PLATE)}, quality=90, optimize=True, progressive=True)
 print('wrote', ${JSON.stringify(PLATE)}, plate.size, 'mark', mark.size)
 `;

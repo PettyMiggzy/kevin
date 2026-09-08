@@ -16,6 +16,36 @@ const DIR = join(ROOT, 'assets/memes');
 const OUT = join(ROOT, 'js/memes-data.js');
 const OK = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif']);
 
+/**
+ * HELD BACK FROM THE WALL. The files stay in assets/memes/ — nothing is
+ * deleted — they are simply not published.
+ *
+ * Every one of these carries a real fast-food chain's trade dress: the golden
+ * arches, in several cases the literal wordmark, in one case the registered-
+ * trademark symbol and the advertising slogan. The wall says "take any of
+ * them", so publishing these is handing strangers someone else's mark to
+ * repost under this project's name.
+ *
+ * The owner has ruled the arches out twice, in his own words — "instead arches
+ * do a M", then "Mc instead arches" — and tools/scrub-logo.mjs already exists
+ * for exactly this reason. This is that rule, applied to the wall.
+ *
+ * TO PUT ONE BACK: delete its line here and re-run this script. That is the
+ * whole undo.
+ */
+const HELD = {
+  'drive-thru.jpg':             'two full golden-arch signs, plus the mark on the cap, polo, carton, cup and bag',
+  'employee-of-the-month.jpg':  'the literal wordmark with the registered-trademark symbol, the arches ~15 times, and the advertising slogan',
+  'end-of-shift.jpg':           'arches on the wall, the apron, the bag, the cup, the carton, the cap and the polo',
+  'first-day.jpg':              'the chain named outright in panel one, and the arch in all eight panels',
+  'fries-fuel-legends.jpg':     'arches on the fry cartons and the uniform',
+  'good-fries-good-grains.jpg': 'a wall poster carrying the arches with a trademark mark under it',
+  'lovin-it.jpg':               'the advertising slogan as the caption, over arched cartons',
+  'on-shift.jpg':               'a full arch filling the back wall, the slogan on the right, arches on nine props',
+  'shopping-run.jpg':           'the chain named on a road sign, arches on the cap, cup, bag, shoe and carton',
+  'the-bench.jpg':              "the chain's own mascot character, sitting next to Kevin",
+};
+
 const titleFrom = (file) =>
   basename(file, extname(file))
     .replace(/[-_]+/g, ' ')
@@ -56,6 +86,9 @@ async function main() {
     // folder not there yet — that's fine, we write an empty manifest
   }
 
+  const held = files.filter((f) => HELD[f]);
+  files = files.filter((f) => !HELD[f]);
+
   const items = [];
   for (const f of files) {
     const { w, h } = await dimensions(join(DIR, f));
@@ -70,6 +103,13 @@ async function main() {
   await writeFile(OUT, body);
   console.log(`indexed ${items.length} meme${items.length === 1 ? '' : 's'} -> js/memes-data.js`);
   for (const i of items) console.log(`   ${i.title}  (${i.w}x${i.h})`);
+  if (held.length) {
+    console.log('');
+    console.log(`held back ${held.length}, still in assets/memes/, not published:`);
+    for (const f of held) console.log(`   ${f}\n      ${HELD[f]}`);
+    console.log('');
+    console.log('   To publish one again: delete its line from HELD in this file and re-run.');
+  }
   if (!items.length) console.log('   assets/memes/ is empty — drop art in and run this again.');
 }
 
