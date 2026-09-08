@@ -1,0 +1,94 @@
+<!doctype html><meta charset="utf-8"><title>Kevin — box vs sprite</title>
+<!--
+  A spike, not production. Open it at /tools/sprite-demo.html.
+
+  LEFT is how the gym builds Kevin today: boxes and capsules. It is the only
+  Kevin most players ever see, and it is not the character on the stickers, the
+  memes, the site, or the sticker pack.
+
+  RIGHT is a billboard of assets/sprites/walk-atlas.png — 45 hand-drawn frames,
+  9 each across front/back/left/right/diagonal, that were already in this repo.
+  Nothing was drawn or modelled for this demo. The atlas is sampled by moving
+  texture.offset one cell at a time at the cadence the frames were drawn for.
+
+  The point of the file is that the fix is a mesh swap, not an art project.
+-->
+<style>
+  body{margin:0;background:#ffe500;font-family:'Space Mono',ui-monospace,monospace}
+  #c{display:block;width:100vw;height:100vh}
+  .hud{position:fixed;top:14px;left:14px;background:#0b0b0b;color:#ffe500;
+       padding:10px 14px;border-radius:10px;font-size:13px;font-weight:700;letter-spacing:.1em}
+  .lab{position:fixed;bottom:20px;width:100%;display:flex;justify-content:space-around;
+       font-weight:700;font-size:18px;color:#0b0b0b;text-transform:uppercase;letter-spacing:.12em}
+</style>
+<canvas id="c"></canvas>
+<div class="hud">SAME WALK CYCLE · 45 FRAMES YOU ALREADY OWN</div>
+<div class="lab"><span>what the gym renders now</span><span>what the art already supports</span></div>
+<script type="module">
+import * as THREE from '../gym/vendor/three.module.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffe500);
+const cam = new THREE.PerspectiveCamera(38, innerWidth/innerHeight, 0.1, 100);
+cam.position.set(0, 2.6, 8.5); cam.lookAt(0, 1.1, 0);
+const r = new THREE.WebGLRenderer({canvas:document.getElementById('c'), antialias:true});
+r.setSize(innerWidth, innerHeight); r.setPixelRatio(2);
+scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+const key = new THREE.DirectionalLight(0xffffff, 0.9); key.position.set(4,8,6); scene.add(key);
+
+// ground
+const g = new THREE.Mesh(new THREE.PlaneGeometry(40,40),
+  new THREE.MeshBasicMaterial({color:0xf5c400}));
+g.rotation.x = -Math.PI/2; scene.add(g);
+
+/* LEFT — the box-and-capsule figure, the way the gym builds him today. */
+const box = new THREE.Group();
+const RED = new THREE.MeshLambertMaterial({color:0xe8232b});
+const CREAM = new THREE.MeshLambertMaterial({color:0xfff6c8});
+const head = new THREE.Mesh(new THREE.BoxGeometry(1.05,0.95,0.9), RED);
+head.position.y = 1.75; box.add(head);
+const muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.4,0.3), CREAM);
+muzzle.position.set(0,1.6,0.5); box.add(muzzle);
+const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.34,0.5,4,8), RED);
+body.position.y = 0.85; box.add(body);
+for (const s of [-1,1]) {
+  const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.13,0.42,4,8), RED);
+  arm.position.set(s*0.46,0.95,0); box.add(arm);
+  const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.15,0.35,4,8), RED);
+  leg.position.set(s*0.2,0.3,0); box.add(leg);
+}
+box.position.x = -2.6; scene.add(box);
+
+/* RIGHT — a billboard of the hand-drawn walk cycle. Same character the
+   stickers, the memes and the site already use, so it cannot drift. */
+const atlas = await new THREE.TextureLoader().loadAsync('../assets/sprites/walk-atlas.png');
+atlas.colorSpace = THREE.SRGBColorSpace;
+atlas.magFilter = THREE.NearestFilter;   // hand-drawn line art, keep it crisp
+atlas.minFilter = THREE.LinearMipmapLinearFilter;
+const COLS = 9, ROWS = 5;
+atlas.repeat.set(1/COLS, 1/ROWS);
+const sprite = new THREE.Mesh(
+  new THREE.PlaneGeometry(1.58*1.35, 1.76*1.35),
+  new THREE.MeshBasicMaterial({map:atlas, transparent:true, alphaTest:0.5})
+);
+sprite.position.set(2.6, 1.19, 0); scene.add(sprite);
+
+// a soft contact shadow so he is standing on the ground, not floating over it
+const sh = new THREE.Mesh(new THREE.CircleGeometry(0.62, 24),
+  new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.22}));
+sh.rotation.x = -Math.PI/2; sh.position.set(2.6, 0.01, 0.1); scene.add(sh);
+
+const ROW = {front:0, back:1, left:2, right:3, diagonal:4};
+let t = 0;
+function frame(){
+  t += 1/60;
+  const f = Math.floor(t*9) % COLS;                  // 9 fps, the drawn cadence
+  atlas.offset.set(f/COLS, 1 - (ROW.front+1)/ROWS);  // front row, walking at you
+  // the box figure gets the only animation boxes can have
+  box.children.forEach((m,i)=>{ if(i>3) m.position.y += Math.sin(t*9+i)*0.004; });
+  box.rotation.y = Math.sin(t*0.8)*0.25;
+  r.render(scene, cam);
+  requestAnimationFrame(frame);
+}
+frame();
+</script>
