@@ -30,7 +30,7 @@ window.KEVIN_ZONES = {
 
   block: {
     name: "Kevin's Block",
-    art: '../assets/png/world/block.jpg',
+    art: '../assets/png/world/block.jpg?v=e2e64ce2',
     spawn: { x: 880, y: 660 },
     // Traced off the painting. Keeps him on the paving.
     floor: [[700,455],[1180,455],[1470,720],[1430,830],[430,830],[330,700],[470,520]],
@@ -52,7 +52,7 @@ window.KEVIN_ZONES = {
 
   downtown: {
     name: 'Downtown',
-    art: '../assets/png/world/downtown.jpg',
+    art: '../assets/png/world/downtown.jpg?v=02f603c7',
     spawn: { x: 300, y: 690 },
     // Up to the kerb, so the shopfronts are reachable from the road.
     floor: [[170,400],[1390,400],[1470,830],[80,830]],
@@ -74,7 +74,7 @@ window.KEVIN_ZONES = {
 
   neighbourhood: {
     name: 'His Street',
-    art: '../assets/png/world/neighbourhood.jpg',
+    art: '../assets/png/world/neighbourhood.jpg?v=8d57196b',
     spawn: { x: 1300, y: 690 },
     floor: [[110,545],[1430,545],[1470,830],[70,830]],
     spots: [
@@ -101,7 +101,7 @@ window.KEVIN_ZONES = {
 
   mckevins: {
     name: "McKevin's",
-    art: '../assets/png/world/mckevins.jpg',
+    art: '../assets/png/world/mckevins.jpg?v=96874cba',
     spawn: { x: 790, y: 720 },
     floor: [[445,348],[1145,348],[1175,660],[1500,860],[40,860],[360,660]],
     spots: [
@@ -123,7 +123,7 @@ window.KEVIN_ZONES = {
 
   gameshop: {
     name: 'The Game Shop',
-    art: '../assets/png/world/gameshop.jpg',
+    art: '../assets/png/world/gameshop.jpg?v=64c63ff2',
     spawn: { x: 768, y: 740 },
     floor: [[380,545],[1180,545],[1250,700],[1500,860],[40,860],[110,700]],
     spots: [
@@ -141,7 +141,7 @@ window.KEVIN_ZONES = {
 
   brokerage: {
     name: 'The Brokerage',
-    art: '../assets/png/world/brokerage.jpg',
+    art: '../assets/png/world/brokerage.jpg?v=a2052004',
     spawn: { x: 790, y: 760 },
     floor: [[470,618],[1130,618],[1270,690],[1500,862],[40,862],[250,700],[430,660]],
     spots: [
@@ -160,7 +160,7 @@ window.KEVIN_ZONES = {
 
   house: {
     name: "Kevin's House",
-    art: '../assets/png/world/house.jpg',
+    art: '../assets/png/world/house.jpg?v=a69ad818',
     spawn: { x: 768, y: 720 },
     floor: [[490,440],[1080,440],[1130,610],[1270,820],[1280,862],[120,862],[320,745],[350,580],[450,480]],
     spots: [

@@ -16,6 +16,7 @@
 // after editing the lore; the page says which commit it came from so a stale
 // build is visible rather than silent.
 import { readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -129,6 +130,12 @@ function render(md) {
 
 const md = readFileSync(SRC, 'utf8');
 const { body, toc } = render(md);
+// The stylesheet reference is stamped here rather than by
+// tools/stamp-assets.mjs, because this file is regenerated and would
+// otherwise come back unstamped every time the lore is edited.
+const cssVersion = createHash('sha256')
+  .update(readFileSync(join(ROOT, 'css/style.css')))
+  .digest('hex').slice(0, 8);
 let stamp = 'uncommitted';
 try { stamp = execSync('git log -1 --format=%h\\ %cs -- docs/LORE.md', { cwd: ROOT }).toString().trim(); } catch {}
 
@@ -155,7 +162,7 @@ const page = `<!doctype html>
      stylesheet parses swaps them in late and reflows the hero. -->
 <link rel="preload" href="../assets/fonts/luckiest-guy-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="../assets/fonts/space-mono-700.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="../css/style.css?v=${cssVersion}">
 <style>
   .lore { max-width: 72ch; }
   .lore h2 {
