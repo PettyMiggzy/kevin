@@ -151,7 +151,7 @@ contract AirdropOverdrawTest is Test {
     function test_aSweptRoundCannotBeReopened() public {
         vm.startPrank(owner);
         uint256 a = drop.openRound(IERC20(address(gme)), root, total, uint64(block.timestamp + 30 days), "A");
-        drop.openRound(IERC20(address(gme)), root, total, uint64(block.timestamp + 400 days), "B");
+        drop.openRound(IERC20(address(gme)), root, total, uint64(block.timestamp + 300 days), "B");
         vm.stopPrank();
 
         vm.warp(block.timestamp + 31 days);

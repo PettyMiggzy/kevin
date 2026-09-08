@@ -60,6 +60,15 @@ contract KevinAirdrop is Ownable2Step, ReentrancyGuard {
     ///         one-block claim window is not a drop, it is a headline.
     uint256 public constant MIN_WINDOW = 7 days;
 
+    /// @notice The longest a round may stay open. There is no way to pull a
+    ///         deadline in — only `extendDeadline`, which pushes it out — and
+    ///         `sweepExpired` needs the deadline to pass. So a deadline typed
+    ///         one thousand times too large (a millisecond timestamp pasted
+    ///         where a second one belongs) locks the whole unclaimed remainder
+    ///         in this contract until roughly the year 56,000. The floor was
+    ///         bounded and the ceiling was not; both are now.
+    uint256 public constant MAX_WINDOW = 365 days;
+
     struct Round {
         IERC20 token;
         bytes32 merkleRoot;
@@ -105,7 +114,8 @@ contract KevinAirdrop is Ownable2Step, ReentrancyGuard {
      * @param  token     what is being paid out (GME, or anything else)
      * @param  merkleRoot root of leaves keccak256(bytes.concat(keccak256(abi.encode(index, account, amount))))
      * @param  amount    how much to pull in from the caller
-     * @param  deadline  after this, unclaimed tokens can be swept. At least MIN_WINDOW away.
+     * @param  deadline  after this, unclaimed tokens can be swept. At least MIN_WINDOW away
+     *                   and at most MAX_WINDOW away — a deadline too far out can never be reached.
      * @param  uri       where the full list is published. Put something here.
      *
      * @dev The amount RECEIVED is what is recorded, not the amount requested,
@@ -121,6 +131,7 @@ contract KevinAirdrop is Ownable2Step, ReentrancyGuard {
     ) external onlyOwner nonReentrant returns (uint256 roundId) {
         if (address(token) == address(0) || merkleRoot == bytes32(0) || amount == 0) revert BadParam();
         if (deadline < block.timestamp + MIN_WINDOW) revert BadParam();
+        if (deadline > block.timestamp + MAX_WINDOW) revert BadParam();
 
         uint256 before = token.balanceOf(address(this));
         token.safeTransferFrom(msg.sender, address(this), amount);
@@ -237,6 +248,7 @@ contract KevinAirdrop is Ownable2Step, ReentrancyGuard {
         // has to be refused here rather than remembered.
         if (r.swept) revert RoundClosed();
         if (newDeadline <= r.deadline) revert BadParam();
+        if (newDeadline > block.timestamp + MAX_WINDOW) revert BadParam();
         emit DeadlineExtended(roundId, r.deadline, newDeadline);
         r.deadline = newDeadline;
     }

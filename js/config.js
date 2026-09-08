@@ -24,17 +24,23 @@ window.KEVIN = {
   //
   // NOTHING HERE IS A PROMISE, and the wording is careful on purpose: an
   // airdrop that is announced and then does not happen is worse than one that
-  // was never mentioned. `confirmed` stays false until it is actually built,
+  // was never mentioned. `confirmed` stays false until it is actually open,
   // funded and dated, and while it is false Kevin may only ever HINT — no
-  // date, no amount, no "hold to qualify", which is the line between a nice
-  // idea and telling people to buy.
+  // date, and never "hold to qualify", which is the line between a nice idea
+  // and telling people to buy.
+  //
+  // The SNAPSHOT is a separate fact from the ROUND. The snapshot has been
+  // taken and published at /claim, over a window that has already closed, so
+  // the list is fixed and nobody can buy their way onto it. Saying "no
+  // snapshot taken" here while /claim publishes one is the kind of small
+  // contradiction people screenshot.
   //
   // Set to null to remove it from the bot's facts entirely.
   airdrop: {
     token: 'GME',
     confirmed: false,
     who: 'people holding $KEVIN, weighted by how much and how long',
-    note: 'No date, no amount, no snapshot taken.',
+    note: 'The snapshot is taken and published at /claim. The distributor is not deployed and there is no date. Its window has already closed, so buying now cannot put anyone on the list.',
   },
 
   // Launch mechanics, taken from the kekfun docs. These are protocol rules

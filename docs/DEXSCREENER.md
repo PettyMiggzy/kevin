@@ -129,8 +129,9 @@ launchpad, the $299 buys nothing you don't already have.
 - **No price, no market cap, no dollar figures.** Same rule the bot runs under.
 - **No returns, no targets, no "next 100x", no "guaranteed".**
 - **No roadmap dates.** Kevin does not have a roadmap. That is the joke.
-- **The GME airdrop is not confirmed** and must not appear in the bio.
-  `js/config.js` has it as `confirmed: false` with no date, no amount and no
-  snapshot taken. Kevin may hint at it in Telegram, in his voice. A token
-  profile is not a hint, it is a claim.
+- **The GME round is not open** and must not appear in the bio.
+  `js/config.js` has it as `confirmed: false` — the snapshot is taken and
+  published at /claim, but nothing is deployed and there is no date. Kevin
+  may hint at it in Telegram, in his voice. A token profile is not a hint,
+  it is a claim.
 - Third person is fine, first person is better. Kevin talks like Kevin.

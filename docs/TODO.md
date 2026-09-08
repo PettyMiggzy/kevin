@@ -108,4 +108,4 @@ to qualify". That last one is telling people to buy.**
       it. Say the word and I'll work out the exact tick range and size.
 - [ ] Turn on the buy bot (`BUY_CHAT_ID` + `LIVE=1`, then `git pull && ./setup.sh`)
 - [ ] Rotate the Groq and Telegram keys — still outstanding, flagged repeatedly
-- [ ] Nothing in `contracts/` is deployed. 227 tests pass. No addresses.
+- [ ] Nothing in `contracts/` is deployed. 229 tests pass. No addresses.

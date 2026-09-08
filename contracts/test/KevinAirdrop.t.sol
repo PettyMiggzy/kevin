@@ -159,7 +159,7 @@ contract KevinAirdropTest is Test {
         uint256 a = _open();
         vm.prank(owner);
         uint256 b = drop.openRound(
-            IERC20(address(gme)), root, total, uint64(block.timestamp + 400 days), "ipfs://second"
+            IERC20(address(gme)), root, total, uint64(block.timestamp + 300 days), "ipfs://second"
         );
         assertEq(gme.balanceOf(address(drop)), total * 2);
 
@@ -229,6 +229,49 @@ contract KevinAirdropTest is Test {
         vm.prank(owner);
         vm.expectRevert(KevinAirdrop.BadParam.selector);
         drop.openRound(IERC20(address(gme)), root, total, uint64(block.timestamp + 1 days), "x");
+    }
+
+    /**
+     * A DEADLINE TOO FAR AWAY IS A LOCKED ROUND.
+     *
+     * The floor was bounded and the ceiling was not. There is no way to pull a
+     * deadline in — extendDeadline only pushes it out — and sweepExpired needs
+     * the deadline to pass, so one mistyped number puts the unclaimed remainder
+     * beyond reach forever. The number is typed by hand: the snapshot tool
+     * prints the openRound call with <DEADLINE> as a placeholder, and pasting
+     * a millisecond timestamp where a second one belongs is a normal mistake.
+     */
+    function test_aRoundCannotOpenWithADeadlineNobodyCouldReach() public {
+        vm.startPrank(owner);
+        // Date.now() in milliseconds, pasted where seconds belong.
+        vm.expectRevert(KevinAirdrop.BadParam.selector);
+        drop.openRound(IERC20(address(gme)), root, total, uint64(1789000000000), "ms");
+
+        vm.expectRevert(KevinAirdrop.BadParam.selector);
+        drop.openRound(IERC20(address(gme)), root, total, uint64(block.timestamp + 366 days), "just over");
+
+        // The edge itself is allowed, so the bound is a ceiling and not a cliff
+        // one second below where the constant says it is.
+        uint256 id = drop.openRound(
+            IERC20(address(gme)), root, total, uint64(block.timestamp + drop.MAX_WINDOW()), "at the ceiling"
+        );
+        assertEq(drop.rounds(id).deadline, uint64(block.timestamp + drop.MAX_WINDOW()));
+        vm.stopPrank();
+    }
+
+    /// @dev And the same hole on the other function: extendDeadline would
+    ///      happily push a live round to type(uint64).max, which is the same
+    ///      lock arrived at one step later.
+    function test_theDeadlineCannotBeExtendedOutOfReach() public {
+        uint256 id = _open();
+        vm.startPrank(owner);
+        vm.expectRevert(KevinAirdrop.BadParam.selector);
+        drop.extendDeadline(id, type(uint64).max);
+        vm.expectRevert(KevinAirdrop.BadParam.selector);
+        drop.extendDeadline(id, uint64(block.timestamp + 366 days));
+        drop.extendDeadline(id, uint64(block.timestamp + 90 days));
+        vm.stopPrank();
+        assertEq(drop.rounds(id).deadline, uint64(block.timestamp + 90 days));
     }
 
     // --- the round is funded before it is announced -------------------------

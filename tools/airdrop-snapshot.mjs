@@ -64,6 +64,23 @@ const cfg = {
   // exactly the person an airdrop for holders should not be paying.
   minBalance: BigInt(arg('min-balance', '5000000000000000000000000')), // 5,000,000 KEVIN
   out: arg('out', null),
+  // Where the round will live once it is opened. Written into the round file so
+  // the claim page has a destination instead of a null — a transaction with no
+  // `to` is a contract deployment, and every claimant would have paid gas to
+  // deploy their own claim calldata.
+  airdrop: arg('airdrop', null),
+  roundId: Number(arg('round', '0')),
+  // WHAT IS BEING PAID OUT, which is not the same thing as the token the
+  // snapshot was taken over. A KEVIN snapshot paying a GME round rendered its
+  // amounts with no unit at all next to the words "5,000,000 KEVIN", so the
+  // page read as if it were paying KEVIN.
+  payoutToken: arg('payout-token', null),
+  payoutSymbol: arg('payout-symbol', null),
+  payoutDecimals: Number(arg('payout-decimals', '18')),
+  // Both of these change WHICH addresses end up in the list, so both have to
+  // travel in reproduceWith or an honest round fails its own verification.
+  genesisBlock: Number(arg('genesis-block', '53285633')),
+  extraExclude: arg('exclude', '') || '',
   // Robinhood Chain does ~18 blocks/sec — about 856,000 blocks a DAY — so a
   // 9,000-block chunk means ~95 requests per day of window and the public RPC
   // rate-limits long before the scan finishes.
@@ -137,7 +154,7 @@ async function allTransfers(latest) {
   // factory. Starting one block later loses the mint, the replayed balances
   // come to zero, and the reconciliation check below correctly refuses to
   // publish — which is how this number was found.
-  let from = Number(arg('genesis-block', '53285633'));
+  let from = cfg.genesisBlock;
   while (from <= latest) {
     const to = Math.min(from + cfg.chunk, latest);
     let logs;
@@ -230,6 +247,11 @@ const leafOf = (index, account, amount) =>
 const pair = (a, b) => keccak256(concatHex(a.toLowerCase() < b.toLowerCase() ? [a, b] : [b, a]));
 
 function buildTree(leaves) {
+  // A tree of nothing has no root, and `layers[last][0]` would be undefined —
+  // which JSON.stringify then drops from the file entirely, so the round file
+  // ends up with no root at all and everything downstream compares undefined
+  // to undefined and passes.
+  if (!leaves.length) throw new Error('cannot build a merkle tree with no leaves');
   const layers = [leaves];
   while (layers[layers.length - 1].length > 1) {
     const prev = layers[layers.length - 1];
@@ -275,6 +297,10 @@ async function verify(path) {
     .sort((a, b) => a.index - b.index);
 
   const problems = [];
+  // Check the file HAS the things before checking they agree. A round file with
+  // no root at all would otherwise compare undefined to undefined and pass.
+  if (!/^0x[0-9a-fA-F]{64}$/.test(j.root || '')) problems.push(`the file has no usable root (${j.root})`);
+  if (!rows.length) problems.push('the file has no claims in it');
   rows.forEach((r, i) => { if (r.index !== i) problems.push(`index ${r.index} is out of order at position ${i}`); });
 
   const leaves = rows.map((r) => leafOf(r.index, r.address, r.amount));
@@ -333,7 +359,11 @@ async function verify(path) {
       problems.push(`the list pays ${sum} but the round is only funded with ${r.total}`);
     }
     if (j.token && r.token.toLowerCase() === j.token.toLowerCase()) {
-      problems.push('the payout token is the same as the snapshot token — check that is intended');
+      // Normal for a memecoin round, and the contract explicitly allows it. It
+      // used to go into `problems`, which printed "DO NOT open a round against
+      // this file" and exited 1 — so the one command we tell strangers to run
+      // to prove this is not a scam returned a scam verdict on a correct round.
+      console.log('  NOTE the payout token is the same as the snapshot token — check that is intended');
     }
   } else {
     console.log('');
@@ -427,7 +457,15 @@ async function main() {
   const contracts = [];
   for (const r of rows) {
     const code = await rpc('eth_getCode', [r.address, 'latest']);
-    if (code && code !== '0x') contracts.push(r.address);
+    // EIP-7702: an EOA that has signed a delegation carries `0xef0100` followed
+    // by 20 bytes of address as its code. It still has a private key, it can
+    // still sign, it can still claim — it is not a contract. Every modern
+    // smart-account wallet flow sets this on an ordinary person's wallet, so
+    // treating it as bytecode drops real holders and then tells them on the
+    // claim page that they are a contract.
+    const delegated = /^0xef0100[0-9a-fA-F]{40}$/i.test(code || '');
+    if (code && code !== '0x' && !delegated) contracts.push(r.address);
+    else if (delegated) console.error(`  keeping ${r.address} — EIP-7702 delegated EOA, not a contract`);
     await new Promise((res) => setTimeout(res, 40)); // the public RPC rate-limits
   }
   if (contracts.length) {
@@ -446,6 +484,10 @@ async function main() {
   }
   for (const r of rows) r.amount = (cfg.total * r.weight) / totalWeight;
   rows = rows.filter((r) => r.amount > cfg.minPayout && r.amount > 0n);
+  if (rows.length === 0) {
+    console.error('nobody clears --min-payout. Nothing written.');
+    process.exit(1);
+  }
   // Biggest first, so the index order is stable and readable.
   rows.sort((a, b) => (b.amount === a.amount ? (a.address < b.address ? -1 : 1) : b.amount > a.amount ? 1 : -1));
 
@@ -471,7 +513,14 @@ async function main() {
     `--blocks-per-day ${blocksPerDay}`,
     `--min-hold-days ${cfg.minHoldDays}`,
     `--min-balance ${cfg.minBalance}`,
+    `--genesis-block ${cfg.genesisBlock}`,
     cfg.minPayout > 0n ? `--min-payout ${cfg.minPayout}` : '',
+    // --exclude removes addresses, which renormalises every weight and changes
+    // every amount. Leaving it out means a verifier following our own printed
+    // instructions rebuilds a DIFFERENT list, gets a different root, and the
+    // one check that makes this verifiable instead of trusted accuses an honest
+    // round of fabricating its list.
+    cfg.extraExclude ? `--exclude ${cfg.extraExclude}` : '',
   ].filter(Boolean).join(' ');
 
   const dust = cfg.total - rows.reduce((n, r) => n + r.amount, 0n);
@@ -488,6 +537,14 @@ async function main() {
     minBalance: cfg.minBalance.toString(),
     contractsDropped: contracts,
     generatedFrom: 'Transfer log only.',
+    // Filled from --airdrop/--round. Null means the round has nowhere to go
+    // yet, and the claim page must refuse to build a transaction rather than
+    // send one with an empty `to`.
+    airdrop: cfg.airdrop,
+    roundId: cfg.roundId,
+    payout: cfg.payoutSymbol
+      ? { token: cfg.payoutToken, symbol: cfg.payoutSymbol, decimals: cfg.payoutDecimals }
+      : null,
     // Run this and you must get the same root. That is what turns "this list
     // hashes to this root" — which a fabricated list also satisfies — into
     // "this list came from the chain".
@@ -520,9 +577,16 @@ async function main() {
   console.error('list was actually built for, and a round funded with a different');
   console.error('number cannot pay its own list:');
   console.error('');
-  console.error(`  cast send <PAYOUT_TOKEN> "approve(address,uint256)" <AIRDROP> ${cfg.total}`);
-  console.error(`  cast send <AIRDROP> "openRound(address,bytes32,uint256,uint64,string)" \\`);
-  console.error(`    <PAYOUT_TOKEN> ${root} ${cfg.total} <DEADLINE> "<WHERE YOU PUBLISHED IT>"`);
+  const payout = cfg.payoutToken || '<PAYOUT_TOKEN>';
+  const at = cfg.airdrop || '<AIRDROP>';
+  console.error(`  cast send ${payout} "approve(address,uint256)" ${at} ${cfg.total}`);
+  console.error(`  cast send ${at} "openRound(address,bytes32,uint256,uint64,string)" \\`);
+  console.error(`    ${payout} ${root} ${cfg.total} <DEADLINE> "<WHERE YOU PUBLISHED IT>"`);
+  console.error('');
+  console.error('<DEADLINE> is a UNIX time in SECONDS, at least 7 days and at most 365 days');
+  console.error('out. Pasting milliseconds there used to lock the unclaimed remainder in the');
+  console.error('contract forever; the contract now refuses it, but check the number anyway:');
+  console.error(`  date -d @<DEADLINE>     # e.g. ${Math.floor(Date.now() / 1000) + 30 * 86400} is 30 days from now`);
 }
 
 // Only when run directly. Importing this from a test must not start a run —
