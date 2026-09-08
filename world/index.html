@@ -64,7 +64,7 @@
 <canvas id="stage"></canvas>
 
 <div class="frame" id="hud-top">
-  <div class="panel" id="where">Kevin's Block<small id="sub">walk around</small></div>
+  <div class="panel" id="where">Kevin's Block<small id="sub">tap the ground or use the stick</small></div>
   <div id="links">
     <a href="../">Site</a><a href="../docs/">Docs</a><a href="../gym/">Gym</a>
   </div>
@@ -94,50 +94,43 @@ const C = { void:'#ffe500', deep:'#f5c400', dark:'#e0b400', ink:'#0b0b0b',
             red:'#e8232b', redDark:'#b0141b', cream:'#fff6c8', white:'#fff',
             kek:'#2fbf4a', grey:'#8a92b2' };
 
-/* ---------- the sprite sheet already in the repo ---------- */
+/* ---------- assets ---------- */
 const ATLAS = { cols:9, rows:5, cw:158, ch:176,
                 row:{ front:0, back:1, left:2, right:3, diagonal:4 } };
-const sheet = new Image();
-sheet.src = '../assets/sprites/walk-atlas.png';
+const sheet = new Image(); sheet.src = '../assets/sprites/walk-atlas.png';
+const block = new Image(); block.src = '../assets/png/world/block.jpg';
 
-/* ---------- world ----------
-   The ground is DARK on purpose. An earlier pass had a yellow character and
-   yellow buildings on a yellow field, and nothing read — everything was the
-   same value, so the scene had no depth and looked unfinished. Dark asphalt
-   under bright buildings is what gives the block contrast. */
-const W = 2200, H = 1600;
-const player = { x: W/2, y: H/2 + 250, vx:0, vy:0, dir:'front', flip:false, step:0, moving:false };
+/* ---------- the world IS the painting ----------
+   An earlier pass drew the block out of canvas rectangles. It worked and it
+   looked like canvas rectangles. The reference this is chasing settled the
+   question: that world is one painted image with an invisible grid over it,
+   and the engine only does depth = base + y. The art is the product.
 
+   So: the painting is the world, fitted to the viewport, and everything below
+   is expressed in the painting's own 1536x864 coordinates. No scrolling
+   camera — the composition was painted to be seen whole, and panning around
+   inside it would only ever show a worse crop of it. */
+const IMG = { w: 1536, h: 864 };
+
+// The plaza floor, traced off the painting. Kevin is kept inside this so he
+// never walks up a wall or off into the void.
+const FLOOR = [ [700,455], [1180,455], [1470,720], [1430,830], [430,830], [330,700], [470,520] ];
+
+// Doors, in painting coordinates, taken from where they actually are.
+// Doors in painting coordinates, read off the render rather than guessed.
+// signY is where the name plate hangs above each shopfront.
 const PLACES = [
-  { x: 520,  y: 620,  w: 300, h: 150, d: 96, fill:C.cream, roof:C.red,  awning:C.red,
-    name:"McKEVIN'S", sub:'the shift',
+  { x:300,  y:470, r:165, signY:300, name:"McKEVIN'S",     sub:'the shift',
     tip:"McKevin's. Where the shift is, and where $KEVIN comes from." },
-  { x: 1360, y: 560,  w: 250, h: 132, d: 86, fill:C.white, roof:C.grey, awning:C.grey,
-    name:'THE STOREROOM', sub:'4 written · 0 deployed',
+  { x:776,  y:340, r:150, signY:150, name:'THE STOREROOM', sub:'4 written · 0 deployed',
     tip:'The storeroom. Four contracts written and tested. None deployed.' },
-  { x: 820,  y: 1180, w: 268, h: 140, d: 90, fill:C.cream, roof:C.kek,  awning:C.kek,
-    name:"KEVIN'S GYM", sub:'no pain, only kevin',
+  { x:995,  y:380, r:150, signY:212, name:"KEVIN'S GYM",   sub:'no pain, only kevin',
     tip:"The gym. No pain, only Kevin.", href:'../gym/' },
-  { x: 1640, y: 1150, w: 240, h: 128, d: 84, fill:C.white, roof:C.red,  awning:C.red,
-    name:'THE CARD ROOM', sub:'texas hold’em',
+  { x:1270, y:452, r:160, signY:300, name:'THE CARD ROOM', sub:'texas hold’em',
     tip:'The card room. He is not good at it.', href:'../poker/' },
 ];
 
-// Street furniture from the lore rather than generic shrubs — a generic shrub
-// is exactly what "we did not finish this" looks like.
-const PROPS = [];
-(function seed(){
-  let s = 20260908;
-  const rnd = () => (s = (s*1664525 + 1013904223) % 4294967296) / 4294967296;
-  const kinds = ['crate','crate','bin','lamp','planter','cone','crate'];
-  const clear = (x,y) => PLACES.every(p =>
-        Math.abs(x-p.x) > p.w*0.7 + 80 || Math.abs(y-p.y) > p.h + p.d + 100);
-  for (let i=0;i<54;i++){
-    const x = 190 + rnd()*(W-380), y = 400 + rnd()*(H-540);
-    if (!clear(x,y)) continue;
-    PROPS.push({ x, y, kind: kinds[(rnd()*kinds.length)|0], t: rnd() });
-  }
-})();
+const player = { x:880, y:660, vx:0, vy:0, dir:'front', flip:false, step:0, moving:false };
 
 /* ---------- input ---------- */
 const keys = new Set();
@@ -148,172 +141,89 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
 
 const stick = document.getElementById('stick'), knob = document.getElementById('knob');
-let stickV = { x:0, y:0 }, stickId = null;
+let stickV = {x:0,y:0}, stickId = null;
 function stickAt(t){
   const r = stick.getBoundingClientRect();
-  let dx = t.clientX - (r.left + r.width/2), dy = t.clientY - (r.top + r.height/2);
-  const d = Math.hypot(dx,dy), max = r.width/2 - 12;
-  if (d > max) { dx = dx/d*max; dy = dy/d*max; }
+  let dx = t.clientX-(r.left+r.width/2), dy = t.clientY-(r.top+r.height/2);
+  const d = Math.hypot(dx,dy), max = r.width/2-12;
+  if (d>max){ dx=dx/d*max; dy=dy/d*max; }
   knob.style.transform = `translate(${dx}px,${dy}px)`;
-  stickV = { x: dx/max, y: dy/max };
+  stickV = { x:dx/max, y:dy/max };
 }
-stick.addEventListener('pointerdown', e => { stickId=e.pointerId; stick.setPointerCapture(e.pointerId); stickAt(e); });
-stick.addEventListener('pointermove', e => { if (e.pointerId===stickId) stickAt(e); });
-const drop = e => { if (e.pointerId===stickId){ stickId=null; stickV={x:0,y:0}; knob.style.transform=''; } };
+stick.addEventListener('pointerdown', e=>{ stickId=e.pointerId; stick.setPointerCapture(e.pointerId); stickAt(e); });
+stick.addEventListener('pointermove', e=>{ if(e.pointerId===stickId) stickAt(e); });
+const drop = e=>{ if(e.pointerId===stickId){ stickId=null; stickV={x:0,y:0}; knob.style.transform=''; } };
 stick.addEventListener('pointerup', drop); stick.addEventListener('pointercancel', drop);
 
-/* ---------- camera ---------- */
-const cam = { x: player.x, y: player.y, scale: 1 };
+// tap the floor to walk there
+let goal = null;
+cv.addEventListener('pointerdown', e => {
+  if (e.target !== cv) return;
+  const p = toImg(e.clientX, e.clientY);
+  if (inside(p.x, p.y)) goal = p;
+});
+
+/* ---------- fit ---------- */
+let fit = { s:1, ox:0, oy:0 };
 function resize(){
-  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const dpr = Math.min(devicePixelRatio||1, 2);
   cv.width = innerWidth*dpr; cv.height = innerHeight*dpr;
   cv.style.width = innerWidth+'px'; cv.style.height = innerHeight+'px';
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  // zoomed out enough to see the block, not so far Kevin is a dot
-  cam.scale = Math.max(0.5, Math.min(0.82, innerWidth/1700));
+  // cover, so there is never a letterbox bar beside the painting
+  const s = Math.max(innerWidth/IMG.w, innerHeight/IMG.h);
+  fit = { s, ox:(innerWidth - IMG.w*s)/2, oy:(innerHeight - IMG.h*s)/2 };
 }
 addEventListener('resize', resize); resize();
+const toScreen = (x,y) => ({ x: x*fit.s + fit.ox, y: y*fit.s + fit.oy });
+const toImg = (x,y) => ({ x:(x-fit.ox)/fit.s, y:(y-fit.oy)/fit.s });
 
-const world = (x,y) => ({ x:(x-cam.x)*cam.scale + innerWidth/2, y:(y-cam.y)*cam.scale + innerHeight/2 });
-const S = n => n*cam.scale;
-
-/* ---------- drawing ---------- */
-function shape(fn, fill, lw){
-  ctx.beginPath(); fn();
-  if (fill){ ctx.fillStyle=fill; ctx.fill(); }
-  if (lw){ ctx.lineWidth=lw; ctx.strokeStyle=C.ink; ctx.lineJoin='round'; ctx.lineCap='round'; ctx.stroke(); }
-}
-const rr = (x,y,w,h,r) => ctx.roundRect(x,y,w,h,r);
-function shadow(sx,sy,rx,ry){
-  ctx.save(); ctx.globalAlpha=.26; ctx.beginPath();
-  ctx.ellipse(sx,sy,rx,ry,0,0,7); ctx.fillStyle='#000'; ctx.fill(); ctx.restore();
+function inside(x,y){
+  let hit = false;
+  for (let i=0, j=FLOOR.length-1; i<FLOOR.length; j=i++){
+    const [xi,yi]=FLOOR[i], [xj,yj]=FLOOR[j];
+    if ((yi>y)!==(yj>y) && x < (xj-xi)*(y-yi)/(yj-yi)+xi) hit = !hit;
+  }
+  return hit;
 }
 
-function drawGround(){
-  // beyond the block: the void
-  ctx.fillStyle = C.void; ctx.fillRect(0,0,innerWidth,innerHeight);
-  ctx.strokeStyle='rgba(0,0,0,.05)'; ctx.lineWidth=2;
-  const stepY=20*cam.scale, off=(-cam.y*cam.scale)%stepY;
-  for(let y=off;y<innerHeight;y+=stepY){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(innerWidth,y); ctx.stroke(); }
-
-  const a = world(120,300), b = world(W-120,H-80);
-  const w = b.x-a.x, h = b.y-a.y;
-  // kerb, then asphalt inset — two tones give the edge a real thickness
-  shape(()=>rr(a.x, a.y, w, h, S(46)), C.dark, S(9));
-  shape(()=>rr(a.x+S(16), a.y+S(16), w-S(32), h-S(32), S(34)), '#2b2622', S(7));
-
-  // paving grid, faint
-  ctx.save();
-  ctx.beginPath(); rr(a.x+S(16), a.y+S(16), w-S(32), h-S(32), S(34)); ctx.clip();
-  ctx.strokeStyle='rgba(255,255,255,.045)'; ctx.lineWidth=Math.max(1,S(2));
-  for(let x=120;x<W;x+=140){ const p=world(x,0); ctx.beginPath(); ctx.moveTo(p.x,a.y); ctx.lineTo(p.x,b.y); ctx.stroke(); }
-  for(let y=300;y<H;y+=140){ const p=world(0,y); ctx.beginPath(); ctx.moveTo(a.x,p.y); ctx.lineTo(b.x,p.y); ctx.stroke(); }
-
-  // a yellow path connecting the doorways, so the block has a route through it
-  ctx.strokeStyle=C.deep; ctx.lineWidth=S(64); ctx.lineCap='round'; ctx.lineJoin='round';
-  ctx.beginPath();
-  [[520,790],[820,1330],[1640,1290],[1360,700],[520,790]].forEach((pt,i)=>{
-    const p=world(pt[0],pt[1]); i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);
-  });
-  ctx.stroke();
-  ctx.setLineDash([S(26),S(26)]); ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=S(5);
-  ctx.stroke(); ctx.setLineDash([]);
-  ctx.restore();
-}
-
-function drawProp(p){
-  const s = world(p.x,p.y);
-  if (p.kind==='lamp'){
-    shadow(s.x, s.y+S(3), S(15), S(6));
-    shape(()=>rr(s.x-S(4), s.y-S(96), S(8), S(96), S(3)), C.ink, S(4));
-    shape(()=>ctx.ellipse(s.x, s.y-S(104), S(15), S(13), 0,0,7), C.void, S(5));
-    return;
-  }
-  if (p.kind==='bin'){
-    shadow(s.x, s.y+S(3), S(20), S(7));
-    shape(()=>rr(s.x-S(18), s.y-S(44), S(36), S(44), S(5)), C.grey, S(5));
-    shape(()=>rr(s.x-S(22), s.y-S(52), S(44), S(11), S(4)), C.ink, S(4));
-    return;
-  }
-  if (p.kind==='planter'){
-    shadow(s.x, s.y+S(3), S(24), S(8));
-    shape(()=>ctx.ellipse(s.x, s.y-S(44), S(22), S(19), 0,0,7), C.kek, S(5));
-    shape(()=>rr(s.x-S(20), s.y-S(30), S(40), S(30), S(5)), C.dark, S(5));
-    return;
-  }
-  if (p.kind==='cone'){
-    shadow(s.x, s.y+S(2), S(15), S(6));
-    shape(()=>{ ctx.moveTo(s.x, s.y-S(42)); ctx.lineTo(s.x+S(15), s.y); ctx.lineTo(s.x-S(15), s.y); ctx.closePath(); }, C.red, S(5));
-    shape(()=>rr(s.x-S(6), s.y-S(28), S(12), S(7), S(2)), C.white, 0);
-    return;
-  }
-  // crate — a fry crate with a K on it
-  const w=S(46), h=S(38);
-  shadow(s.x, s.y+S(3), w*0.6, S(8));
-  shape(()=>rr(s.x-w/2, s.y-h, w, h, S(5)), C.deep, S(5));
-  shape(()=>{ ctx.moveTo(s.x-w/2+S(5), s.y-h+S(9)); ctx.lineTo(s.x+w/2-S(5), s.y-h+S(9)); }, null, S(4));
-  ctx.fillStyle=C.ink; ctx.textAlign='center';
-  ctx.font=`${Math.round(S(15))}px 'Luckiest Guy', system-ui`;
-  ctx.fillText('K', s.x, s.y-S(9));
-}
-
-function drawPlace(p){
-  const s = world(p.x,p.y);
-  const w=S(p.w), h=S(p.h), d=S(p.d);
-  const x=s.x-w/2, yF=s.y-h;            // front face top
-  const yR=yF-d;                        // roof top edge
-
-  shadow(s.x+S(8), s.y+S(6), w*0.58, S(16));
-
-  // roof slab, drawn as a squashed top face so it reads as a solid box
-  shape(()=>{ ctx.moveTo(x-S(10), yF); ctx.lineTo(x+w+S(10), yF);
-              ctx.lineTo(x+w-S(4), yR); ctx.lineTo(x+S(4), yR); ctx.closePath(); }, p.roof, S(7));
-  // front face
-  shape(()=>rr(x, yF, w, h, S(8)), p.fill, S(7));
-  // awning stripe under the roof
-  shape(()=>rr(x+S(6), yF+S(4), w-S(12), S(16), S(4)), p.awning, S(4));
-  // windows
-  const wy = yF+S(38);
-  for (const wx of [x+w*0.22, x+w*0.78]){
-    shape(()=>rr(wx-S(24), wy, S(48), S(34), S(5)), '#bfe4ff', S(5));
-    shape(()=>{ ctx.moveTo(wx, wy); ctx.lineTo(wx, wy+S(34)); }, null, S(4));
-  }
-  // door
-  shape(()=>rr(s.x-S(20), s.y-S(58), S(40), S(58), S(5)), C.ink, S(5));
-  shape(()=>ctx.arc(s.x+S(12), s.y-S(28), S(3.5), 0, 7), C.void, 0);
-
-  // sign board on the roof — where the name actually lives
-  const sw = Math.max(w*0.86, S(150)), sh = S(34);
-  shape(()=>rr(s.x-sw/2, yR-sh-S(8), sw, sh, S(7)), C.ink, S(5));
-  ctx.fillStyle=C.void; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.font=`${Math.round(S(19))}px 'Luckiest Guy', system-ui`;
-  ctx.fillText(p.name, s.x, yR-sh/2-S(8)+S(1));
-  ctx.textBaseline='alphabetic';
-  ctx.fillStyle='rgba(11,11,11,.62)';
-  ctx.font=`700 ${Math.round(S(10))}px 'Space Mono', monospace`;
-  ctx.fillText(p.sub.toUpperCase(), s.x, s.y+S(22));
-}
-
+/* ---------- draw ---------- */
 function drawKevin(){
-  const s = world(player.x, player.y);
-  const scale = 0.86*cam.scale;
-  const w = ATLAS.cw*scale, h = ATLAS.ch*scale;
-  shadow(s.x, s.y+S(2), w*0.30, S(9));
+  const s = toScreen(player.x, player.y);
+  // Y is squashed relative to X in an oblique view, so the character is scaled
+  // by depth: further up the plaza reads as further away.
+  const depth = 0.80 + 0.28*((player.y-455)/(830-455));
+  const k = 0.86 * fit.s * depth;
+  const w = ATLAS.cw*k, h = ATLAS.ch*k;
+  ctx.save(); ctx.globalAlpha=.28;
+  ctx.beginPath(); ctx.ellipse(s.x, s.y, w*0.30, h*0.06, 0,0,7);
+  ctx.fillStyle='#000'; ctx.fill(); ctx.restore();
   if (!sheet.complete || !sheet.naturalWidth) return;
   const col = player.moving ? (player.step|0) % ATLAS.cols : 0;
-  const row = ATLAS.row[player.dir];
-  ctx.save();
-  ctx.translate(s.x, s.y-h);
+  ctx.save(); ctx.translate(s.x, s.y-h);
   if (player.flip){ ctx.translate(w,0); ctx.scale(-1,1); }
-  ctx.drawImage(sheet, col*ATLAS.cw, row*ATLAS.ch, ATLAS.cw, ATLAS.ch, 0, 0, w, h);
+  ctx.drawImage(sheet, col*ATLAS.cw, ATLAS.row[player.dir]*ATLAS.ch, ATLAS.cw, ATLAS.ch, 0,0,w,h);
   ctx.restore();
 }
 
-function vignette(){
-  const g = ctx.createRadialGradient(innerWidth/2, innerHeight/2, innerHeight*0.34,
-                                     innerWidth/2, innerHeight/2, innerHeight*0.95);
-  g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,.30)');
-  ctx.fillStyle=g; ctx.fillRect(0,0,innerWidth,innerHeight);
+function drawSigns(){
+  ctx.textAlign = 'center';
+  for (const p of PLACES){
+    const s = toScreen(p.x, p.signY);
+    const active = near === p;
+    const fs = Math.round(19*fit.s);
+    ctx.font = `${fs}px 'Luckiest Guy', system-ui`;
+    const w = ctx.measureText(p.name).width + 26*fit.s;
+    const h = 30*fit.s;
+    ctx.beginPath(); ctx.roundRect(s.x-w/2, s.y-h, w, h, 8*fit.s);
+    ctx.fillStyle = active ? '#e8232b' : '#0b0b0b'; ctx.fill();
+    ctx.lineWidth = 4*fit.s; ctx.strokeStyle = '#0b0b0b'; ctx.stroke();
+    ctx.fillStyle = '#ffe500';
+    ctx.fillText(p.name, s.x, s.y - h/2 + fs*0.36);
+    // a short post down to the roof, so the plate belongs to the building
+    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x, s.y + 14*fit.s);
+    ctx.lineWidth = 5*fit.s; ctx.strokeStyle = '#0b0b0b'; ctx.stroke();
+  }
 }
 
 /* ---------- loop ---------- */
@@ -325,46 +235,55 @@ function step(now){
 
   let ix = (keys.has('arrowright')||keys.has('d')?1:0) - (keys.has('arrowleft')||keys.has('a')?1:0);
   let iy = (keys.has('arrowdown')||keys.has('s')?1:0) - (keys.has('arrowup')||keys.has('w')?1:0);
-  if (Math.abs(stickV.x)>.18 || Math.abs(stickV.y)>.18){ ix=stickV.x; iy=stickV.y; }
+  if (Math.abs(stickV.x)>.18 || Math.abs(stickV.y)>.18){ ix=stickV.x; iy=stickV.y; goal=null; }
+  if (ix||iy) goal = null;
+  if (goal){
+    const dx = goal.x-player.x, dy = goal.y-player.y, d = Math.hypot(dx,dy);
+    if (d < 12) goal = null; else { ix = dx/d; iy = dy/d; }
+  }
   const m = Math.hypot(ix,iy); if (m>1){ ix/=m; iy/=m; }
 
-  const SPEED = 320;
+  const SPEED = 300;
   player.vx += (ix*SPEED - player.vx)*Math.min(1, dt*12);
-  player.vy += (iy*SPEED - player.vy)*Math.min(1, dt*12);
-  player.x = Math.max(190, Math.min(W-190, player.x + player.vx*dt));
-  player.y = Math.max(430, Math.min(H-150, player.y + player.vy*dt));
+  player.vy += (iy*SPEED*0.62 - player.vy)*Math.min(1, dt*12);  // Y squashed ~1.6x
+  const nx = player.x + player.vx*dt, ny = player.y + player.vy*dt;
+  if (inside(nx, player.y)) player.x = nx; else player.vx = 0;
+  if (inside(player.x, ny)) player.y = ny; else player.vy = 0;
 
-  const sp = Math.hypot(player.vx, player.vy);
-  player.moving = sp > 22;
+  const sp = Math.hypot(player.vx, player.vy/0.62);
+  player.moving = sp > 20;
   if (player.moving){
-    player.step += dt*9*Math.min(1, sp/260);
-    if (Math.abs(player.vx) > Math.abs(player.vy)*1.25){ player.dir = player.vx>0?'right':'left'; player.flip=false; }
-    else if (Math.abs(player.vy) > Math.abs(player.vx)*1.25){ player.dir = player.vy>0?'front':'back'; player.flip=false; }
+    player.step += dt*9*Math.min(1, sp/250);
+    const ay = player.vy/0.62;
+    if (Math.abs(player.vx) > Math.abs(ay)*1.3){ player.dir = player.vx>0?'right':'left'; player.flip=false; }
+    else if (Math.abs(ay) > Math.abs(player.vx)*1.3){ player.dir = ay>0?'front':'back'; player.flip=false; }
     else { player.dir='diagonal'; player.flip = player.vx<0; }
   }
 
-  cam.x += (player.x-cam.x)*Math.min(1, dt*4.5);
-  cam.y += (player.y-60-cam.y)*Math.min(1, dt*4.5);
-
-  let best=null, bd=210;
-  for (const p of PLACES){ const d=Math.hypot(player.x-p.x, player.y-p.y); if (d<bd){ bd=d; best=p; } }
+  let best=null, bd=Infinity;
+  for (const p of PLACES){
+    const d = Math.hypot(player.x-p.x, (player.y-p.y)/0.62);
+    if (d < p.r && d < bd){ bd=d; best=p; }
+  }
   if (best!==near){
     near=best; tip.classList.toggle('on', !!near);
     if (near) tip.textContent = near.tip + (near.href ? '  ·  press E to go in' : '');
-    sub.textContent = near ? near.name.toLowerCase() : 'walk around';
+    sub.textContent = near ? near.name.toLowerCase() : 'tap the ground or use the stick';
   }
   if (near && near.href && (keys.has('e')||keys.has('enter'))) location.href = near.href;
 
-  drawGround();
-  const order = [...PROPS.map(o=>({...o,_k:'prop'})), ...PLACES.map(o=>({...o,_k:'place'})),
-                 { x:player.x, y:player.y, _k:'kevin' }].sort((a,b)=>a.y-b.y);
-  for (const o of order) o._k==='prop' ? drawProp(o) : o._k==='place' ? drawPlace(o) : drawKevin();
-  vignette();
+  ctx.fillStyle = '#ffe500'; ctx.fillRect(0,0,innerWidth,innerHeight);
+  if (block.complete && block.naturalWidth)
+    ctx.drawImage(block, fit.ox, fit.oy, IMG.w*fit.s, IMG.h*fit.s);
+  drawSigns();
+  drawKevin();
   requestAnimationFrame(step);
 }
 
-sheet.onload = () => { boot.remove(); requestAnimationFrame(step); };
-sheet.onerror = () => { boot.textContent = 'could not load Kevin'; };
+let ready = 0;
+const go = () => { if (++ready === 2) { boot.remove(); requestAnimationFrame(step); } };
+sheet.onload = go; block.onload = go;
+sheet.onerror = block.onerror = () => { boot.textContent = 'could not load the block'; };
 </script>
 </body>
 </html>
