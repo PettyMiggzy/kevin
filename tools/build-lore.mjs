@@ -208,7 +208,6 @@ const page = `<!doctype html>
     </a>
     <div class="nav__links">
       <a href="./">Docs</a>
-      <a href="../kit/">Kit</a>
       <a href="../world/">World</a>
       <a href="../memes.html">Memes</a>
       <a href="../#burn">Burns</a>
@@ -250,8 +249,8 @@ ${body.split('\n').map((l) => '    ' + l).join('\n')}
   <div class="wrap lore">
     <p class="lead">This page is generated from <code>docs/LORE.md</code>. If you are quoting
     Kevin, quote that file — it is the one the bot, the brief and this page all read.</p>
-    <p><a class="btn btn--sm" href="../kit/">The press kit &rarr;</a>
-       <a class="btn btn--sm btn--ghost" href="./">The documentation &rarr;</a></p>
+    <p><a class="btn btn--sm" href="./">The documentation &rarr;</a>
+       <a class="btn btn--sm btn--ghost" href="../world/">The world &rarr;</a></p>
   </div>
 </section>
 
