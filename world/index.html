@@ -68,6 +68,14 @@
 
   #boot{position:fixed;inset:0;background:var(--void);display:grid;place-items:center;
     font-family:'Luckiest Guy',system-ui;font-size:30px;color:var(--ink);z-index:9}
+
+  /* Said in the corner, not across the whole screen. Whatever is missing, the
+     rest of the world is still there to walk around. */
+  #note{left:50%;transform:translateX(-50%);top:calc(max(14px,env(safe-area-inset-top)) + 92px);
+    background:var(--cream);color:var(--ink);border:4px solid var(--ink);border-radius:12px;
+    box-shadow:5px 5px 0 rgba(0,0,0,.45);padding:8px 14px;font-size:12px;
+    letter-spacing:.1em;text-transform:uppercase;text-align:center;display:none}
+  #note.on{display:block}
 </style>
 </head>
 <body>
@@ -80,6 +88,7 @@
   </div>
 </div>
 
+<div class="frame" id="note"></div>
 <div class="frame" id="job"></div>
 <div class="frame panel panel--light" id="tip"></div>
 
@@ -107,6 +116,16 @@ const boot = document.getElementById('boot');
 const ATLAS = { cols:9, rows:5, cw:158, ch:176,
                 row:{ front:0, back:1, left:2, right:3, diagonal:4 } };
 const sheet = new Image(); sheet.src = '../assets/sprites/walk-atlas.png';
+// The world does NOT wait for this. It is over a megabyte, and on a bad
+// connection it can hang for as long as it likes without ever failing — which
+// is not the same thing as failing, so no catch ever runs. Gating the page on
+// it meant sitting on "loading the world…" forever, over a world that was
+// ready to walk around.
+let spriteReady = false;
+sheet.onload = () => { spriteReady = true; note(''); };
+sheet.onerror = () => { note('Kevin\'s sprite did not load. Reload to try again.'); };
+// A cached image can finish before the handler above is attached.
+if (sheet.complete && sheet.naturalWidth) spriteReady = true;
 // the zone's painting is loaded by enter(), below
 
 /* ---------- zones ----------
@@ -235,6 +254,13 @@ function plate(x, y, text, size, bg, fg){
   return h;
 }
 
+function note(text){
+  const el = document.getElementById('note');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('on', !!text);
+}
+
 function drawKevin(){
   const s = toScreen(player.x, player.y);
   // Further up the floor reads as further away, so the character scales with it.
@@ -244,7 +270,14 @@ function drawKevin(){
   ctx.save(); ctx.globalAlpha=.28;
   ctx.beginPath(); ctx.ellipse(s.x, s.y, w*0.30, h*0.06, 0,0,7);
   ctx.fillStyle='#000'; ctx.fill(); ctx.restore();
-  if (!sheet.complete || !sheet.naturalWidth) return;
+  if (!spriteReady) {
+    // He is still on his way. Draw where he is standing so the controls still
+    // make sense, rather than steering something invisible.
+    ctx.beginPath(); ctx.arc(s.x, s.y - 26*fit.s, 15*fit.s, 0, 7);
+    ctx.fillStyle = '#e8232b'; ctx.fill();
+    ctx.lineWidth = 4*fit.s; ctx.strokeStyle = '#0b0b0b'; ctx.stroke();
+    return;
+  }
   const col = player.moving ? (player.step|0) % ATLAS.cols : 0;
   ctx.save(); ctx.translate(s.x, s.y-h);
   if (player.flip){ ctx.translate(w,0); ctx.scale(-1,1); }
@@ -405,12 +438,12 @@ function step(now){
   requestAnimationFrame(step);
 }
 
-sheet.onload = () => {
-  enter(ZONES[location.hash.slice(1)] ? location.hash.slice(1) : 'block');
-  boot.remove();
-  requestAnimationFrame(step);
-};
-sheet.onerror = () => { boot.textContent = 'could not load Kevin'; };
+// Start now. The painting, the doors, the jobs and the walking are all ready
+// the moment this module runs.
+enter(ZONES[location.hash.slice(1)] ? location.hash.slice(1) : 'block');
+boot.remove();
+if (!spriteReady) note('Kevin is still loading. Everything else works.');
+requestAnimationFrame(step);
 </script>
 </body>
 </html>

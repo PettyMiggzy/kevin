@@ -6,6 +6,21 @@
   'use strict';
 
   var K = window.KEVIN || {};
+
+  /**
+   * A fetch that never settles leaves a panel on "Loading…" for as long as the
+   * tab is open, which reads as broken and tells the reader nothing. A request
+   * that fails at least reaches a catch. This makes hanging behave like
+   * failing, so every panel ends on a sentence.
+   */
+  function withTimeout(p, ms) {
+    return Promise.race([
+      p,
+      new Promise(function (_, reject) {
+        setTimeout(function () { reject(new Error('timed out after ' + ms + 'ms')); }, ms);
+      }),
+    ]);
+  }
   var $ = function (sel) { return document.querySelector(sel); };
 
   // --- ticker -------------------------------------------------------------
@@ -45,11 +60,17 @@
     return !K.contractLiveAt || Date.now() >= Date.parse(K.contractLiveAt);
   };
 
-  // If js/config.js did not load, K is {} and every line below asserts
-  // something it cannot know — "Fry cook · undefined · launching soon", and an
-  // auction state that overwrites the served "has closed" with "has not opened
-  // yet". The served HTML is already correct and already honest. Leave it.
-  if (!window.KEVIN) return;
+  // If js/config.js did not load, K is {} and the two functions below would
+  // assert things they cannot know — "Fry cook · undefined · launching soon",
+  // and an auction state that overwrites the served "has closed" with "has not
+  // opened yet". The served HTML is already correct, so those two stand down.
+  //
+  // This used to be `return`, which walked out of the whole file and took the
+  // LP fee panel and the burn counter with it — both of which read their own
+  // JSON and never needed config at all. The page then sat on "Loading the
+  // receipts…" forever. A guard that silences one claim must not silence
+  // everything underneath it.
+  var hasConfig = !!window.KEVIN;
 
   var heroState = $('#heroState');
   var chainVerb = $('#heroChainVerb');
@@ -58,6 +79,7 @@
   var caNote = null;
 
   function renderLaunchState() {
+    if (!hasConfig) return;
     var live = contractLive();
     var when = K.contractLiveAt ? utcDay(K.contractLiveAt) : null;
 
@@ -286,7 +308,7 @@
   // it cannot disagree the second the window opens or shuts.
   var auctionState = $('#auctionState');
   function renderAuctionState() {
-    if (!auctionState) return;
+    if (!auctionState || !hasConfig) return;
     var aStart = auction.startsAt ? new Date(auction.startsAt) : null;
     var aEnd = auction.endsAt ? new Date(auction.endsAt) : null;
     var nowA = new Date();
@@ -362,7 +384,7 @@
       return n.toLocaleString('en-GB', { maximumFractionDigits: n < 1 ? 6 : 4 });
     };
 
-    fetch('data/fees.json', { cache: 'no-store' })
+    withTimeout(fetch('data/fees.json', { cache: 'no-store' }), 12000)
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
       .then(function (d) {
         var claims = d.claims || [];
@@ -453,7 +475,7 @@
       var x = Number(v);
       return isFinite(x) ? x.toLocaleString('en-GB', { maximumFractionDigits: 0 }) : v;
     };
-    fetch('data/burns.json', { cache: 'no-store' })
+    withTimeout(fetch('data/burns.json', { cache: 'no-store' }), 12000)
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
       .then(function (d) {
         var rows = d.burns || [];

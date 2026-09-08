@@ -104,7 +104,9 @@
 
     <div class="hero__art">
       <span class="hero__stamp">EMPLOYEE<br>OF THE MONTH</span>
-      <img src="assets/scenes/venice/pfp-nano-banana-pro.png" alt="Kevin" width="1024" height="1024">
+      <!-- The same render as a JPEG: 1.2MB of PNG for a photographic image, above
+           the fold, on the page a phone lands on first. 118KB now. -->
+      <img src="assets/png/hero-kevin-1024.jpg" alt="Kevin" width="1024" height="1024" fetchpriority="high">
     </div>
   </div>
 </header>
@@ -132,7 +134,7 @@
       class="spot__video"
       poster="assets/png/promo-poster.jpg"
       width="1280" height="720"
-      controls muted playsinline loop preload="metadata">
+      controls muted playsinline loop preload="none">
       <source src="assets/video/kevin-promo-web.webm" type="video/webm">
       <source src="assets/video/kevin-promo-web.mp4" type="video/mp4">
     </video>

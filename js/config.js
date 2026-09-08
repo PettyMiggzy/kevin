@@ -154,7 +154,10 @@ window.KEVIN = {
     'I WORK THE FRYER',
     'I HAVE WIFI',
     'ONE OF THESE IS GOING TO WORK OUT',
-    'LAUNCHING AS SOON AS MY SHIFT IS OVER',
+    // Past tense since 7 September. It reads as a live claim in a marquee, and
+    // the site says two sections down that the auction has closed. It is still
+    // a Kevin line in docs/LORE.md, where it is a quote rather than a status.
+    'THE SHIFT ENDED. IT LAUNCHED.',
     'BIG DREAMS \u2192 MCKEVIN\u2019S \u2192 FREEDOM',
     'A GME POOL ON ROBINHOOD CHAIN',
     'EMPLOYEE OF THE MONTH',
