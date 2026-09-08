@@ -54,6 +54,24 @@
   }
   .copyme p { margin:0 0 14px } .copyme p:last-child { margin:0 }
   .warn { border-left: var(--edge) solid var(--red); padding: 6px 0 6px 18px; margin: 22px 0 }
+
+  /* Every link, in one table, because "where is the X" was being asked once a
+     day and the answer was spread over six pages. */
+  .links { width:100%; border-collapse:collapse; font-size:15px }
+  .links th, .links td { text-align:left; padding:11px 12px; border-bottom:2px solid rgba(0,0,0,.16); vertical-align:top }
+  .links th { width:30%; font-weight:700; white-space:nowrap }
+  .links td a { word-break:break-all }
+  .links tr.head th { background:var(--ink); color:var(--void); border-bottom:0;
+    font-family:var(--display); font-size:17px; letter-spacing:.02em }
+  .links code { word-break:break-all; font-size:13px }
+
+  /* Paste-ready copy. Monospace so a marketer can see exactly what they are
+     taking, including the line breaks. */
+  .post { background:var(--cream); border:var(--edge) solid var(--ink); border-radius:var(--radius);
+    box-shadow:var(--shadow-sm); padding:18px 20px; margin:0 0 18px; white-space:pre-wrap;
+    font-family:var(--mono,ui-monospace,monospace); font-size:14px; line-height:1.65 }
+  .post b { font-family:var(--display); font-size:13px; letter-spacing:.14em; text-transform:uppercase;
+    display:block; margin-bottom:10px; opacity:.6 }
 </style>
 </head>
 <body>
@@ -68,7 +86,10 @@
       <a href="#numbers">Numbers</a>
       <a href="#facts">Facts</a>
       <a href="#built">Built</a>
+      <a href="#links">Links</a>
+      <a href="#round">Round</a>
       <a href="#assets">Assets</a>
+      <a href="#post">Post</a>
       <a href="#voice">Voice</a>
       <a href="../docs/">Docs</a>
     </div>
@@ -84,8 +105,9 @@
     <p class="eyebrow">Press &amp; marketing kit</p>
     <h1>Everything,<br>in one place.</h1>
     <p class="hero__sub">
-      The pitch, the live numbers, the facts anyone can verify, the art, and
-      how he talks. Take what you need. No permission required.
+      The pitch, the live numbers, every link, the holder round, the art,
+      copy you can paste, and how he talks. Take what you need — no permission
+      required, no attribution asked for.
     </p>
   </div>
 </header>
@@ -163,6 +185,85 @@
   </div>
 </section>
 
+<!-- ============ EVERY LINK ============ -->
+<section class="section" id="links">
+  <div class="wrap kit">
+    <p class="eyebrow">Nothing hidden, nothing to hunt for</p>
+    <h2>Every link</h2>
+    <p class="lead">
+      All of it, in one table. If it is not here it does not exist, and anybody
+      DMing you a link that is not on this list is not us.
+    </p>
+    <div class="table-scroll">
+      <table class="links">
+        <tr class="head"><th colspan="2">The token</th></tr>
+        <tr><th>Contract</th><td><code>0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A</code><br>
+          <small>Robinhood Chain, id 4663. Check it character by character.</small></td></tr>
+        <tr><th>Chart</th><td><a href="https://dexscreener.com/robinhood/0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A" target="_blank" rel="noopener">DEX Screener</a></td></tr>
+        <tr><th>Buy / swap</th><td><a href="https://kekfun.xyz" target="_blank" rel="noopener">kekfun.xyz</a> — the launchpad it was created on</td></tr>
+        <tr><th>Explorer</th><td><a href="https://robinhoodchain.blockscout.com/token/0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A" target="_blank" rel="noopener">Blockscout</a></td></tr>
+
+        <tr class="head"><th colspan="2">The site</th></tr>
+        <tr><th>Home</th><td><a href="../">iamkevin.lol</a></td></tr>
+        <tr><th>Documentation</th><td><a href="../docs/">/docs</a> — supply, pools, mechanics, risk, glossary, errata</td></tr>
+        <tr><th>The Book of Kevin</th><td><a href="../docs/lore.html">/docs/lore.html</a> — the full lore, who he is and how he talks</td></tr>
+        <tr><th>This kit</th><td><a href="./">/kit</a></td></tr>
+        <tr><th>Burn receipts</th><td><a href="../#burn">/#burn</a> — every burn, with its transaction hash</td></tr>
+        <tr><th>LP fee receipts</th><td><a href="../#fees">/#fees</a> — every fee claim, with its transaction hash</td></tr>
+        <tr><th>Holder round</th><td><a href="../claim/">/claim</a> — the published list. Read the section below before you post about this one.</td></tr>
+
+        <tr class="head"><th colspan="2">Things to play</th></tr>
+        <tr><th>The world</th><td><a href="../world/">/world</a> — six painted places, two jobs. Early build.</td></tr>
+        <tr><th>The gym</th><td><a href="../gym/">/gym</a> — no pain, only Kevin</td></tr>
+        <tr><th>The card room</th><td><a href="../poker/">/poker</a> — Texas hold'em</td></tr>
+        <tr><th>The terminal</th><td><a href="../dos.html">/dos.html</a></td></tr>
+        <tr><th>Meme maker</th><td><a href="../memes.html">/memes.html</a> — 59 pictures, caption and download in the browser</td></tr>
+
+        <tr class="head"><th colspan="2">Where he talks</th></tr>
+        <tr><th>Telegram</th><td><a href="https://t.me/kevinRBH" target="_blank" rel="noopener">t.me/kevinRBH</a> — the only official group</td></tr>
+        <tr><th>X</th><td><a href="https://x.com/Iamkevinonrh" target="_blank" rel="noopener">@Iamkevinonrh</a> — the only official account</td></tr>
+        <tr><th>Sticker pack</th><td><a href="https://t.me/addstickers/kevin_by_Iamkevinzbot" target="_blank" rel="noopener">Telegram, 20 stickers</a></td></tr>
+        <tr><th>Source</th><td><a href="https://github.com/PettyMiggzy/kevin" target="_blank" rel="noopener">github.com/PettyMiggzy/kevin</a> — the whole site, the contracts, the tools</td></tr>
+      </table>
+    </div>
+    <p class="warn">
+      <b>He does not DM first.</b> There is no allocation waiting for anybody, no
+      presale, no "send to receive". Every real announcement goes in the group
+      and on X, in that order. If you are asked to repeat something that is not
+      on this page, ask us before you post it.
+    </p>
+  </div>
+</section>
+
+<!-- ============ THE HOLDER ROUND ============ -->
+<section class="section section--cream" id="round">
+  <div class="wrap kit">
+    <p class="eyebrow">The one people will ask about</p>
+    <h2>The holder round</h2>
+    <p class="lead">
+      There is a published list at <a href="../claim/"><b>/claim</b></a>. It is
+      real, it is checkable, and <b>it is not open</b>. Say all three or none of
+      them.
+    </p>
+    <div class="table-scroll">
+      <table class="fact">
+        <tr><th>What it is</th><td>A GME round for $KEVIN holders, funded from the LP fees the pools have already earned — the same fees whose receipts are published at <a href="../#fees">/#fees</a>.</td></tr>
+        <tr><th>Who is on it</th><td>17 addresses, published in full with their amounts and the Merkle root. Anybody can check any address without a wallet.</td></tr>
+        <tr><th>How they qualified</th><td>Held at least 5,000,000 KEVIN at the end of a fixed block window, weighted by how much and how long. Contracts excluded; a wallet that has merely delegated under EIP-7702 is not a contract and is on the list.</td></tr>
+        <tr><th>Is it open?</th><td><b>No.</b> The distributor is written and tested but <b>not deployed</b>. Nothing can be claimed and the page will not let anybody try.</td></tr>
+        <tr><th>Can I get on it?</th><td><b>No, and neither can anybody else.</b> The window it was taken over has already closed. The list is fixed and published.</td></tr>
+        <tr><th>Verify it</th><td>The round file names the exact command that rebuilds it from chain logs. Run it, and the root must match.</td></tr>
+      </table>
+    </div>
+    <p class="warn">
+      <b>Never "hold to qualify".</b> The snapshot is already taken, so it is
+      also simply false — nobody can buy their way onto a list that is closed.
+      It is the single easiest sentence to say by accident and the single
+      easiest one to be held to.
+    </p>
+  </div>
+</section>
+
 <!-- ============ WHAT'S BUILT ============ -->
 <section class="section" id="built">
   <div class="wrap kit">
@@ -175,6 +276,10 @@
       <li><b>Four playable games</b> — a gym, a card room, a DOS terminal, and a wall of memes.</li>
       <li><b>A walkable world</b> — six painted places, indoors and out, with two jobs
           in it. Early build, and it says so on screen.</li>
+      <li><b>A published holder round</b> — 17 addresses, their amounts and the Merkle root,
+          checkable by anybody without a wallet. Not open; see <a href="#round">the section above</a>.</li>
+      <li><b>Burn and LP-fee receipts</b> read off the chain by a watcher, published as
+          transaction hashes rather than as numbers somebody typed.</li>
       <li><b>120 hand-drawn stickers and emoji</b>, plus walk cycles cut frame by frame.</li>
       <li><b>Four smart contracts</b> with 229 passing tests, including three attacks found by trying to break them on purpose and kept as tests that must keep failing.</li>
     </ol>
@@ -213,6 +318,59 @@
       <a href="https://t.me/addstickers/kevin_by_Iamkevinzbot" target="_blank" rel="noopener">Sticker pack<small>Telegram, 20 stickers</small></a>
       <a href="https://github.com/PettyMiggzy/kevin/tree/claude/kevin-crypto-art-website-ymq79j/assets" target="_blank" rel="noopener">Everything else<small>The full assets folder</small></a>
     </div>
+  </div>
+</section>
+
+<!-- ============ READY TO POST ============ -->
+<section class="section" id="post">
+  <div class="wrap kit">
+    <p class="eyebrow">Copy, paste, send</p>
+    <h2>Ready to post</h2>
+    <p class="lead">
+      Written to the rules further down this page, so none of it is a claim
+      anybody can knock over. Change the wording all you like — just keep it
+      true, and keep the disclosure if you were paid.
+    </p>
+
+    <div class="post"><b>X · the one-liner</b>On a chain built by a brokerage, the memecoin is the guy working the fryer.
+
+$KEVIN. Minimum wage, maximum conviction, and a GME pool he refuses to explain.
+
+iamkevin.lol</div>
+
+    <div class="post"><b>X · the receipts one</b>Every claim on the $KEVIN site is a transaction hash you can open.
+
+Burns: published, with hashes.
+LP fees: published, with hashes.
+Creator allocation: zero — the launchpad factory has no field for one.
+Mint function: none. Owner: none.
+
+Go and check it. iamkevin.lol</div>
+
+    <div class="post"><b>X · the character one</b>Kevin clocked in at 3:41 PM on a Thursday in 2009 and has never clocked out.
+
+His plan has four boxes. LAUNCH, MOON, LAMBO, SLEEP. He ticked three of them in advance. He calls that planning.
+
+$KEVIN on Robinhood Chain.</div>
+
+    <div class="post"><b>Telegram · a first message</b>$KEVIN — the fry cook on Robinhood Chain.
+
+Contract: 0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A
+Chart: dexscreener.com/robinhood/0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A
+Site: iamkevin.lol
+Docs: iamkevin.lol/docs
+
+No creator allocation, no mint function, no owner. Burns and LP fees are published with their transaction hashes.
+
+He does not DM first. Nobody has an allocation for you.</div>
+
+    <div class="post"><b>If you were paid to post</b>Paid partnership with $KEVIN.</div>
+
+    <p class="warn">
+      <b>Say it once, plainly, in the post itself.</b> Not in a reply, not in a
+      bio. Undisclosed paid promotion is the thing that actually gets people in
+      trouble, and disclosing it has never once cost anybody a follower.
+    </p>
   </div>
 </section>
 
