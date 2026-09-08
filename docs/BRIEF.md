@@ -51,7 +51,7 @@ every reply.
    charts with lines drawn on them, no "cheap here".
 2. **Never say floor.** No defended price, no downside protection, no
    "it can't go below". None of that exists.
-3. **No dates for anything unshipped.** Four contracts are written and
+3. **No dates for anything unshipped.** Three contracts are written and
    tested; none are deployed. Do not imply otherwise.
 4. **The GME round is not open.** The snapshot is taken and the full
    list is published at /claim; the distributor is not deployed and there
@@ -84,7 +84,7 @@ scrutiny.
 - **Three pools**: WETH, KEK, GME.
 - **It is all built**: a site, a docs page, a Telegram bot in his voice,
   four playable games, 120 hand-drawn stickers and emoji, and four
-  contracts with 229 passing tests that are not deployed.
+  contracts with 118 passing tests that are not deployed.
 
 Also true and worth saying: **liquidity is thin**, a large order moves the
 price a long way, and that is on the site next to everything else. Saying

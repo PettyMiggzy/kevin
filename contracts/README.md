@@ -1,488 +1,142 @@
-# KEVIN STAKING
+# KEVIN CONTRACTS
 
-> I put the tokens in the machine. The machine gives me more tokens later. I do
-> not know why this works. It is on the whiteboard.
+Three contracts. **None of them are deployed.** There is no address for any of
+this on Robinhood Chain or anywhere else, and the only broadcast records in
+this repo are chain `31337` — a local anvil. Say "built", never "live".
 
-Solidity contracts for the $KEVIN staking pool. One contract, `KevinStaking`,
-plus the scripts that deploy and configure it.
-
----
-
-## What it does
-
-Holders stake $KEVIN and earn $KEVIN out of a pot the owner funds. Staking a
-KEVIN'S CREW NFT alongside your tokens raises the weight your stake carries in
-the pool — it does not create new rewards, it moves a bigger slice of a fixed
-pot to you and a smaller slice to everyone else.
-
-- **Rewards** use the Synthetix accumulator (`rewardPerTokenStored` /
-  `userRewardPerTokenPaid`). Nothing ever iterates over stakers, so cost per
-  action does not grow with the number of people in the pool.
-- **Boost** comes from NFTs. Each token id has a tier; each tier is worth a
-  number of basis points; a staker's boost is the sum of their staked NFTs'
-  tiers, capped at `MAX_BOOST_BPS` = 20 000 bps (3x effective balance).
-- **Emissions** run over a fixed period. The owner can start a new period once
-  the last one has ended, or top up the running one — but topping up cannot move
-  the end date, and starting a new one cannot happen early. There is no path
-  that silently lengthens a period stakers have already priced in.
-- **Principal always comes out.** There is a pause, it blocks deposits only, and
-  no exit path reads it.
-
-### Files
+118 tests, all passing.
 
 ```
-src/KevinStaking.sol            the contract
-script/Deploy.s.sol             step 1 - put it on chain
-script/derive-tiers.mjs         step 2 - traits -> tiers, off chain, reproducible
-script/Configure.s.sol          step 3 - publish the tier table
-test/KevinStaking.t.sol         63 unit + fuzz tests
-test/KevinStaking.invariant.t.sol   7 invariants over random action sequences
-test/Configure.t.sol            3 tests that actually run the deploy script
-test/mocks/                     mock ERC-20, ERC-721, and a re-entering token
-test/fixtures/tiers.json        the plan derived from the current 20 minted
-```
-
-Deployed size: 11 400 bytes runtime, well under the 24 576 limit.
-
----
-
-## The boost design, and why it is this one
-
-The requirement was that the multiplier comes from NFT traits and that the
-mapping stays owner-settable after deploy, because the crew grows. Two shapes
-satisfy that. This contract uses **tokenId → tier → bps**, not
-**(traitCategory, traitValue) → bps**.
-
-The reason is that neither shape gets traits for free. KEVIN'S CREW is
-trait-layered — 8 layers, 8 128 512 reachable combinations, append-only tables —
-and the traits live in `assets/crew/crew.json`, off chain. The ERC-721 does not
-expose them. So under either shape the owner has to publish per-token data on
-chain. Given that:
-
-| | storage per token | cold SLOADs to read one NFT's boost | 5 NFTs |
-|---|---|---|---|
-| trait pairs | 8 words | 8 (traits) + up to 8 (table) | ~168k gas |
-| **tiers** | **1 word** | **2** | **~21k gas** |
-
-Tiers are ~8x cheaper to publish and ~8x cheaper to read, and they do not get
-worse when a ninth trait layer is added next month. The trait decision still
-happens — it happens in `script/derive-tiers.mjs`, which reads the manifest,
-scores each member on a fixed points-per-trait table, and buckets the score into
-a tier. That script is in this repo so a holder can re-run it and compare its
-output against what the contract actually stores. What stays settable on chain,
-which is the actual requirement, is `setTierBoost`: what a tier is worth can be
-retuned any time, and a brand new trait just means a new tier id. **No trait
-name appears anywhere in the contract.**
-
-The cost of choosing this is stated plainly in the security section below: the
-tier assignment is a claim by the owner, and the chain cannot check it.
-
-### When a boost change takes effect
-
-The accumulator is only sound while `totalEffectiveSupply` equals the sum of
-every `effectiveBalanceOf`. Applying a retuned tier to everybody at once would
-mean walking every staker, which is the thing this pattern exists to avoid.
-
-So a boost change is **not retroactive**. It lands on an account the next time
-that account is synced: any stake, withdraw or claim, or a call to
-`syncBoost(account)`, which **anyone may call for anyone**. Both sides of the
-invariant move in the same transaction, so the accounting is exact at every
-block. Rewards already earned are never re-priced.
-
-This means a UI has to call `syncBoost` after a retune, or holders keep earning
-at their old boost until they next touch their position. It also means a boost
-*cut* can be forced onto you immediately by any stranger. Those two are the same
-mechanism and it is symmetric on purpose.
-
----
-
-## Deploy order
-
-Prerequisites: the $KEVIN ERC-20 and the KEVIN'S CREW ERC-721 are deployed and
-you have both addresses. Ideally `STAKING_OWNER` is a multisig — read the owner
-powers below before deciding it is an EOA.
-
-```sh
-export PRIVATE_KEY=0x...
-export KEVIN_TOKEN=0x...        # $KEVIN ERC-20
-export CREW_NFT=0x...           # KEVIN'S CREW ERC-721
-export STAKING_OWNER=0x...      # who will own the pool
-export REWARDS_DURATION=2592000 # optional, default 30 days
-export ROBINHOOD_RPC_URL=https://...
-```
-
-**1. Deploy the pool.**
-
-```sh
-forge script script/Deploy.s.sol --rpc-url robinhood --broadcast
-```
-
-Constructor is `(stakingToken, rewardToken, crew, rewardsDuration, owner)`. The
-script passes `KEVIN_TOKEN` for both token slots — stake $KEVIN, earn $KEVIN.
-Ownership is set in the constructor, so there is no window where the deployer
-owns it.
-
-**2. Derive the tier plan from the manifest.**
-
-```sh
-node script/derive-tiers.mjs --out tiers.json
-```
-
-Prints the score and reasoning for every minted crew member and writes the plan.
-Commit `tiers.json` next to the deploy record — it is the receipt for what the
-next step publishes.
-
-**3. Publish the tier table.** Run as the **owner**, not the deployer.
-
-```sh
-STAKING=0x... TIERS_JSON=tiers.json \
-  forge script script/Configure.s.sol --rpc-url robinhood --broadcast
-```
-
-This calls `setTierBoost(tier, bps, label)` for each tier, then
-`setTokenTiers(tokenIds, tier)` for each tier's token ids.
-
-**4. Move the reward tokens into the pool.** A plain ERC-20 transfer. The
-contract does not pull them and `notifyRewardAmount` will refuse to start a
-period it cannot pay.
-
-```sh
-cast send $KEVIN_TOKEN "transfer(address,uint256)" $STAKING 5000000000000000000000000 \
-  --rpc-url robinhood --private-key $PRIVATE_KEY
-```
-
-**5. Start emissions.** Owner only.
-
-```sh
-cast call $STAKING "freeRewardBalance()(uint256)" --rpc-url robinhood   # check first
-cast send $STAKING "notifyRewardAmount(uint256)" 5000000000000000000000000 \
-  --rpc-url robinhood --private-key $PRIVATE_KEY
-```
-
-**6. Verify.**
-
-```sh
-cast call $STAKING "periodFinish()(uint256)"     --rpc-url robinhood
-cast call $STAKING "rewardRate()(uint256)"       --rpc-url robinhood
-cast call $STAKING "tierBoostBps(uint16)(uint16)" 1 --rpc-url robinhood
-```
-
-### What the owner must call before it works
-
-| If this is not called | What happens |
-|---|---|
-| `setTierBoost` | Every tier is worth 0 bps. NFTs stake fine and boost nothing. |
-| `setTokenTiers` | Every token is tier 0, which is permanently worth 0. Same result. |
-| ERC-20 transfer in, then `notifyRewardAmount` | Nothing accrues. Staking works; `earned()` stays 0 forever. |
-
-None of these are failure states. The pool is never *wrong* before it is
-configured, only plain — an untiered NFT is inert rather than accidentally
-valuable, which is the safe default when the collection keeps growing.
-
-### Ongoing, as the crew grows
-
-New mints are tier 0 until someone tiers them.
-
-```sh
-node script/derive-tiers.mjs --out tiers.json     # re-derive, thresholds are fixed
-cast send $STAKING "setTokenTiers(uint256[],uint16)" "[21,22,23]" 2 ...
-```
-
-Because `derive-tiers.mjs` scores fixed points per trait and buckets on fixed
-thresholds — never percentiles — minting more crew members never re-tiers an
-existing one. That mirrors the manifest's own rule that minted traits are
-frozen. If a genuinely new trait appears, add a line to `POINTS`, and if it
-needs a new tier, `setTierBoost` it before assigning any token to it.
-
----
-
-## Building and testing
-
-```sh
 forge build
 forge test
-forge test --match-path test/KevinStaking.invariant.t.sol -vv
 ```
 
-73 tests, all passing at the time of writing: 63 unit and fuzz tests, 7
-invariants over randomised action sequences, 3 tests that execute the real
-configure script against the real derived plan.
+---
 
-Coverage of the things that matter:
+## What is here
 
-- stake / withdraw / exit, and the boundary cases (zero, over-balance, dust)
-- reward accrual over time, linear and to the wei
-- two and three stakers splitting emissions by weight, including a late arrival
-- boost changing mid-stake, three ways: the owner retunes a tier up, the owner
-  cuts a tier to zero, the holder stakes an NFT part way through
-- the cap actually capping a stack of three max-tier NFTs
-- reward-period expiry, and that a second period starts cleanly after the first
-- that a running period cannot be restarted, and a top-up cannot move its end
-- that staked principal cannot be spent as rewards even though it is the same
-  token, and that rewards already owed cannot fund the next period
-- emergency withdraw: principal out, rewards forfeited, other stakers unaffected
-- reentrancy, four ways, using an ERC-777-shaped token that calls back into the
-  pool mid-transfer — with an assertion that the attack actually fired, so the
-  test cannot pass by silently not attacking
-- withdrawals, claims and NFT withdrawals all working while deposits are paused
-- swap-and-pop NFT removal from the middle of a list, then draining the rest
-- that the owner cannot recover principal or committed rewards
+### `src/KevinAirdrop.sol` — 294 lines, 31 tests
 
-**Dependencies.** `lib/forge-std` and `lib/openzeppelin-contracts` (v5.4.0) are
-vendored into the repo rather than installed as git submodules, because the
-environment this was built in could not reach github.com. On a normal checkout
-the equivalent is:
+Pays a token out to $KEVIN holders against a published Merkle root. Built for
+the GME the pools earn going back to the people who held.
 
-```sh
-forge install foundry-rs/forge-std
-forge install OpenZeppelin/openzeppelin-contracts@v5.4.0
+**Why a root and not a loop.** "Airdrop to everyone who held" is a loop over an
+unbounded list. It does not fit in a block, and it gets more expensive the more
+successful the token is. A root is one storage word whether there are fifty
+holders or fifty thousand, holders pay their own claim gas, and the full list
+is published so anybody can rebuild the root and check their own row — a
+stronger guarantee than trusting a spreadsheet nobody outside the team sees.
+
+Rounds are separate pots. A round can never spend another round's money, which
+three of its tests exist specifically to prove: they started life as an audit's
+demonstration that it could, and are kept inverted so they must keep failing.
+
+A deadline is bounded at both ends — at least `MIN_WINDOW` (7 days) and at most
+`MAX_WINDOW` (365 days). The ceiling is not decoration: `extendDeadline` only
+ever moves a deadline later and `sweepExpired` needs it to pass, so a
+millisecond timestamp pasted where seconds belong used to lock the unclaimed
+remainder until roughly the year 56,000.
+
+The list generator and verifier is `tools/airdrop-snapshot.mjs`. The claim page
+is `claim/`.
+
+### `src/KevinFloorV4.sol` — 779 lines, 61 tests
+
+Sells $KEVIN into strength and buys it back into weakness, against a floor the
+pool itself refuses to cross.
+
+**The one idea it is built on.** Uniswap v4's swap takes a `sqrtPriceLimitX96`,
+and the pool stops filling when the price reaches it — not reverts, *stops*,
+having filled what fit and consumed only that much of the input. So "sell into
+buy pressure but never wreck the chart" is not a heuristic and does not depend
+on a keeper guessing a size. Offer the pool more than you think it can take
+with the limit set at the floor, and it sells exactly as much as fits above the
+floor and hands the rest back.
+
+### `src/KevinLock.sol` — 276 lines, 24 tests
+
+Holds the treasury's bag and can only let it out at a published rate, through
+the floor keeper, which cannot sell below the floor.
+
+**What it is actually for.** A large holder with a vesting schedule is the
+single most bearish fact about a young token, and it is bearish *before they
+sell anything*. Every buyer can see the wallet, everyone knows roughly when the
+unlocks land, and the rational move for all of them is to sell into that
+wallet's shadow first. You do not have to dump to be dumped on; you only have
+to be able to.
+
+---
+
+## Files
+
+```
+src/KevinAirdrop.sol            merkle claim distributor
+src/KevinFloorV4.sol            the floor keeper
+src/KevinLock.sol               the treasury lock
+
+script/DeployAirdrop.s.sol      deploy the distributor
+script/DeployFloorV4.s.sol      deploy the floor keeper
+script/DeployLock.s.sol         deploy the lock
+script/LocalFloor.s.sol         floor + lock, against a local anvil
+script/LocalPump.s.sol          drive a local pool, for eyeballing behaviour
+script/Preflight.s.sol          read a live pool's state before pointing anything at it
+
+test/                           118 tests
+test/fixtures/airdrop.json      a real round, used by both the Solidity and JS sides
 ```
 
-`remappings.txt` points at `lib/` either way, so nothing else changes. If your
-environment cannot reach github.com either, the Foundry binaries are also on npm
-as `@foundry-rs/forge-linux-amd64`, and forge-std ships through the Soldeer
-registry (`forge soldeer install forge-std~1.16.2`) rather than GitHub.
+---
 
-**`evm_version = "paris"`** in `foundry.toml` is deliberate and conservative:
-Robinhood Chain (4663) is new and this repo has not confirmed which fork it runs.
-Paris emits no PUSH0 and no MCOPY, so the bytecode runs on anything post-Merge.
-Raise it after checking the chain, not before.
+## Deploy order, when there is one
+
+Nothing here is deployed and nothing should be until somebody has decided it
+should be. When that happens, the order that works:
+
+1. **Preflight.** `forge script script/Preflight.s.sol` against the real pool
+   first. It reads the live state and prints it. Deploying a floor keeper
+   against a pool whose key you guessed is how you fund somebody else's
+   arbitrage.
+2. **KevinLock**, then **KevinFloorV4** pointed at it — the lock takes the
+   keeper's address, so the keeper exists first in any ordering that is not
+   circular; read `LocalFloor.s.sol`, which does the whole dance locally.
+3. **KevinAirdrop** is independent of both. Deploy it, fund a round, and only
+   then fill `airdrop` and `roundId` in `claim/round.json`. Until that file has
+   a real address the claim page refuses to build a transaction, which is
+   deliberate: a claim sent with no `to` is a contract deployment, and every
+   claimant would have paid gas to deploy their own calldata.
 
 ---
 
 ## Security
 
-Read this part.
+**What has not been done.** No third-party audit. No formal verification. No
+bug bounty. The tests include attacks written by trying to break these on
+purpose, and three of them are audit findings kept as tests, but that is not
+the same thing as an audit and must not be described as one.
 
-### What has not been done
+**What an owner can still do.** Open a round with any root they like, including
+one that pays themselves — which is why the list is published before the round
+is opened and why `tools/airdrop-snapshot.mjs --verify` exists and is
+advertised. Set the floor. Move the lock's rate within its own bounds. Read
+each contract's own header for the exact list; none of them can take a funded
+round's money back before its deadline.
 
-- **No audit.** No third party has looked at this. No formal verification. No
-  bug bounty.
-- **Never deployed.** Not to Robinhood Chain, not to a testnet, not to anywhere.
-  Every line of evidence in this repo comes from the Foundry EVM.
-- **Never run against the real tokens.** The tests use mock ERC-20 and ERC-721
-  contracts. The real $KEVIN and the real KEVIN'S CREW contracts are not in this
-  repo and have not been read. If either does anything non-standard, the
-  assumptions below are wrong.
-- **Chain assumptions unverified.** `evm_version = "paris"` is a cautious guess,
-  not a checked fact about chain 4663. Gas costs, opcode support and reorg
-  behaviour on that chain have not been examined.
-- **`script/Deploy.s.sol` has never broadcast anything.** It compiles.
-  `script/Configure.s.sol` is exercised in tests, but only against a mock pool
-  in the Foundry EVM.
-- Tests are written by the same party that wrote the contract, which is the
-  weakest form of assurance there is.
+**What an owner cannot do.** Mint. Pause. Blacklist. Take a claimant's claim.
+Sell below the floor through the keeper. Pull a deadline in.
 
-### What an owner can still do to holders
-
-The owner is not a spectator. Assume the key is a live risk and put it behind a
-multisig.
-
-1. **Set every tier boost to zero.** Your NFT stops boosting. Any stranger can
-   then force that onto your position with `syncBoost`.
-2. **Re-tier your specific token** to a worse tier, or to tier 0.
-3. **Never fund another period.** Emissions simply stop when `periodFinish`
-   passes. Nothing in the contract obliges the owner to fund anything, ever.
-4. **Pause deposits indefinitely.** Nobody new can stake and nobody can add to a
-   position. Existing holders can always leave — the pause does not reach any
-   exit path — but the pool can be frozen shut.
-5. **Sweep the free reward balance** with `recoverERC20`. "Free" excludes staked
-   principal and rewards already owed, but it *includes* rewards forfeited by
-   people who used `emergencyWithdraw`, and rewards that accrued while the pool
-   was empty. Those can be taken rather than re-emitted.
-6. **Raise the emission rate mid-period** with `topUpCurrentPeriod`, changing
-   everyone's yield without notice. Only upwards, and `periodFinish` cannot move.
-7. **Move any ERC-721 sitting in the contract with no recorded depositor**, via
-   `rescueERC721`. A staked NFT is refused by the function, not by policy.
-8. **Renounce ownership**, freezing the tier table and ending emissions
-   permanently. Withdrawals and claims keep working after that.
-9. **Lie about tiers.** This is the real one. The contract cannot check that
-   token #4 has a Crown; it stores whatever the owner says. Nothing stops an
-   owner assigning tier 5 to a wallet they control. The mitigation is that
-   `derive-tiers.mjs` is public and deterministic, so anyone can re-run it and
-   compare — but it is a social mitigation, not an on-chain one.
-
-### What an owner cannot do
-
-Stated as design intent, not as a promise about unfound bugs:
-
-- **Take staked principal.** `recoverERC20` subtracts `totalStaked` before
-  checking its limit, including when the staking and reward token are the same
-  token, and it is the only path that moves an ERC-20 out to the owner.
-  `rescueERC721` explicitly refuses `stakingToken` and `rewardToken`, because
-  `transferFrom(address,address,uint256)` is the *same* 4-byte selector on
-  ERC-721 and ERC-20: without that guard, calling `rescueERC721` on the staking
-  token with an amount in the `tokenId` slot executes
-  `stakingToken.transferFrom(address(this), to, amount)`, which succeeds on any
-  ERC-20 that skips the allowance check when `from == msg.sender`
-  (DSToken/DAI-shaped tokens and many others) and drains 100% of principal.
-  This was a live hole in the first cut of this contract; the guard and a
-  regression test for it are in `test/Adversarial.t.sol`.
-- **Take rewards already owed.** `rewardsCommitted` is subtracted the same way.
-- **Take a staked NFT.** `rescueERC721` refuses any id with a depositor.
-- **Block a withdrawal, a claim, or an emergency withdrawal.** The pause flag is
-  read by `stake` and `stakeNfts` and by nothing else.
-- **Raise the boost cap.** `MAX_BOOST_BPS` is a `constant`. The worst dilution an
-  unboosted staker can suffer is fixed at deploy time.
-- **Mint.** There is no mint function.
-- **Extend a running period's end date.**
-
-### Other risks, not owner powers
-
-1. **Fee-on-transfer or rebasing tokens break this.** The free reward balance is
-   derived from `balanceOf(address(this))` minus what is owed. $KEVIN is a plain
-   ERC-20; do not point this contract at anything that is not.
-2. **A boost raise is not automatic.** Somebody has to call `syncBoost`. If the
-   front end does not, holders quietly earn at their old rate. This is a
-   product-operations obligation, not a bug, but it will bite if nobody owns it.
-3. **Truncation dust is permanently locked.** `rewardRate = reward / duration`
-   truncates, so `reward - rewardRate * duration` stays counted as committed
-   forever. That is under one wei per second of period length — well under
-   0.000000000003 KEVIN for a 30-day period — and it is not recoverable.
-4. **32 NFTs per address**, hard. A larger holder must split across addresses.
-   The boost is capped anyway, so the cap costs nothing in practice, but it is a
-   hard revert and not a graceful one.
-5. **Retuning the tier table makes everyone's next transaction more expensive.**
-   A tier write bumps a global epoch and invalidates every cached boost; each
-   account then pays for one recompute, up to 32 storage reads. An owner
-   retuning constantly is a gas nuisance. It is not a fund risk.
-6. **Rewards emitted into an empty pool pay nobody** for those seconds. They are
-   tracked in `unallocatedRewards` and released back to the free balance at the
-   next `notifyRewardAmount` — but only then, and see owner power 5 for what can
-   happen to a free balance.
-7. **`syncBoost` is permissionless in both directions.** That is the point, but
-   it does mean a cut reaches you the moment somebody bothers to push it.
-8. **The crew NFT address is trusted.** It is immutable and set at construction,
-   but a malicious contract at that address could grief NFT staking. This does
-   not put staked $KEVIN at risk — `emergencyWithdraw` deliberately does not
-   touch NFTs, precisely so a broken ERC-721 can never stand between a holder and
-   their principal.
-9. **No lock-up and no cooldown.** Stake, claim, leave. That is intended, and it
-   means emissions are farmable by capital that has no interest in Kevin.
-10. **Reentrancy is guarded, not proven absent.** `nonReentrant` on every
-    external state-changing entry point, effects before interactions everywhere,
-    and four tested attack paths using a token that calls back mid-transfer. That
-    is evidence, not a proof.
-
-### If you find something
-
-Do not open a public issue for anything that lets someone take tokens. There is
-no formal disclosure process yet, which is itself a gap worth naming.
+**If you find something**, say so in the Telegram group or open an issue.
+Nothing here is deployed, so there is nothing at risk yet and everything to
+gain from hearing it early.
 
 ---
 
-*Launching as soon as my shift is over.*
+## What was removed
 
----
+`KevinStaking` and its commitment layer used to live here — 1,180 lines and 111
+tests. It took a `KEVIN'S CREW` ERC-721 in its constructor, and that collection
+does not exist: there is art and a trait manifest in `assets/crew/`, but no NFT
+contract, no mint, and no date for one. A contract that cannot be deployed
+without a dependency nobody has built is not part of "what is built", so it is
+out of the tree rather than sitting in it inflating a number.
 
-## Commitment staking
-
-`KevinStaking` gained an optional layer that does what the treasury actually
-asked for: **hold a minimum, wait before you start earning, pick a term you are
-willing to be locked for, and forfeit the rewards — never the principal — if you
-break it.**
-
-```
-setMinStake(5_000_000e18)   hold at least five million $KEVIN
-setWarmup(5 days)           nothing accrues for the first five days
-setTerm(1, 30 days,  2_500) +25%
-setTerm(2, 90 days,  6_000) +60%
-setTerm(3, 180 days, 10_000) +100%, and MAX_TERM_BOOST_BPS is a constant
-```
-
-**It is off until it is configured.** With no minimum, no warm-up and no terms,
-every path is a no-op and the contract behaves exactly as it did before the
-layer existed — which is why the 70 tests written before it still pass
-untouched. That is the reason it was built as a layer instead of a second
-contract: a staking contract holds *other people's* tokens, and the safest
-version of a new feature is one the existing test suite already covers.
-
-### What breaking a commitment costs
-
-Rewards. Only rewards. **No configuration of this contract lets anybody keep
-somebody else's principal**, and there is a test that sets the minimum to
-`type(uint128).max`, pauses deposits, and shows the principal still walks out.
-
-Two ways to break it, which are the two that were asked for:
-
-- leaving before your term is up
-- selling down *under* the minimum while still holding some
-
-Both hand the whole accrued reward back to the pool, where it is emitted again
-to whoever stayed. Leaving *completely* after your term is up costs nothing.
-
-**It does not go to the treasury, and that is now enforced rather than
-promised.** Forfeitures land in `forfeitedPool`, which is reserved from
-`recoverERC20` — the audit found the owner could sweep them straight out,
-against a version of this paragraph that had already claimed otherwise. A
-treasury that profits from broken commitments has exactly the wrong incentive:
-raise the minimum, push a hundred people under it, collect. The reservation is
-released only by emitting the tokens again, so the one way out is through the
-stakers who stayed.
-
-**While your term is running you cannot claim.** `getReward()` reverts
-`StillLocked`. That is not an inconvenience bolted on — it is the only thing
-that makes the penalty mean anything, and an audit found out the hard way:
-
-> Forfeiture can only take what is still sitting in `rewards[account]`. Without
-> a gate on the claim path, a staker empties that bucket with one
-> `getReward()`, then breaks a 180-day promise on day eleven and forfeits
-> **exactly nothing** — keeping the full +100% term boost. Four of five
-> reviewers found it independently. The tell was that `StillLocked` was
-> declared in the errors and thrown from nowhere.
-
-`exit()` still works mid-term: `_withdraw` runs first, takes the penalty and
-deletes the lock, so nobody is ever trapped. You are paid for the promise when
-the promise is kept.
-
-**And the boost dies with the term.** It used to outlive its own end date and,
-worse, apply to every later top-up — so one thirty-day term bought a permanent
-+25% on an unlimited, uncommitted stake. A term boost is now paid only while
-`isLocked`, which also means topping up after your term ends earns nothing
-extra unless you take a new one.
-
-### What the owner cannot do
-
-`lockOf` freezes the boost and the end date at stake time. Retuning a term
-changes what future stakes get and **cannot reach back** to devalue a promise
-somebody already made or extend a lock they are already inside. Terms can only
-ever be strengthened by the staker: topping up may push the end date further out
-or raise the boost, never the reverse.
-
-### The warm-up needs a poke, and `keeper/activate.mjs` is the poke
-
-The reward accumulator is global, so nothing fires by itself when one account's
-warm-up ends. `activate(address)` and `activateMany(address[])` are
-permissionless — anybody may call them, because the only account they can help
-is the one named. An account inside its warm-up counts for nothing, so calling
-late costs that staker and nobody else.
-
-**Which is exactly why it has to be automatic.** Nobody is exploited by this
-going unrun; people who staked and waited their five days simply earn nothing
-and cannot tell why. That is a support disaster rather than a hack, and it is
-the kind of thing that stays unbuilt until it has already happened.
-
-`keeper/activate.mjs` indexes `Staked` events, asks the contract
-`needsSync(a)`, and batches whoever says yes into `activateMany`. It asks
-rather than working it out, because it first tried to — "warmed up and not yet
-counted" — and that missed a term expiring, so a boost went on being paid after
-the promise it was paid for had ended. `needsSync` compares the applied weight
-to what it should be and answers in one word, so the keeper can never quietly
-disagree with the contract about who is owed what. Hourly, because a staker loses nothing by
-being brought in a few minutes late; they were earning nothing either way. It
-holds no money, cannot trade, and the only call it makes is one anybody could
-make. `keeper/kevin-activate.service` is the unit, and like the floor keeper it
-starts in dry run and `setup.sh` refuses to start it until it is configured.
-
-Driven end to end on anvil, both transitions: quiet during the warm-up, then one
-`activateMany` the moment the five days were up, taking a 6m stake on a +25%
-term to 7.5m effective; then quiet for thirty days; then one more the moment the
-term expired, putting it back to 6m. Quiet again after each, rather than
-re-sending forever.
-
-### Why this is also floor support
-
-Staked tokens are not sellable tokens. A commitment layer that locks supply for
-a term does more for the chart than any bid wall the treasury could afford at
-this size — and unlike a bid wall, it costs nothing to run and cannot be walked
-through.
+It is in the git history if it is ever wanted back.

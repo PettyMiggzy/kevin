@@ -38,7 +38,7 @@ window.KEVIN_ZONES = {
       { x:300,  y:470, r:200, signY:300, name:"McKEVIN'S",
         tip:"McKevin's. Where the shift is, and where $KEVIN comes from." },
       { x:776,  y:340, r:205, signY:150, name:'THE STOREROOM',
-        tip:'The storeroom. Four contracts written and tested. None deployed.' },
+        tip:'The storeroom. Three contracts written and tested. None deployed.' },
       { x:995,  y:380, r:150, signY:212, name:"KEVIN'S GYM",
         tip:'The gym. No pain, only Kevin.',
         to:'gym', at:{ x:768, y:700 } },

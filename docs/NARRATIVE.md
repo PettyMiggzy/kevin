@@ -66,7 +66,7 @@ not dress them up.
 - **Three pools**: WETH, KEK, GME.
 - **It is all built.** A site, a documentation page, a Telegram bot in his
   voice, four playable games, 120 hand-drawn stickers and emoji, and four
-  contracts with 229 passing tests. The contracts are **not deployed** and
+  contracts with 118 passing tests. The contracts are **not deployed** and
   the site says so.
 
 ## What NOT to claim
@@ -104,7 +104,7 @@ Long form. Paste whole, or cut it down to whatever their form allows.
 > **What is actually there.** A website, a documentation page nobody asked
 > for, a Telegram bot that talks in his voice, four playable games, 120
 > hand-drawn stickers and emoji, and three live pools — WETH, KEK and GME.
-> Four contracts are written and tested (229 passing) and **none of them are
+> Three contracts are written and tested (118 passing) and **none of them are
 > deployed**; the site says so in bold rather than implying otherwise.
 >
 > **What makes it safe to look at.** Creator allocation is zero — the
