@@ -126,7 +126,18 @@ const addrOf = (topic) => getAddress('0x' + topic.slice(26));
 /** Every Transfer the token has ever emitted, oldest first. */
 async function allTransfers(latest) {
   const out = [];
-  let from = 0;
+  // Start at the token's own mint, not block 0. Robinhood Chain was already
+  // 53M blocks deep when $KEVIN was minted, so scanning from zero spends
+  // hundreds of requests on chain that provably cannot contain a Transfer of a
+  // token that did not exist yet, and the public RPC rate-limits long before
+  // reaching the blocks that matter.
+  //
+  // 53,285,633 is not a guess: it is the block of the single Transfer from the
+  // zero address that created all 1,000,000,000 tokens, to the launchpad
+  // factory. Starting one block later loses the mint, the replayed balances
+  // come to zero, and the reconciliation check below correctly refuses to
+  // publish — which is how this number was found.
+  let from = Number(arg('genesis-block', '53285633'));
   while (from <= latest) {
     const to = Math.min(from + cfg.chunk, latest);
     let logs;
@@ -442,6 +453,27 @@ async function main() {
   const layers = buildTree(leaves);
   const root = layers[layers.length - 1][0];
 
+  // The exact command that regenerates this file, declared BEFORE the object
+  // that embeds it — a `const` referenced above its own declaration is a
+  // temporal dead zone error, and it only ever fired once a run got far
+  // enough to build the round file.
+  //
+  // Every knob that changes the output belongs in here. A round whose
+  // reproduce command omits --min-balance regenerates a DIFFERENT list under
+  // the default, so the root would not match and the one check that makes this
+  // verifiable instead of trusted would fail for an honest run.
+  const command = [
+    'node tools/airdrop-snapshot.mjs',
+    `--token ${cfg.token}`,
+    `--total ${cfg.total}`,
+    `--from-block ${fromBlock}`,
+    `--to-block ${latest}`,
+    `--blocks-per-day ${blocksPerDay}`,
+    `--min-hold-days ${cfg.minHoldDays}`,
+    `--min-balance ${cfg.minBalance}`,
+    cfg.minPayout > 0n ? `--min-payout ${cfg.minPayout}` : '',
+  ].filter(Boolean).join(' ');
+
   const dust = cfg.total - rows.reduce((n, r) => n + r.amount, 0n);
   const out = {
     token: cfg.token,
@@ -468,18 +500,6 @@ async function main() {
       proof: proofFor(layers, i),
     }])),
   };
-
-  // The exact command that regenerates this file. Anybody can run it.
-  const command = [
-    'node tools/airdrop-snapshot.mjs',
-    `--token ${cfg.token}`,
-    `--total ${cfg.total}`,
-    `--from-block ${fromBlock}`,
-    `--to-block ${latest}`,
-    `--blocks-per-day ${blocksPerDay}`,
-    `--min-hold-days ${cfg.minHoldDays}`,
-    cfg.minPayout > 0n ? `--min-payout ${cfg.minPayout}` : '',
-  ].filter(Boolean).join(' ');
 
   const path = cfg.out || join(ROOT, 'airdrop', `round-${Date.now()}.json`);
   await mkdir(dirname(path), { recursive: true });
