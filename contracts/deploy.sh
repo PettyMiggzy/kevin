@@ -34,7 +34,27 @@ TREASURY=0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf
 GME=0x1b0E319c6A659F002271B69dB8A7df2F911c153E
 
 export FLOOR_OWNER="${FLOOR_OWNER:-$TREASURY}"
-export FLOOR_OPERATOR="${FLOOR_OPERATOR:-$TREASURY}"
+
+# NO DEFAULT, AND IT MUST NOT BE THE OWNER.
+#
+# This defaulted to the treasury, which quietly undid the entire point of the
+# split. The operator is the HOT key: it lives on whatever box runs the keeper,
+# it signs every few minutes, and DeployFloorV4 says of it "assume it leaks".
+# The owner key can sweep, re-tune every rail and hand over ownership. Making
+# them the same address means a compromised keeper box is not a capped, rate
+# limited nuisance — it is the treasury, and every published ceiling in the
+# contract becomes decorative because the thief can just call setPolicy.
+#
+# Generate a throwaway key for this and fund it with gas only:
+#   cast wallet new
+: "${FLOOR_OPERATOR:?set FLOOR_OPERATOR to a hot key that is NOT the owner — see the note above; cast wallet new}"
+if [ "${FLOOR_OPERATOR,,}" = "${FLOOR_OWNER,,}" ]; then
+  echo "REFUSING: FLOOR_OPERATOR is the same address as FLOOR_OWNER." >&2
+  echo "The operator signs from a hot box every few minutes. If it is the owner" >&2
+  echo "key, a keeper compromise is total loss rather than a capped one." >&2
+  exit 1
+fi
+export FLOOR_OPERATOR
 export BENEFICIARY="${BENEFICIARY:-$TREASURY}"
 export OWNER="${OWNER:-$TREASURY}"
 
