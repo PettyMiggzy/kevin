@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>KEVIN — The Block</title>
-<meta name="description" content="Walk around Kevin's block. Early build.">
+<title>KEVIN — The World</title>
+<meta name="description" content="Walk around Kevin's town. His block, downtown, his street, and the insides of the places he actually goes. Early build.">
 <link rel="icon" href="../assets/art/favicon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#ffe500">
 <style>
@@ -37,12 +37,22 @@
   }
   #links a:active{transform:translate(2px,2px);box-shadow:2px 2px 0 rgba(0,0,0,.45)}
 
+  /* the job counter, only on screen while a job is running */
+  #job{left:14px;top:calc(max(14px,env(safe-area-inset-top)) + 74px);
+    background:var(--red);color:#fff;border:4px solid var(--ink);border-radius:12px;
+    box-shadow:5px 5px 0 rgba(0,0,0,.45);padding:8px 13px;font-size:12px;
+    letter-spacing:.14em;text-transform:uppercase;line-height:1.6;display:none}
+  #job b{color:var(--void);font-size:15px}
+  #job.on{display:block}
+
   #tip{left:50%;transform:translateX(-50%);bottom:calc(112px + env(safe-area-inset-bottom));
     font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;text-align:center;
     max-width:min(92vw,520px);opacity:0;transition:opacity .22s}
   #tip.on{opacity:1}
+  #tip.go{background:var(--red);color:#fff;cursor:pointer}
+  #tip.go:active{transform:translateX(-50%) translate(2px,2px)}
 
-  #wip{left:50%;transform:translateX(-50%);bottom:max(12px,env(safe-area-inset-bottom));
+  #wip{right:14px;bottom:max(12px,env(safe-area-inset-bottom));max-width:min(60vw,420px);
     background:var(--red);color:#fff;border:4px solid var(--ink);border-radius:12px;
     box-shadow:5px 5px 0 rgba(0,0,0,.45);padding:9px 16px;font-size:12px;
     letter-spacing:.16em;text-transform:uppercase;text-align:center;line-height:1.5}
@@ -70,73 +80,86 @@
   </div>
 </div>
 
+<div class="frame" id="job"></div>
 <div class="frame panel panel--light" id="tip"></div>
 
 <div class="frame" id="wip">
-  <b>Early build.</b> Kevin walks, the block is being built around him.
+  <b>Early build.</b> Six places, two jobs. More going in.
 </div>
 
 <div id="stick"><div id="knob"></div></div>
-<div id="boot">loading the block…</div>
+<div id="boot">loading the world…</div>
 
+<script src="zones.js"></script>
 <script type="module">
-/* Kevin's block.
+/* Kevin's town.
    Canvas 2D on purpose: the art is flat with heavy outlines, which a 2D
    context draws perfectly and a 3D engine only makes heavier. The whole page
-   is a few KB plus one sprite atlas, so it opens instantly on a phone — which
-   matters more than a renderer nobody can see the benefit of. */
+   is a few KB plus one sprite atlas and one painting per zone, so it opens
+   instantly on a phone — which matters more than a renderer nobody can see
+   the benefit of. */
 
 const cv = document.getElementById('stage');
 const ctx = cv.getContext('2d', { alpha: false });
 const boot = document.getElementById('boot');
 
-const C = { void:'#ffe500', deep:'#f5c400', dark:'#e0b400', ink:'#0b0b0b',
-            red:'#e8232b', redDark:'#b0141b', cream:'#fff6c8', white:'#fff',
-            kek:'#2fbf4a', grey:'#8a92b2' };
-
 /* ---------- assets ---------- */
 const ATLAS = { cols:9, rows:5, cw:158, ch:176,
                 row:{ front:0, back:1, left:2, right:3, diagonal:4 } };
 const sheet = new Image(); sheet.src = '../assets/sprites/walk-atlas.png';
-const block = new Image(); block.src = '../assets/png/world/block.jpg';
+// the zone's painting is loaded by enter(), below
 
-/* ---------- the world IS the painting ----------
-   An earlier pass drew the block out of canvas rectangles. It worked and it
-   looked like canvas rectangles. The reference this is chasing settled the
-   question: that world is one painted image with an invisible grid over it,
-   and the engine only does depth = base + y. The art is the product.
-
-   So: the painting is the world, fitted to the viewport, and everything below
-   is expressed in the painting's own 1536x864 coordinates. No scrolling
-   camera — the composition was painted to be seen whole, and panning around
-   inside it would only ever show a worse crop of it. */
+/* ---------- zones ----------
+   The engine knows how to walk around A zone. It knows nothing about which
+   zones exist — that is all in zones.js, in the painting's own pixels, so
+   adding a place is a painting plus a data entry. */
 const IMG = { w: 1536, h: 864 };
+const ZONES = window.KEVIN_ZONES;
+let Z = null, key = null, art = null, job = null, exitLock = true;
+const player = { x:0, y:0, vx:0, vy:0, dir:'front', flip:false, step:0, moving:false };
 
-// The plaza floor, traced off the painting. Kevin is kept inside this so he
-// never walks up a wall or off into the void.
-const FLOOR = [ [700,455], [1180,455], [1470,720], [1430,830], [430,830], [330,700], [470,520] ];
+// Progress is per visit. Walking out of the shift and back in starts it again,
+// which is the honest reading of a shift.
+function startJob(){
+  job = null;
+  if (!Z.job) return;
+  job = { def: Z.job, held: 0, left: Z.job.drops.map(([x,y]) => ({ x, y })), done: false };
+}
 
-// Doors, in painting coordinates, taken from where they actually are.
-// Doors in painting coordinates, read off the render rather than guessed.
-// signY is where the name plate hangs above each shopfront.
-const PLACES = [
-  { x:300,  y:470, r:165, signY:300, name:"McKEVIN'S",     sub:'the shift',
-    tip:"McKevin's. Where the shift is, and where $KEVIN comes from." },
-  { x:776,  y:340, r:150, signY:150, name:'THE STOREROOM', sub:'4 written · 0 deployed',
-    tip:'The storeroom. Four contracts written and tested. None deployed.' },
-  { x:995,  y:380, r:150, signY:212, name:"KEVIN'S GYM",   sub:'no pain, only kevin',
-    tip:"The gym. No pain, only Kevin.", href:'../gym/' },
-  { x:1270, y:452, r:160, signY:300, name:'THE CARD ROOM', sub:'texas hold’em',
-    tip:'The card room. He is not good at it.', href:'../poker/' },
-];
+function enter(to, at){
+  const next = ZONES[to];
+  if (!next) return;
+  Z = next; key = to;
+  location.hash = to;
+  const p = at || Z.spawn;
+  player.x = p.x; player.y = p.y; player.vx = player.vy = 0;
+  goal = null; near = null;
+  // You spawn standing on the doorway you came through. Without this you would
+  // be pushed straight back out of it on the first frame.
+  exitLock = true;
+  document.getElementById('where').firstChild.textContent = Z.name;
+  startJob();
+  const img = new Image();
+  img.onload  = () => { if (Z === next) art = img; };
+  img.onerror = () => { if (Z === next) art = null; };  // an unpainted zone says so
+  art = null;
+  img.src = Z.art;
+}
 
-const player = { x:880, y:660, vx:0, vy:0, dir:'front', flip:false, step:0, moving:false };
+// The address bar is a way in. Back, forward, and a pasted #downtown all
+// land somewhere real instead of silently doing nothing.
+addEventListener('hashchange', () => {
+  const to = location.hash.slice(1);
+  if (ZONES[to] && to !== key) enter(to);
+});
 
 /* ---------- input ---------- */
 const keys = new Set();
 addEventListener('keydown', e => {
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
   keys.add(e.key.toLowerCase());
+  const k = e.key.toLowerCase();
+  if ((k === 'e' || k === 'enter') && near && (near.href || near.to)) activate(near);
 });
 addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
 
@@ -163,6 +186,17 @@ cv.addEventListener('pointerdown', e => {
   if (inside(p.x, p.y)) goal = p;
 });
 
+// There is no E key on a phone, so the prompt itself is the button.
+const tip = document.getElementById('tip');
+tip.addEventListener('click', () => { if (near) activate(near); });
+
+function activate(p){
+  if (p.to) return enter(p.to, p.at);
+  if (!p.href) return;
+  if (p.ext) window.open(p.href, '_blank', 'noopener');
+  else location.href = p.href;
+}
+
 /* ---------- fit ---------- */
 let fit = { s:1, ox:0, oy:0 };
 function resize(){
@@ -179,19 +213,31 @@ const toScreen = (x,y) => ({ x: x*fit.s + fit.ox, y: y*fit.s + fit.oy });
 const toImg = (x,y) => ({ x:(x-fit.ox)/fit.s, y:(y-fit.oy)/fit.s });
 
 function inside(x,y){
-  let hit = false;
-  for (let i=0, j=FLOOR.length-1; i<FLOOR.length; j=i++){
-    const [xi,yi]=FLOOR[i], [xj,yj]=FLOOR[j];
+  const F = Z.floor; let hit = false;
+  for (let i=0, j=F.length-1; i<F.length; j=i++){
+    const [xi,yi]=F[i], [xj,yj]=F[j];
     if ((yi>y)!==(yj>y) && x < (xj-xi)*(y-yi)/(yj-yi)+xi) hit = !hit;
   }
   return hit;
 }
+// Y is squashed relative to X in an oblique view, so distances are measured in
+// the same squashed space the character walks in.
+const reach = (x,y) => Math.hypot(player.x-x, (player.y-y)/0.62);
 
 /* ---------- draw ---------- */
+function plate(x, y, text, size, bg, fg){
+  ctx.font = `${size}px 'Luckiest Guy', system-ui`;
+  const w = ctx.measureText(text).width + 26*fit.s, h = size*1.6;
+  ctx.beginPath(); ctx.roundRect(x-w/2, y-h/2, w, h, 8*fit.s);
+  ctx.fillStyle = bg; ctx.fill();
+  ctx.lineWidth = 4*fit.s; ctx.strokeStyle = '#0b0b0b'; ctx.stroke();
+  ctx.fillStyle = fg; ctx.fillText(text, x, y + size*0.35);
+  return h;
+}
+
 function drawKevin(){
   const s = toScreen(player.x, player.y);
-  // Y is squashed relative to X in an oblique view, so the character is scaled
-  // by depth: further up the plaza reads as further away.
+  // Further up the floor reads as further away, so the character scales with it.
   const depth = 0.80 + 0.28*((player.y-455)/(830-455));
   const k = 0.86 * fit.s * depth;
   const w = ATLAS.cw*k, h = ATLAS.ch*k;
@@ -206,29 +252,70 @@ function drawKevin(){
   ctx.restore();
 }
 
-function drawSigns(){
-  ctx.textAlign = 'center';
-  for (const p of PLACES){
-    const s = toScreen(p.x, p.signY);
-    const active = near === p;
-    const fs = Math.round(19*fit.s);
-    ctx.font = `${fs}px 'Luckiest Guy', system-ui`;
-    const w = ctx.measureText(p.name).width + 26*fit.s;
-    const h = 30*fit.s;
-    ctx.beginPath(); ctx.roundRect(s.x-w/2, s.y-h, w, h, 8*fit.s);
-    ctx.fillStyle = active ? '#e8232b' : '#0b0b0b'; ctx.fill();
-    ctx.lineWidth = 4*fit.s; ctx.strokeStyle = '#0b0b0b'; ctx.stroke();
-    ctx.fillStyle = '#ffe500';
-    ctx.fillText(p.name, s.x, s.y - h/2 + fs*0.36);
-    // a short post down to the roof, so the plate belongs to the building
-    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x, s.y + 14*fit.s);
-    ctx.lineWidth = 5*fit.s; ctx.strokeStyle = '#0b0b0b'; ctx.stroke();
+function drawExits(){
+  ctx.textAlign='center';
+  for (const e of Z.exits){
+    const s = toScreen(e.x, e.y - 58);
+    plate(s.x, s.y, e.label, Math.round(15*fit.s), '#e8232b', '#fff');
   }
 }
 
+function drawSpots(){
+  ctx.textAlign = 'center';
+  for (const p of Z.spots){
+    const s = toScreen(p.x, p.signY ?? p.y);
+    const on = near === p;
+    const fs = Math.round((p.flat ? 15 : 19)*fit.s);
+    const h = plate(s.x, s.y - (p.flat ? 0 : fs*0.8), p.name, fs,
+                    on ? '#e8232b' : '#0b0b0b', on ? '#fff' : '#ffe500');
+    // Outside, a short post ties the plate to the roof it belongs to. Inside,
+    // the label floats where the thing is, so there is nothing to tie it to.
+    if (!p.flat){
+      ctx.beginPath(); ctx.moveTo(s.x, s.y - fs*0.8 + h/2); ctx.lineTo(s.x, s.y + 14*fit.s);
+      ctx.lineWidth = 5*fit.s; ctx.strokeStyle = '#0b0b0b'; ctx.stroke();
+    }
+  }
+}
+
+function drawJob(){
+  if (!job || job.done) return;
+  const J = job.def;
+  ctx.textAlign = 'center';
+  // what is still to be delivered
+  for (const d of job.left){
+    const s = toScreen(d.x, d.y);
+    const w = 26*fit.s, h = 17*fit.s;
+    ctx.save();
+    ctx.globalAlpha = .25;
+    ctx.beginPath(); ctx.ellipse(s.x, s.y+h*0.7, w*0.6, h*0.3, 0,0,7);
+    ctx.fillStyle = '#000'; ctx.fill();
+    ctx.restore();
+    const bob = Math.sin(performance.now()/300 + d.x) * 3 * fit.s;
+    ctx.beginPath(); ctx.roundRect(s.x-w/2, s.y-h+bob, w, h, 4*fit.s);
+    ctx.fillStyle = job.held > 0 ? '#ffe500' : '#fff6c8'; ctx.fill();
+    ctx.lineWidth = 4*fit.s; ctx.strokeStyle = '#0b0b0b'; ctx.stroke();
+  }
+  // where you pick up, when your hands are empty and there is anything left
+  if (job.held === 0 && job.left.length){
+    const s = toScreen(J.pickup.x, J.pickup.y);
+    plate(s.x, s.y, J.pickup.label, Math.round(14*fit.s), '#ffe500', '#0b0b0b');
+  }
+}
+
+function paintHud(){
+  const el = document.getElementById('job');
+  if (!job){ el.classList.remove('on'); return; }
+  el.classList.add('on');
+  const J = job.def, total = J.drops.length, left = job.left.length;
+  el.innerHTML = job.done
+    ? `${J.title}<br><b>${J.done}</b>`
+    : `${J.title}<br><b>${total-left}/${total}</b> ${J.unit}` +
+      (job.held ? ` &middot; carrying ${job.held}` : ` &middot; ${J.idle}`);
+}
+
 /* ---------- loop ---------- */
-const tip = document.getElementById('tip'), sub = document.getElementById('sub');
-let near = null, last = performance.now();
+const sub = document.getElementById('sub');
+let near = null, last = performance.now(), hudKey = '';
 
 function step(now){
   const dt = Math.min((now-last)/1000, .05); last = now;
@@ -260,30 +347,70 @@ function step(now){
     else { player.dir='diagonal'; player.flip = player.vx<0; }
   }
 
+  // the job: walk into the pass to load up, walk over a marker to deliver
+  if (job && !job.done){
+    const J = job.def;
+    if (job.held === 0 && job.left.length && reach(J.pickup.x, J.pickup.y) < J.pickup.r)
+      job.held = Math.min(J.carry, job.left.length);
+    if (job.held > 0){
+      const i = job.left.findIndex(d => reach(d.x, d.y) < 58);
+      if (i > -1){ job.left.splice(i,1); job.held--; }
+    }
+    if (!job.left.length){ job.done = true; job.held = 0; }
+  }
+
   let best=null, bd=Infinity;
-  for (const p of PLACES){
-    const d = Math.hypot(player.x-p.x, (player.y-p.y)/0.62);
+  for (const p of Z.spots){
+    const d = reach(p.x, p.y);
     if (d < p.r && d < bd){ bd=d; best=p; }
   }
+  // Walking into an exit moves zone — no prompt, no key. The lock stops the
+  // doorway you arrived on from throwing you straight back out.
+  let onExit = false;
+  for (const e of Z.exits){
+    if (reach(e.x, e.y) < e.r){
+      onExit = true;
+      if (!exitLock){ enter(e.to, e.at); return requestAnimationFrame(step); }
+    }
+  }
+  if (!onExit) exitLock = false;
+
   if (best!==near){
     near=best; tip.classList.toggle('on', !!near);
-    if (near) tip.textContent = near.tip + (near.href ? '  ·  press E to go in' : '');
+    const go = !!(near && (near.href || near.to));
+    tip.classList.toggle('go', go);
+    if (near) tip.textContent = near.tip + (go ? '  ·  press E or tap here' : '');
     sub.textContent = near ? near.name.toLowerCase() : 'tap the ground or use the stick';
   }
-  if (near && near.href && (keys.has('e')||keys.has('enter'))) location.href = near.href;
-
   ctx.fillStyle = '#ffe500'; ctx.fillRect(0,0,innerWidth,innerHeight);
-  if (block.complete && block.naturalWidth)
-    ctx.drawImage(block, fit.ox, fit.oy, IMG.w*fit.s, IMG.h*fit.s);
-  drawSigns();
+  if (art) ctx.drawImage(art, fit.ox, fit.oy, IMG.w*fit.s, IMG.h*fit.s);
+  else {
+    // Not painted yet. Say that, rather than render an empty yellow rectangle
+    // and let somebody think it is the place.
+    ctx.fillStyle = '#0b0b0b'; ctx.textAlign = 'center';
+    ctx.font = `${Math.round(30*fit.s)}px 'Luckiest Guy', system-ui`;
+    ctx.fillText(Z.name.toUpperCase(), innerWidth/2, innerHeight/2 - 10*fit.s);
+    ctx.font = `700 ${Math.round(13*fit.s)}px 'Space Mono', monospace`;
+    ctx.fillText('NOT PAINTED YET — WALK BACK THE WAY YOU CAME', innerWidth/2, innerHeight/2 + 22*fit.s);
+  }
+  drawExits();
+  drawJob();
+  drawSpots();
   drawKevin();
+
+  // the HUD is DOM, so only touch it when the numbers actually move
+  const k = job ? `${job.def.id}|${job.left.length}|${job.held}|${job.done}` : '';
+  if (k !== hudKey){ hudKey = k; paintHud(); }
+
   requestAnimationFrame(step);
 }
 
-let ready = 0;
-const go = () => { if (++ready === 2) { boot.remove(); requestAnimationFrame(step); } };
-sheet.onload = go; block.onload = go;
-sheet.onerror = block.onerror = () => { boot.textContent = 'could not load the block'; };
+sheet.onload = () => {
+  enter(ZONES[location.hash.slice(1)] ? location.hash.slice(1) : 'block');
+  boot.remove();
+  requestAnimationFrame(step);
+};
+sheet.onerror = () => { boot.textContent = 'could not load Kevin'; };
 </script>
 </body>
 </html>
