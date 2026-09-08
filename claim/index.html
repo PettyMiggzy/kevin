@@ -38,6 +38,15 @@
      space for. The floor is only here so that swapping to the shorter
      open-round copy cannot pull the page up under a moving thumb. */
   #round-state { min-height: 232px; }
+  #everyone-table { border-collapse:collapse; width:100%; min-width:560px; font-size:14px }
+  #everyone-table th, #everyone-table td { text-align:left; padding:9px 12px; border-bottom:2px solid rgba(11,11,11,.12) }
+  #everyone-table th { font-size:11px; letter-spacing:.14em; text-transform:uppercase; opacity:.6 }
+  #everyone-table td.num { font-variant-numeric:tabular-nums; white-space:nowrap }
+  #everyone-table code { font-size:13px }
+  #everyone-table tr.me { background:var(--void); outline:3px solid var(--ink) }
+  .pill { display:inline-block; padding:2px 9px; border-radius:99px; border:2px solid var(--ink); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em }
+  .pill--open { background:var(--cream) }
+  .pill--done { background:var(--ink); color:var(--void) }
   .box {
     background: var(--white); border: var(--edge) solid var(--ink);
     border-radius: var(--radius); box-shadow: var(--shadow);
@@ -116,6 +125,26 @@
       <div id="result" style="margin-top:22px"></div>
     </div>
 
+    <div class="box" id="everyone">
+      <h3 style="margin-top:0">Everybody on the list</h3>
+      <p class="muted" style="margin-top:0">
+        The whole round, every row. It was already published as
+        <a href="round.json">round.json</a> — this is the same file, read out,
+        so checking somebody else's row does not require downloading anything
+        or trusting a screenshot. Once the distributor is live each row also
+        shows whether it has been taken.
+      </p>
+      <div style="overflow-x:auto">
+        <table id="everyone-table">
+          <thead><tr>
+            <th>#</th><th>Address</th><th>Held</th><th>Owed</th><th>Status</th>
+          </tr></thead>
+          <tbody id="everyone-rows"><tr><td colspan="5" class="muted">loading…</td></tr></tbody>
+        </table>
+      </div>
+      <p class="muted" id="everyone-note" style="margin-bottom:0"></p>
+    </div>
+
     <div class="box" id="how">
       <h3 style="margin-top:0">How this works, and why it is done this way</h3>
       <p>
@@ -157,6 +186,11 @@
    the page says there is no round rather than inventing one. */
 (function () {
   var CHAIN_ID = 4663;
+  // READ-ONLY, AND DELIBERATELY NOT THROUGH A WALLET. The whole promise of this
+  // page is that looking costs nothing and needs no wallet, so the claimed/
+  // unclaimed state has to be readable without one too. Writes still go through
+  // window.ethereum; this is only ever used for eth_call.
+  var READ_RPC = 'https://rpc.mainnet.chain.robinhood.com';
   var EXPLORER = 'https://robinhoodchain.blockscout.com/tx/';
   var state = document.getElementById('round-state');
   var lookup = document.getElementById('lookup');
@@ -207,6 +241,7 @@
         if (body && body.tagName === 'P') body.remove();
       }
       lookup.hidden = false;
+      renderEveryone();
     })
     .catch(function () {
       // No file, or an unreadable one, means no round. Never imply otherwise —
@@ -304,6 +339,86 @@
   /* Minimal ABI encoder for exactly one function. Pulling in a library to
      encode a single call would be a much bigger attack surface than the
      forty lines it replaces. */
+  // --- the whole list ------------------------------------------------------
+
+  function short(a) { return a.slice(0, 6) + '…' + a.slice(-4); }
+
+  async function readIsClaimed(distributor, roundId, index) {
+    // isClaimed(uint256,uint256) -> bool
+    var sel = '0xf364c90c'; // verified with `cast sig`, not guessed
+    var w = function (n) { return BigInt(n).toString(16).padStart(64, '0'); };
+    var r = await fetch(READ_RPC, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'eth_call',
+        params: [{ to: distributor, data: sel + w(roundId) + w(index) }, 'latest'],
+      }),
+    }).then(function (x) { return x.json(); });
+    if (r.error) throw new Error(r.error.message);
+    return /1$/.test(r.result || '');
+  }
+
+  async function renderEveryone() {
+    var body = document.getElementById('everyone-rows');
+    var note = document.getElementById('everyone-note');
+    if (!body || !round || !round.claims) return;
+
+    var rows = Object.keys(round.claims).map(function (addr) {
+      var c = round.claims[addr];
+      return { addr: addr, index: c.index, amount: c.amount, balance: c.balance };
+    }).sort(function (a, b) {
+      var x = BigInt(a.amount), y = BigInt(b.amount);
+      return x > y ? -1 : x < y ? 1 : 0;
+    });
+
+    var sym = (round.payout && round.payout.symbol) || '';
+    var live = isAddress(round && round.airdrop);
+    var typed = (document.getElementById('addr').value || '').trim().toLowerCase();
+
+    body.innerHTML = rows.map(function (r) {
+      var mine = typed && r.addr.toLowerCase() === typed;
+      return '<tr' + (mine ? ' class="me"' : '') + '>' +
+        '<td class="num">' + esc(r.index) + '</td>' +
+        '<td><code title="' + esc(r.addr) + '">' + esc(short(r.addr)) + '</code></td>' +
+        '<td class="num">' + fmt(r.balance) + '</td>' +
+        '<td class="num">' + fmt(r.amount) + (sym ? ' ' + esc(sym) : '') + '</td>' +
+        '<td class="num" id="st-' + esc(r.index) + '">' +
+          (live ? '<span class="muted">checking…</span>'
+                : '<span class="pill pill--open">not open</span>') +
+        '</td></tr>';
+    }).join('');
+
+    if (!live) {
+      note.textContent = 'Status stays blank until a distributor exists. Nothing has been '
+        + 'claimed because there is nothing to claim from yet.';
+      return;
+    }
+
+    // One call per row. Seventeen rows is nothing; if this ever grows, batch it.
+    var done = 0;
+    for (var i = 0; i < rows.length; i++) {
+      (function (r) {
+        readIsClaimed(round.airdrop, round.roundId || 0, r.index).then(function (taken) {
+          var cell = document.getElementById('st-' + r.index);
+          if (!cell) return;
+          cell.innerHTML = taken
+            ? '<span class="pill pill--done">claimed</span>'
+            : '<span class="pill pill--open">unclaimed</span>';
+          if (taken) done++;
+          note.textContent = done + ' of ' + rows.length + ' rows claimed.';
+        }).catch(function () {
+          var cell = document.getElementById('st-' + r.index);
+          // Say the read failed rather than implying the row is unclaimed —
+          // an RPC hiccup must not read as a fact about somebody's money.
+          if (cell) cell.innerHTML = '<span class="muted">unknown</span>';
+          note.textContent = 'Could not reach the chain to check what has been claimed. '
+            + 'The amounts above come from the published list and are unaffected.';
+        });
+      })(rows[i]);
+    }
+  }
+
   function encodeClaim(roundId, index, account, amount, proof) {
     // Verified against `cast sig`, not guessed. The first selector written
     // here by hand was wrong, which would have produced a transaction that
@@ -327,6 +442,7 @@
       return;
     }
     show(v);
+    renderEveryone(); // so the row you asked about is marked in the full list
   };
   document.getElementById('connect').onclick = async function () {
     if (!window.ethereum) {
