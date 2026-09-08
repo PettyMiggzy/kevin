@@ -261,6 +261,18 @@
     var aStart = auction.startsAt ? new Date(auction.startsAt) : null;
     var aEnd = auction.endsAt ? new Date(auction.endsAt) : null;
     var nowA = new Date();
+
+    // A MISSING START DATE IS NOT EVIDENCE THE AUCTION HAS NOT HAPPENED.
+    //
+    // This used to fall through to "has not opened yet" whenever startsAt was
+    // null — which it still is, because nobody filled the dates in after the
+    // fact. So the live front page told every visitor the auction had not
+    // opened while the token had been trading for a day. The token being live
+    // is proof the auction settled; trust that over an unfilled field.
+    if (contractLive() && K.contract) {
+      auctionState.textContent = 'has closed';
+      return;
+    }
     auctionState.textContent =
       !aStart || isNaN(aStart)        ? 'has not opened yet'
       : nowA < aStart                 ? 'has not opened yet'
@@ -269,6 +281,13 @@
   }
 
   function tick() { renderCountdown(); renderAuctionState(); }
+
+  // With no auction dates and a live token there is nothing to count down to,
+  // and an empty countdown box under a closed auction reads as broken.
+  if (contractLive() && K.contract && !auction.startsAt) {
+    if (countdown) countdown.hidden = true;
+    if (note) note.hidden = true;
+  }
 
   tick();
   if (auction.startsAt) setInterval(tick, 1000);

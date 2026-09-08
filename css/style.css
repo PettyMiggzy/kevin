@@ -196,7 +196,29 @@ p { margin: 0 0 1em; }
   border-bottom: 3px solid transparent;
 }
 .nav__links a:hover { border-bottom-color: var(--ink); }
-@media (max-width: 1080px) { .nav__links { display: none; } }
+/* THE NAV LINKS USED TO BE display:none BELOW 1080px.
+   That hid Docs, Kit, Claim, Burn, Fees and Memes from every phone and tablet
+   — with no hamburger and no other route to them, they were simply
+   unreachable for most of the traffic. The docs page is the one that makes a
+   stranger trust this, so it was hidden from exactly the people who needed it.
+   Below 1080 they become a second row that scrolls sideways: no JavaScript, no
+   menu to open, and nothing can be hidden by a script failing to load. */
+@media (max-width: 1080px) {
+  .nav__inner { flex-wrap: wrap; row-gap: 10px; }
+  .nav__links {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 20px;
+    padding-bottom: 2px;
+    border-top: 2px solid rgba(0, 0, 0, .15);
+    padding-top: 10px;
+  }
+  .nav__links::-webkit-scrollbar { display: none; }
+  .nav__links a { font-size: 14px; padding-bottom: 4px; }
+}
 
 /* --- ticker ------------------------------------------------------------- */
 
