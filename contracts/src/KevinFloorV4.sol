@@ -771,8 +771,18 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
     function fundWarChestToken(uint256 amount) external {
         Currency q = _quote();
         if (q.isAddressZero()) revert BadParam();
-        IERC20(Currency.unwrap(q)).safeTransferFrom(msg.sender, address(this), amount);
-        warChest += amount;
+        IERC20 t = IERC20(Currency.unwrap(q));
+        // CREDIT WHAT ARRIVED, NOT WHAT WAS ASKED FOR. This credited `amount`,
+        // so a quote token that takes a cut on transfer left `warChest`
+        // claiming money the contract never received — and the chest is spent
+        // by settling real tokens to the pool, so the overstated tail made
+        // every bid revert with the contract looking solvent. That is the same
+        // failure the sweep() accounting note describes, reached from the
+        // other side, and openRound() in KevinAirdrop already measures the
+        // delta for exactly this reason.
+        uint256 before = t.balanceOf(address(this));
+        t.safeTransferFrom(msg.sender, address(this), amount);
+        warChest += t.balanceOf(address(this)) - before;
     }
 
     receive() external payable {}
