@@ -1,0 +1,6 @@
+{
+  "model": "kling-o3-pro-reference-to-video",
+  "queue_id": "01a08243-837b-7c09-ae17-12968d3facaa",
+  "id": "p2-fryer-3d",
+  "prompt": "KEVIN is a physical 3D character present in the scene: the same red creature with the swept-back crest, huge white eyes and cream muzzle, but rendered with real volume, real lighting, contact shadows and reflections that match the room, like a practical puppet or a Pixar character shot on location.\n\nPhotorealistic live-action environment, real cinema camera, natural lighting, shallow depth of field, film grain, 35mm. The environment and every object in it is REAL and PHOTOGRAPHIC. Only the character is drawn.\n\nSHOT: A cramped, real fast-food kitchen at night. Stainless steel fryers, oil haze in the air, harsh overhead strip lighting, grease on the tiles. @Element1 stands at the fryer basket, completely calm, doing his job."
+}
