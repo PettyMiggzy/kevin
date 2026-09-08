@@ -54,3 +54,10 @@ keeper/.buywatch.state
 # as data/burns.json: the receipts are published, the ledger is per-deployment.
 data/.burnwatch.announced
 *.tmp
+
+# Audit scratch reproductions. Verifier agents write a throwaway test to prove
+# or disprove a finding and are told to delete it; some do not. They are
+# evidence for one claim, not part of the suite — a confirmed finding gets
+# promoted to a properly named regression test instead.
+contracts/test/Zz*.t.sol
+contracts/test/ZZ*.t.sol
