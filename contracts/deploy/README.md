@@ -8,6 +8,42 @@
 | KevinFloorV4 (KEVIN/WETH) | `0xd7309Cc9383Feb44d09202764A72951B962a25Ab` | configured but deliberately not driven; its operator key was lost, so repoint it before any use |
 | KevinFloorV4 (KEVIN/KEK) | `0x47Dd22f76129d4AeC0c93668b905BC360657A29C` | **LIVE** — driven by the keeper, sold its first 2,000,000 KEVIN, holds a ~677,000 KEK war chest |
 
+## Built but NOT deployed: KevinLock
+
+`KevinLock.create.hex` is ready to broadcast and was driven end to end against a
+fork of this chain — deployed, wired with `setLockbox`, funded with 3,000,000
+$KEVIN, and dripped. The accrual was exact at 6h (75,052), 30h (375,052) and
+capped correctly at the 3-day bank (900,000), and `release()` succeeded when
+called from an unrelated wallet, which is the permissionless behaviour it is
+supposed to have.
+
+It was not deployed, on purpose. The owner needs to be able to pull supply back
+on short notice, and this contract exists to make that hard: tokens leave only
+through the drip, or through `requestExit()` and a public countdown that cannot
+be shortened after deploy. Worse, `setLockbox` on the floor is ONE SHOT and
+PERMANENT, and it changes `sweep()` so $KEVIN can never again be swept anywhere
+but the lockbox. Setting it would trade away exactly the flexibility that was
+asked for.
+
+Deploy it when the goal is the opposite: convincing holders the treasury
+*cannot* dump. Not before.
+
+**THE CONSTRUCTOR ARGUMENTS ARE BAKED INTO THIS HEX.** Rebuild it if any of
+them should differ:
+
+| arg | value in the artifact |
+|---|---|
+| `token_` | `0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A` ($KEVIN) |
+| `floor_` | `0x47Dd22f76129d4AeC0c93668b905BC360657A29C` (the KEK market maker) |
+| `beneficiary_` | `0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf` (treasury) |
+| `ratePerDay_` | 300,000 $KEVIN |
+| `exitDelay_` | 604800 (7 days) |
+| `exitWindow_` | 172800 (2 days) |
+
+`ratePerDay` can only ever be LOWERED after deploy, via `slowDown()`. `floor`,
+`beneficiary` and `exitDelay` are immutable. sha256 of the artifact:
+`300233cd67f7b65b47ff59ff1c019fdc3ca1d3e0266e23a0c7a89af5f69694b0`.
+
 Both verified against the chain rather than the receipt. The airdrop's runtime
 bytecode is a byte-exact match for the compiled artefact. The keeper has
 immutables, so its runtime differs from the artefact only inside the 39 slots
