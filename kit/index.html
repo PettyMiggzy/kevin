@@ -255,7 +255,7 @@
         <tr><th>What it is</th><td>A GME round for $KEVIN holders, funded from the LP fees the pools have already earned — the same fees whose receipts are published at <a href="../#fees">/#fees</a>.</td></tr>
         <tr><th>Who is on it</th><td>17 addresses, published in full with their amounts and the Merkle root. Anybody can check any address without a wallet.</td></tr>
         <tr><th>How they qualified</th><td>Held at least 5,000,000 KEVIN at the end of a fixed block window, weighted by how much and how long. Contracts excluded; a wallet that has merely delegated under EIP-7702 is not a contract and is on the list.</td></tr>
-        <tr><th>Is it open?</th><td><b>No.</b> The distributor is written and tested but <b>not deployed</b>. Nothing can be claimed and the page will not let anybody try.</td></tr>
+        <tr><th>Is it open?</th><td><b>No.</b> The distributor is deployed at <code>0x37F93dAFF688120d6C7793833cACd830A988A971</code>, but it holds no tokens and no round has been opened, so there is nothing to claim and the page will not let anybody try. Deployed is not the same as funded, and both are checkable.</td></tr>
         <tr><th>Can I get on it?</th><td><b>No, and neither can anybody else.</b> The window it was taken over has already closed. The list is fixed and published.</td></tr>
         <tr><th>Verify it</th><td>The round file names the exact command that rebuilds it from chain logs. Run it, and the root must match.</td></tr>
       </table>
@@ -286,14 +286,16 @@
       <li><b>Burn and LP-fee receipts</b> read off the chain by a watcher, published as
           transaction hashes rather than as numbers somebody typed.</li>
       <li><b>120 hand-drawn stickers and emoji</b>, plus walk cycles cut frame by frame.</li>
-      <li><b>Two smart contracts</b> going on chain, with 130 passing tests, including the attacks found by trying to break them on purpose and kept as tests that must keep failing.</li>
+      <li><b>Smart contracts on chain</b>, with 195 passing tests, including the attacks found by trying to break them on purpose and kept as tests that must keep failing.</li>
     </ol>
     <p class="warn">
-      Both contracts are <b>written and tested, not deployed</b>. Say
-      "built", never "live" — the site says the same thing, so a reader
-      checking will find you were straight with them. Two further contracts
-      were written and are not shipping: the commitment layer was cut, and
-      the lockbox is built and tested but is not being deployed. They are
+      <b>This changed on 9 September and the old wording is wrong.</b> The
+      contracts are deployed, and one of them is funded and trading. You can
+      say <b>live</b>, because it is, and a reader checking will find it is.
+      What you must not say is that it protects anybody's money — see the
+      rules below. Two further contracts were written and are not shipping:
+      the commitment layer was cut, and the lockbox is built and tested but
+      is not being deployed. They are
       still in the public repository, so name them if asked rather than
       letting someone find them and think they were hidden.
     </p>
@@ -420,9 +422,9 @@ He does not DM first. Nobody has an allocation for you.</div>
     </p>
     <ol class="rules">
       <li><b>No price talk.</b> No targets, no market cap, no "next 100x". It reads as a pump to exactly the audience you want, and it is the one thing that turns a promoter into a liability.</li>
-      <li><b>Never say floor.</b> There is no defended price and no downside protection. Saying otherwise is a promise nobody can keep.</li>
-      <li><b>No dates for the contracts.</b> Built and tested, not deployed. "Built" is impressive and true; "live" is neither.</li>
-      <li><b>The GME round is not open.</b> The snapshot is taken and published at <a href="../claim/">/claim</a>, the distributor is not deployed, there is no date. Its window has already closed, so never "hold to qualify" — nobody can buy their way onto a list that is already fixed, and saying otherwise is telling somebody to buy.</li>
+      <li><b>You may say floor. You may not say protected.</b> There is a contract called a floor and it is live, funded and trading. What it does is narrow and worth getting right: <b>it will not sell below its own floor</b>, and it bids with a war chest when the price falls far enough under it. What it does <b>not</b> do is stop the price falling — anybody else can sell as much as they like, and the war chest is small enough to move the price by low single digits. So: "the treasury cannot dump below its own floor" is true and checkable. "There is a floor under the price" is a promise nobody can keep, and it is the sentence that turns a promoter into a liability.</li>
+      <li><b>No dates for anything not already done.</b> The market maker is live; say so. Do not put a date on the airdrop round, the second pool, or anything else that has not happened, because a date you did not set is a promise you cannot keep.</li>
+      <li><b>The GME round is not open.</b> The snapshot is taken and published at <a href="../claim/">/claim</a>, and the distributor is deployed but holds nothing with no round open, so there is no date. Its window has already closed, so never "hold to qualify" — nobody can buy their way onto a list that is already fixed, and saying otherwise is telling somebody to buy.</li>
       <li><b>Nobody else's logo.</b> Kevin works at <b>McKevin's</b>, and the sign says <b>Mc</b> — no arches, no golden M, and never a real chain's name, wordmark or mascot. Ten pieces of art were pulled off the meme wall for breaking this, and they are not on it because they were the funniest ones. Anything you make is yours; anything carrying somebody else's mark is theirs, and it is the one complaint that lands whatever else is true.</li>
     </ol>
     <p class="warn">

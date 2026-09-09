@@ -771,17 +771,29 @@ async function main() {
       const rc = await pub.waitForTransactionReceipt({ hash, timeout: 120_000 });
       say('  ', rc.status, 'in block', rc.blockNumber, `· gas ${rc.gasUsed}`);
     } catch (e) {
-      const m = e.shortMessage || e.message || String(e);
-      // These are the contract saying no, which is the system working.
-      // Match the NAME, and the raw SELECTOR as a fallback: if the ABI ever
-      // drifts from the deployed contract again, a refusal must still be
-      // recognised as a refusal rather than shouted about as a failure.
-      const DECLINED = /NothingToDo|TooSoon|OverDailyCap|NothingToRelease|NoFloorYet/;
-      const SELECTORS = /0x5c52a868|0x6fed7d85|0xc4891db5|0xfd8d3df4/;
-      if (DECLINED.test(m) || SELECTORS.test(m)) {
-        return say('  declined by the contract:', m.split('\n')[0]);
+      // WHICH FIELD CARRIES THE ERROR NAME. Not shortMessage. Measured against
+      // the live contract:
+      //
+      //   e.shortMessage  'The contract function "poke" reverted.'
+      //   e.message       the same, then a blank line, then 'Error: NothingToDo()'
+      //   e.cause.data.errorName  'NothingToDo'
+      //
+      // The previous version read `e.shortMessage || e.message`, and because
+      // shortMessage is always truthy the full message was never looked at. So
+      // adding the errors to the ABI — which is what makes the name appear at
+      // all — fixed nothing on its own, and every routine refusal still shouted
+      // "send failed". Read the name where viem actually puts it, fall back to
+      // the whole message, and keep the raw selectors for the day the ABI
+      // drifts from the deployed contract again.
+      const name = e?.cause?.data?.errorName || e?.data?.errorName || '';
+      const full = [name, e.message, e.shortMessage].filter(Boolean).join('\n') || String(e);
+      const headline = e.shortMessage || String(e).split('\n')[0];
+      const DECLINED = /NothingToDo|TooSoon|OverDailyCap|NothingToRelease|NoFloorYet|NotOperator/;
+      const SELECTORS = /0x5c52a868|0x6fed7d85|0xc4891db5|0xfd8d3df4|0x7c214f04/;
+      if (DECLINED.test(full) || SELECTORS.test(full)) {
+        return say('  declined by the contract:', name || headline);
       }
-      warn('  send failed:', m.split('\n')[0]);
+      warn('  send failed:', headline);
     }
   }
 }
