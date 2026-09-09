@@ -504,19 +504,25 @@ async function main() {
     // three things to go and do.
     if (paused) return note('paused by the owner');
     if (floorAt === 0n) return note('no floor set yet — setFloorFromSpot() first, it does nothing until then');
-    if (sell && held === 0n) {
-      return note('room above the floor, but the contract holds no $KEVIN'
-        + ` — send some to ${cfg.floor} before it can sell`);
-    }
-    if (sell && capT === 0n) {
-      return note('room above the floor, but dailyTokenCap is 0 — setRails() first, it cannot sell a thing');
-    }
-    if (buy && chest === 0n) {
-      return note('under the buy band, but the war chest is empty — fundWarChestToken() first');
-    }
-    if (buy && capQ === 0n) {
-      return note('under the buy band, but dailyQuoteCap is 0 — setRails() first, it cannot bid');
-    }
+    // ORDER OF THIS FUNCTION, AND WHY IT IS NOT THE OBVIOUS ONE.
+    //
+    // Everything that KEEPS THE CONTRACT HONEST runs before anything that
+    // merely EXPLAINS WHY IT IS IDLE. That is not tidiness, it is the fix for
+    // a live outage: the "holds no $KEVIN" note used to sit above the ratchet
+    // branch, so an empty contract returned early on every tick and stopped
+    // ratcheting entirely. It ran that way for 2.7 hours while $KEVIN went from
+    // 0.622 to 0.726 KEK, and none of that rise was banked into the floor —
+    // which went from 37% under spot to 46% under it. Nothing crashed. The
+    // service stayed green, the ticks succeeded, the log looked calm.
+    //
+    // The same trap caught the lockbox: release() is what FIXES an empty
+    // contract, and it sat below the guard that fires when the contract is
+    // empty. It could never have run when it was needed most.
+    //
+    // So: observe and ratchet first, then top up inventory, and only then the
+    // notes about why there is nothing to trade. A diagnostic must never be
+    // able to silence the machine it is describing.
+
     // THE BUCKETS DRAIN LAZILY, AND READING THEM RAW IS A LIE.
     //
     // The contract only writes tokensInBucket/quoteInBucket down inside
@@ -537,62 +543,6 @@ async function main() {
     };
     const sold = drained(storedSold, capT);
     const spent = drained(storedSpent, capQ);
-
-    // THE DAY'S ALLOWANCE IS ALREADY KNOWN. Both numbers are in hand and
-    // printed in every line, so poking while the bucket is full is asking a
-    // question the keeper has already answered. Running LIVE against a fork
-    // with the bucket over cap, it tried and was refused on every single tick
-    // — a wall of identical failures that hides anything real underneath.
-    // MOMENTUM. Record what we saw, then ask whether the price is holding up.
-    //
-    // `spot` here is a sqrt price and upIsUp says which direction is "better"
-    // for $KEVIN, so the comparison goes through _isBetter's equivalent rather
-    // than a naive numeric one — on this pool a RISING $KEVIN is a FALLING
-    // number, and getting that backwards would invert the whole guard.
-    var nowMs = Number(blk.timestamp) * 1000;
-    spotLog.push([nowMs, spot]);
-    while (spotLog.length > 2 && nowMs - spotLog[0][0] > cfg.momentumMs * 2) spotLog.shift();
-
-    function fallingBack() {
-      if (!cfg.sellOnlyRising) return null;
-      // The oldest reading at least momentumMs old. Nothing that old yet means
-      // we have not watched long enough to have an opinion.
-      var ref = null;
-      for (var i = 0; i < spotLog.length; i++) {
-        if (nowMs - spotLog[i][0] >= cfg.momentumMs) ref = spotLog[i]; else break;
-      }
-      if (!ref) {
-        return 'watching the price before it sells — '
-          + forHumans(Math.round((nowMs - spotLog[0][0]) / 1000)) + ' of the '
-          + forHumans(Math.round(cfg.momentumMs / 1000)) + ' it wants';
-      }
-      // Ease the reference by a little, so ordinary noise in a flat market does
-      // not veto a sale. Eased in the WORSE direction, which depends on upIsUp.
-      var tol = BigInt(cfg.momentumTolBps);
-      var eased = up ? (ref[1] * (10_000n - tol)) / 10_000n
-                     : (ref[1] * (10_000n + tol)) / 10_000n;
-      if (worse(spot, eased, up)) {
-        return 'not selling into a falling price — $KEVIN is '
-          + Math.abs(priceMovePct(ref[1], spot, up)).toFixed(2) + '% down over the last '
-          + forHumans(Math.round((nowMs - ref[0]) / 1000));
-      }
-      return null;
-    }
-
-    // Say WHEN it frees up, not how full it is. The bucket drains every second,
-    // so a message carrying the level changes on every tick and defeats the
-    // repeat-suppression in note() — the quiet hour it is meant to produce
-    // becomes eighty lines counting down. The wait is the useful number, and
-    // it is stable enough to say once.
-    const freeIn = (level, cap) => (cap === 0n ? 0n : ((level - cap) * 86_400n) / cap);
-    if (sell && sold >= capT) {
-      return note("the day's selling is used up"
-        + ` (${formatUnits(capT, 18)} $KEVIN a day) — room again in ${forHumans(freeIn(sold, capT))}`);
-    }
-    if (buy && spent >= capQ) {
-      return note("the day's buying is used up"
-        + ` (${formatEther(capQ)} a day) — room again in ${forHumans(freeIn(spent, capQ))}`);
-    }
 
     const state =
       `spot ${readable(spot)} floor ${readable(floorAt)} (${gapPct(floorAt, spot).toFixed(2)}%)` +
@@ -659,6 +609,75 @@ async function main() {
           cfg.lock, LOCK_ABI,
         );
       }
+    }
+
+    if (sell && held === 0n) {
+      return note('room above the floor, but the contract holds no $KEVIN'
+        + ` — send some to ${cfg.floor} before it can sell`);
+    }
+    if (sell && capT === 0n) {
+      return note('room above the floor, but dailyTokenCap is 0 — setRails() first, it cannot sell a thing');
+    }
+    if (buy && chest === 0n) {
+      return note('under the buy band, but the war chest is empty — fundWarChestToken() first');
+    }
+    if (buy && capQ === 0n) {
+      return note('under the buy band, but dailyQuoteCap is 0 — setRails() first, it cannot bid');
+    }
+    // THE DAY'S ALLOWANCE IS ALREADY KNOWN. Both numbers are in hand and
+    // printed in every line, so poking while the bucket is full is asking a
+    // question the keeper has already answered. Running LIVE against a fork
+    // with the bucket over cap, it tried and was refused on every single tick
+    // — a wall of identical failures that hides anything real underneath.
+    // MOMENTUM. Record what we saw, then ask whether the price is holding up.
+    //
+    // `spot` here is a sqrt price and upIsUp says which direction is "better"
+    // for $KEVIN, so the comparison goes through _isBetter's equivalent rather
+    // than a naive numeric one — on this pool a RISING $KEVIN is a FALLING
+    // number, and getting that backwards would invert the whole guard.
+    var nowMs = Number(blk.timestamp) * 1000;
+    spotLog.push([nowMs, spot]);
+    while (spotLog.length > 2 && nowMs - spotLog[0][0] > cfg.momentumMs * 2) spotLog.shift();
+
+    function fallingBack() {
+      if (!cfg.sellOnlyRising) return null;
+      // The oldest reading at least momentumMs old. Nothing that old yet means
+      // we have not watched long enough to have an opinion.
+      var ref = null;
+      for (var i = 0; i < spotLog.length; i++) {
+        if (nowMs - spotLog[i][0] >= cfg.momentumMs) ref = spotLog[i]; else break;
+      }
+      if (!ref) {
+        return 'watching the price before it sells — '
+          + forHumans(Math.round((nowMs - spotLog[0][0]) / 1000)) + ' of the '
+          + forHumans(Math.round(cfg.momentumMs / 1000)) + ' it wants';
+      }
+      // Ease the reference by a little, so ordinary noise in a flat market does
+      // not veto a sale. Eased in the WORSE direction, which depends on upIsUp.
+      var tol = BigInt(cfg.momentumTolBps);
+      var eased = up ? (ref[1] * (10_000n - tol)) / 10_000n
+                     : (ref[1] * (10_000n + tol)) / 10_000n;
+      if (worse(spot, eased, up)) {
+        return 'not selling into a falling price — $KEVIN is '
+          + Math.abs(priceMovePct(ref[1], spot, up)).toFixed(2) + '% down over the last '
+          + forHumans(Math.round((nowMs - ref[0]) / 1000));
+      }
+      return null;
+    }
+
+    // Say WHEN it frees up, not how full it is. The bucket drains every second,
+    // so a message carrying the level changes on every tick and defeats the
+    // repeat-suppression in note() — the quiet hour it is meant to produce
+    // becomes eighty lines counting down. The wait is the useful number, and
+    // it is stable enough to say once.
+    const freeIn = (level, cap) => (cap === 0n ? 0n : ((level - cap) * 86_400n) / cap);
+    if (sell && sold >= capT) {
+      return note("the day's selling is used up"
+        + ` (${formatUnits(capT, 18)} $KEVIN a day) — room again in ${forHumans(freeIn(sold, capT))}`);
+    }
+    if (buy && spent >= capQ) {
+      return note("the day's buying is used up"
+        + ` (${formatEther(capQ)} a day) — room again in ${forHumans(freeIn(spent, capQ))}`);
     }
 
     // The cooldown is checked HERE and not before the two branches above,
