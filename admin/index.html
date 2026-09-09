@@ -52,6 +52,18 @@ pre{background:#0e0e0e;border:1px solid var(--line);border-radius:8px;padding:10
 .pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
 .pill--on{background:var(--ok);color:#04240f} .pill--off{background:#333;color:#bbb}
 .pill--red{background:var(--red);color:#fff}
+.now{background:var(--panel);border:2px solid var(--line);border-radius:12px;padding:18px;margin-bottom:14px}
+.now h3{margin:0 0 2px;font-size:13px;color:var(--void);letter-spacing:.06em}
+.now .big{font-size:24px;font-weight:700;line-height:1.25;margin:8px 0 4px;color:#fff}
+.now .big.good{color:var(--ok)} .now .big.warn{color:var(--warn)} .now .big.bad{color:var(--red)}
+.now .because{font-size:13px;color:#c9c9c9;margin-bottom:10px}
+.now .todo{border-left:4px solid var(--void);padding:8px 12px;background:#0e0e0e;border-radius:0 8px 8px 0;
+  font-size:13px;color:var(--cream);margin-top:10px}
+.now .todo.bad{border-left-color:var(--red);color:#ffb3b6}
+.now .todo.ok{border-left-color:var(--ok);color:#9ff0bd}
+.bar{height:8px;background:#0e0e0e;border:1px solid var(--line);border-radius:99px;overflow:hidden;margin:10px 0 4px}
+.bar i{display:block;height:100%;background:var(--void)}
+.now .idle{opacity:.55}
 footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var(--dim);font-size:11px}
 </style>
 </head>
@@ -68,6 +80,11 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
 </header>
 
 <div class="wrap">
+
+  <section>
+    <h2>Right now</h2>
+    <div id="now"><div class="now"><div class="big">reading…</div></div></div>
+  </section>
 
   <section>
     <h2>Needs attention</h2>
@@ -119,8 +136,13 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
   var EXPLORER = 'https://robinhoodchain.blockscout.com/address/';
 
   var AIRDROP  = '0x37F93dAFF688120d6C7793833cACd830A988A971';
-  var OPERATOR = '0x92B129f75CC5C19636E74B5ec70b13a3962B5cd7';
   var KEVIN    = '0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A';
+
+  // NO HARDCODED OPERATOR. This page used to carry one as a constant, and the
+  // day setOperator() was called it started reporting the gas balance of a
+  // wallet nothing was signing with any more — a monitor confidently watching
+  // the wrong thing, which is worse than not watching. The operator is now
+  // read off each contract and its balance fetched in a second round trip.
 
   var KEEPERS = [
     { name: 'KEVIN / WETH', addr: '0xd7309Cc9383Feb44d09202764A72951B962a25Ab',
@@ -145,6 +167,13 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
     setRails:'0x108452db', setPolicy:'0x0169a27a'
   };
 
+  // Which pools a keeper process is actually driving. The WETH floor is
+  // deployed and tuned but has no systemd instance, so the panel must say so
+  // rather than reporting it as idle and leaving you to wonder.
+  var DRIVEN = ['0x47dd22f76129d4aec0c93668b905bc360657a29c'];
+
+  var ZERO = '0x0000000000000000000000000000000000000000';
+
   var $ = function (id) { return document.getElementById(id); };
   var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) {
     return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); };
@@ -162,9 +191,33 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
     return s;
   }
 
-  // --- one batched JSON-RPC round trip per refresh -------------------------
+  // --- batched JSON-RPC, in chunks the public RPC will actually accept ------
+  //
+  // This used to send every read as ONE array. That is 65 calls for two
+  // keepers, and the public endpoint answers a batch that size with HTTP 429 —
+  // so the page showed "could not read the chain" and nothing else, every time,
+  // for everyone. Caught by running this file's own script against the live
+  // RPC rather than trusting that it worked.
+  //
+  // CHUNK_MAX is deliberately well under where the limit was observed, because
+  // the limit is a rate, not a fixed cap: a refresh competing with anything
+  // else on the same address gets less room than a quiet one.
+  var CHUNK_MAX = 20;
   var callId = 1;
+
   async function batch(calls) {
+    var out = [];
+    for (var i = 0; i < calls.length; i += CHUNK_MAX) {
+      var part = await batchOne(calls.slice(i, i + CHUNK_MAX));
+      out = out.concat(part);
+    }
+    return out;
+  }
+
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  async function batchOne(calls, attempt) {
+    attempt = attempt || 0;
     var body = calls.map(function (c) {
       return c.method === 'eth_getBalance'
         ? { jsonrpc:'2.0', id: callId++, method:'eth_getBalance', params:[c.to, 'latest'] }
@@ -186,6 +239,15 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
       // thing did not answer and how long we waited for it.
       throw new Error(timedOut ? 'the RPC did not answer within 12 seconds' : String(e && e.message || e));
     } finally { clearTimeout(timer); }
+    // 429 is the endpoint asking us to slow down, not a failure. Back off and
+    // try again twice before giving up, because a refresh that dies on the
+    // first rate-limit is a monitor that goes blank exactly when you are
+    // clicking it repeatedly to watch something happen.
+    if (r.status === 429 && attempt < 2) {
+      await sleep(700 * (attempt + 1));
+      return batchOne(calls.map(function (c) { return c; }), attempt + 1);
+    }
+    if (r.status === 429) throw new Error('the RPC is rate-limiting this address — wait a moment and refresh');
     if (!r.ok) throw new Error('RPC returned HTTP ' + r.status);
     var j = await r.json();
     var byId = {};
@@ -212,6 +274,36 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
     return (1 - pf / ps) * 100;
   }
 
+  // Gas arithmetic, measured rather than guessed: on a fork of this chain a
+  // poke cost 176k-213k gas and a ratchet 64k-98k, at ~0.18 gwei. Call an
+  // average action 120k gas — the figure is for a runway estimate, not billing.
+  var GWEI = 182000000n;          // roughly the going rate on Robinhood Chain
+  var ACTION_GAS = 120000n;
+  var ACTION_COST = GWEI * ACTION_GAS;             // ~0.0000218 ETH
+  var GAS_LOW = ACTION_COST * 200n;                // "top it up soon"
+  var GAS_CRIT = ACTION_COST * 40n;                // "it is about to stop"
+  var KEEPER_FLOOR = 500000000000000n;             // MIN_GAS_WEI in the env file
+
+  function pokesLeft(bal) {
+    if (bal <= KEEPER_FLOOR) return '0';
+    return ((bal - KEEPER_FLOOR) / ACTION_COST).toString();
+  }
+
+  // How many ratchet steps until the floor sits at its target gap under spot.
+  // Each step lifts the floor by ratchetBps IN PRICE TERMS, which in sqrt-price
+  // space is the square root of that ratio — the same arithmetic the contract
+  // and the keeper both use.
+  function stepsToTarget(floorSq, spotSq, ratchetBps, gapBps) {
+    if (!floorSq || !spotSq || !ratchetBps) return null;
+    var pf = kevinPrice(floorSq), ps = kevinPrice(spotSq);
+    if (!pf || !ps) return null;
+    var target = ps * (1 - Number(gapBps) / 10000);
+    var step = 1 + Number(ratchetBps) / 10000;
+    var steps = 0;
+    while (pf < target && steps < 500) { pf *= step; steps++; }
+    return steps;
+  }
+
   var state = { wallet: null, isOwner: false, data: null };
 
   async function load() {
@@ -222,7 +314,6 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
     ix.airOwner = push(AIRDROP, SIG.owner);
     ix.airCount = push(AIRDROP, SIG.roundCount);
     ix.treasEth = calls.push({ to: OWNER, method:'eth_getBalance' }) - 1;
-    ix.opEth    = calls.push({ to: OPERATOR, method:'eth_getBalance' }) - 1;
 
     ix.keepers = KEEPERS.map(function (k) {
       var o = {};
@@ -236,7 +327,19 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
     });
 
     var res = await batch(calls);
-    state.data = { res: res, ix: ix };
+
+    // Second trip: whatever address each contract actually names as operator.
+    var ops = KEEPERS.map(function (k, i) { return addrOf(res[ix.keepers[i].operator]); });
+    var uniq = ops.filter(function (a, i) {
+      return a && a !== ZERO && ops.indexOf(a) === i;
+    });
+    var opEth = {};
+    if (uniq.length) {
+      var bals = await batch(uniq.map(function (a) { return { to: a, method:'eth_getBalance' }; }));
+      uniq.forEach(function (a, i) { opEth[a] = n(bals[i]); });
+    }
+
+    state.data = { res: res, ix: ix, ops: ops, opEth: opEth };
     render();
   }
 
@@ -244,17 +347,22 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
     var res = state.data.res, ix = state.data.ix, alerts = [];
 
     // --- wallets
-    var treas = n(res[ix.treasEth]), opEth = n(res[ix.opEth]);
+    var treas = n(res[ix.treasEth]);
+    var seen = {};
     $('wallets').innerHTML =
       kv('Treasury (owner)', units(treas, 18, 6) + ' ETH', treas < 1000000000000000n ? 'bad' : 'good',
          '<a href="' + EXPLORER + OWNER + '" target="_blank" rel="noopener">' + short(OWNER) + '</a>') +
-      kv('Operator (hot key)', units(opEth, 18, 6) + ' ETH', opEth === 0n ? 'bad' : opEth < 10000000000000000n ? 'warn' : 'good',
-         '<a href="' + EXPLORER + OPERATOR + '" target="_blank" rel="noopener">' + short(OPERATOR) + '</a>');
+      KEEPERS.map(function (k, i) {
+        var a = state.data.ops[i];
+        if (!a || a === ZERO || seen[a]) return '';
+        seen[a] = 1;
+        var bal = state.data.opEth[a] || 0n;
+        return kv('Operator · ' + k.name, units(bal, 18, 6) + ' ETH',
+          bal === 0n ? 'bad' : bal < GAS_LOW ? 'warn' : 'good',
+          '<a href="' + EXPLORER + a + '" target="_blank" rel="noopener">' + short(a) + '</a>' +
+          ' · ' + pokesLeft(bal) + ' actions left');
+      }).join('');
 
-    if (opEth === 0n) alerts.push(['bad',
-      'The operator wallet has no ETH. It pays for every poke and ratchet, so nothing will run at all until it is funded.']);
-    else if (opEth < 10000000000000000n) alerts.push(['warn',
-      'Operator gas is under 0.01 ETH. At roughly 0.00006 ETH a poke that is only a few hours of a five-minute cadence.']);
     if (treas < 1000000000000000n) alerts.push(['warn',
       'The treasury is under 0.001 ETH, which is not enough for most owner transactions.']);
 
@@ -280,9 +388,13 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
       var gap = floor && spot ? pctBetween(floor, spot) : null;
       var effGap = eff && spot ? pctBetween(eff, spot) : null;
 
+      // Only complain about pools something is actually driving. An idle,
+      // deliberately-undriven contract holding nothing is the intended state,
+      // and shouting about it trains you to ignore this whole list.
+      var isDriven = DRIVEN.indexOf(k.addr.toLowerCase()) !== -1;
       if (paused) alerts.push(['bad', k.name + ' is PAUSED. It will not trade and its clock is not being advanced by poke or ratchet.']);
-      if (kevBal === 0n) alerts.push(['warn', k.name + ' holds no $KEVIN, so it has nothing to sell.']);
-      if (chest === 0n) alerts.push(['warn', k.name + ' has an empty war chest, so it cannot bid at all.']);
+      if (isDriven && kevBal === 0n) alerts.push(['warn', k.name + ' holds no $KEVIN, so it has nothing to sell.']);
+      if (isDriven && chest === 0n) alerts.push(['warn', k.name + ' has an empty war chest, so it cannot bid at all.']);
       if (chest > qBal) alerts.push(['bad', k.name + ' claims a war chest of ' + units(chest, k.qdp, 4) +
         ' ' + k.qsym + ' but only holds ' + units(qBal, k.qdp, 4) + '. Bids will revert.']);
 
@@ -312,6 +424,112 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
              ? 'NOT SET' : short(addrOf(res[o.operator])),
              addrOf(res[o.operator]) === '0x0000000000000000000000000000000000000000' ? 'bad' : 'good') +
         '</div></div>';
+    }).join('');
+
+    // --- right now: the whole thing in one sentence per pool ---------------
+    $('now').innerHTML = KEEPERS.map(function (k, i) {
+      var o = ix.keepers[i];
+      var opAddr = state.data.ops[i];
+      var gas = (opAddr && state.data.opEth[opAddr]) || 0n;
+      var driven = DRIVEN.indexOf(k.addr.toLowerCase()) !== -1;
+
+      var spot = n(res[o.spot]), floor = n(res[o.floor]), pend = n(res[o.pendingFloor]);
+      var kevBal = n(res[o.kevin]), chest = n(res[o.warChest]);
+      var paused = /1$/.test(res[o.paused] || '');
+      var rd = res[o.reading] || '';
+      var sell = rd.length >= 130 && /1$/.test(rd.slice(2, 66));
+      var buy  = rd.length >= 130 && /1$/.test(rd.slice(66, 130));
+      var traded = n(res[o.lastTrade]) > 0n;
+      var gap = floor && spot ? pctBetween(floor, spot) : null;
+      var steps = stepsToTarget(floor, spot, n(res[o.ratchetBps]), n(res[o.floorGap]));
+      var cool = Number(n(res[o.cooldown])) || 300;
+
+      if (!driven) {
+        return '<div class="now idle"><h3>' + esc(k.name) + '</h3>' +
+          '<div class="big">Not being driven</div>' +
+          '<div class="because">Deployed and tuned, but no keeper process points at it, so nothing ' +
+          'calls poke. It holds ' + units(kevBal, 18, 0) + ' $KEVIN and a war chest of ' +
+          units(chest, k.qdp, 4) + ' ' + k.qsym + '. This is on purpose.</div></div>';
+      }
+
+      var big, cls, because, todo = null, todoCls = '';
+
+      if (paused) {
+        big = 'Paused'; cls = 'bad';
+        because = 'You paused it. It will not trade, and its underwater clock is not advancing.';
+        todo = 'Unpause below when you want it running again.'; todoCls = 'bad';
+      } else if (gas <= KEEPER_FLOOR) {
+        big = 'Out of gas'; cls = 'bad';
+        because = 'The operator wallet is below the ' + units(KEEPER_FLOOR, 18, 4) +
+          ' ETH floor the keeper refuses to send under, so it has stopped acting.';
+        todo = 'Send ETH to ' + opAddr + ' — 0.01 buys about ' + pokesLeft(ACTION_COST * 460n) + ' actions.';
+        todoCls = 'bad';
+      } else if (sell && kevBal === 0n) {
+        big = 'Out of $KEVIN'; cls = 'warn';
+        because = 'There is room above the floor to sell into, but the contract holds nothing to sell.';
+        todo = 'Transfer $KEVIN to ' + k.addr + ' when you want it selling again.';
+      } else if (buy && chest === 0n) {
+        big = 'Out of war chest'; cls = 'warn';
+        because = 'The price is inside the bid band but there is nothing to bid with.';
+        todo = 'approve() then fundWarChestToken() with ' + k.qsym + '. A plain transfer does not count.';
+      } else if (steps !== null && steps > 0) {
+        var mins = Math.round(steps * 2 * cool / 60);
+        big = 'Walking the floor up'; cls = '';
+        because = 'The price has run ahead of the floor, so it banks the rise before selling into it. ' +
+          steps + ' step' + (steps === 1 ? '' : 's') + ' to go, each one two transactions ' +
+          Math.round(cool / 60) + ' minutes apart.' +
+          (traded
+            ? ' It sells in between, so the chart moves as it goes.'
+            : ' Nothing reaches the chart until the first sale.');
+        todo = traded
+          ? 'Nothing to do. ' + units(kevBal, 18, 0) + ' $KEVIN left to sell.'
+          : 'Nothing to do. Expect the first sale in roughly ' +
+            (mins >= 90 ? (mins / 60).toFixed(1) + ' hours' : mins + ' minutes') + '.';
+        todoCls = 'ok';
+      } else if (sell) {
+        big = 'Selling'; cls = 'good';
+        because = 'It is selling into the room above the floor, stopping at the floor every time, ' +
+          'with ' + Math.round(cool / 60) + ' minutes between trades.';
+        todo = 'Nothing to do. ' + units(kevBal, 18, 0) + ' $KEVIN left to sell.'; todoCls = 'ok';
+      } else if (buy) {
+        big = 'Buying the dip'; cls = 'good';
+        because = 'The price is far enough under the floor to bid. It will spend the war chest ' +
+          'defending, and stop at the floor.';
+        todo = 'Nothing to do.'; todoCls = 'ok';
+      } else {
+        big = 'Watching'; cls = 'good';
+        because = traded
+          ? 'Nothing to do at this price. It is waiting for the market to give it room.'
+          : 'Funded and armed, waiting for room above the floor. It has never traded.';
+        todo = 'Nothing to do.'; todoCls = 'ok';
+      }
+
+      if (gas > KEEPER_FLOOR && gas < GAS_CRIT) {
+        todo = 'Top up gas soon — ' + opAddr + ' has about ' + pokesLeft(gas) + ' actions left.';
+        todoCls = 'bad';
+      } else if (gas >= GAS_CRIT && gas < GAS_LOW && todoCls === 'ok') {
+        todo = 'Running fine. Gas is getting low: about ' + pokesLeft(gas) + ' actions left.';
+        todoCls = '';
+      }
+
+      var pct = steps === null ? 100 : Math.max(0, Math.min(100, 100 - steps * 100 / 24));
+
+      return '<div class="now"><h3>' + esc(k.name) + ' · driven by the keeper</h3>' +
+        '<div class="big ' + cls + '">' + esc(big) + '</div>' +
+        '<div class="because">' + esc(because) + '</div>' +
+        (steps !== null && steps > 0 ? '<div class="bar"><i style="width:' + pct.toFixed(0) + '%"></i></div>' : '') +
+        '<div class="grid">' +
+          kv('Gas left', pokesLeft(gas) + ' actions', gas < GAS_CRIT ? 'bad' : gas < GAS_LOW ? 'warn' : 'good',
+             units(gas, 18, 5) + ' ETH') +
+          kv('$KEVIN to sell', units(kevBal, 18, 0), kevBal === 0n ? 'warn' : 'good') +
+          kv('War chest', units(chest, k.qdp, 2) + ' ' + k.qsym, chest === 0n ? 'warn' : 'good') +
+          kv('Floor vs spot', gap === null ? '—' : gap.toFixed(1) + '% under',
+             gap !== null && gap > 40 ? 'warn' : 'good') +
+          kv('Trades so far', traded ? fmtAgo(n(res[o.lastTrade])) : 'none yet') +
+          kv('Next step armed', pend > 0n ? 'yes' : 'no') +
+        '</div>' +
+        (todo ? '<div class="todo ' + todoCls + '">' + esc(todo) + '</div>' : '') +
+        '</div>';
     }).join('');
 
     $('alerts').innerHTML = alerts.length
