@@ -64,6 +64,24 @@ const cfg = {
   // How often to look. The contract has its own cooldown; this only decides how
   // often we ask, and asking is a free eth_call.
   everyMs: Number(process.env.TICK_MS || 45_000),
+  // SELL INTO STRENGTH, NOT JUST INTO ROOM.
+  //
+  // The contract's sell condition is `spot is anywhere above the floor`, with
+  // no notion of which way the price is going. When the floor sits far under
+  // spot that window is enormous, and the keeper will happily sell into a
+  // falling market — which it did, live: 1,511,253 $KEVIN at 0.654 KEK, then
+  // the pool drifted down to 0.627 on other people's trades, and it sold the
+  // remaining 488,747 into that, finishing at 0.622.
+  //
+  // The contract is deployed and immutable, so the restraint has to live here.
+  // The keeper remembers the spot price it has seen and refuses to SELL while
+  // the price is below where it stood `momentumMs` ago. Buying and ratcheting
+  // are untouched: bidding into a dip is the entire point of the war chest,
+  // and a ratchet only ever helps.
+  sellOnlyRising: process.env.SELL_ONLY_RISING !== '0',
+  momentumMs: Number(process.env.MOMENTUM_MS || 900_000),   // 15 minutes
+  momentumTolBps: Number(process.env.MOMENTUM_TOL_BPS || 50), // 0.5% of slack
+
   // Optional Nitro sequencer feed. Off unless set — see startFeed() for why.
   feedUrl: process.env.FEED_URL || null,
   // With the feed on, how long to wait before asking anyway. A backstop, not
@@ -198,6 +216,19 @@ function forHumans(secs) {
   return `${(n / 86400).toFixed(1)}d`;
 }
 
+/**
+ * How far $KEVIN's PRICE moved between two sqrt readings, in percent.
+ * Positive means it went up. This is not gapPct: that one works in raw sqrt
+ * terms, which on a pool where upIsUp is false has the opposite sign to what
+ * anybody means by "the price went up".
+ */
+function priceMovePct(fromSq, toSq, up) {
+  if (!fromSq || !toSq) return 0;
+  const a = Number(fromSq), b = Number(toSq);
+  const ratio = up ? (b / a) ** 2 : (a / b) ** 2;
+  return (ratio - 1) * 100;
+}
+
 /** How far apart two sqrt prices are, in percent of the first. */
 function gapPct(a, b) {
   if (a === 0n) return 0;
@@ -265,6 +296,11 @@ async function main() {
   // when the first tick reads it. Written the other way once, and every tick
   // failed with "Cannot access 'sellToken' before initialization".
   let sellToken = null;
+
+  // Spot readings, oldest first, for the momentum test. In memory only: a
+  // restart forgets, and a keeper with no history does not sell until it has
+  // watched for momentumMs. That is the safe direction to fail.
+  var spotLog = [];
 
   // Sanity, once, loudly. Getting the orientation wrong is the one mistake that
   // turns this from a floor into a dumper, so it is stated at startup rather
@@ -507,6 +543,42 @@ async function main() {
     // question the keeper has already answered. Running LIVE against a fork
     // with the bucket over cap, it tried and was refused on every single tick
     // — a wall of identical failures that hides anything real underneath.
+    // MOMENTUM. Record what we saw, then ask whether the price is holding up.
+    //
+    // `spot` here is a sqrt price and upIsUp says which direction is "better"
+    // for $KEVIN, so the comparison goes through _isBetter's equivalent rather
+    // than a naive numeric one — on this pool a RISING $KEVIN is a FALLING
+    // number, and getting that backwards would invert the whole guard.
+    var nowMs = Number(blk.timestamp) * 1000;
+    spotLog.push([nowMs, spot]);
+    while (spotLog.length > 2 && nowMs - spotLog[0][0] > cfg.momentumMs * 2) spotLog.shift();
+
+    function fallingBack() {
+      if (!cfg.sellOnlyRising) return null;
+      // The oldest reading at least momentumMs old. Nothing that old yet means
+      // we have not watched long enough to have an opinion.
+      var ref = null;
+      for (var i = 0; i < spotLog.length; i++) {
+        if (nowMs - spotLog[i][0] >= cfg.momentumMs) ref = spotLog[i]; else break;
+      }
+      if (!ref) {
+        return 'watching the price before it sells — '
+          + forHumans(Math.round((nowMs - spotLog[0][0]) / 1000)) + ' of the '
+          + forHumans(Math.round(cfg.momentumMs / 1000)) + ' it wants';
+      }
+      // Ease the reference by a little, so ordinary noise in a flat market does
+      // not veto a sale. Eased in the WORSE direction, which depends on upIsUp.
+      var tol = BigInt(cfg.momentumTolBps);
+      var eased = up ? (ref[1] * (10_000n - tol)) / 10_000n
+                     : (ref[1] * (10_000n + tol)) / 10_000n;
+      if (worse(spot, eased, up)) {
+        return 'not selling into a falling price — $KEVIN is '
+          + Math.abs(priceMovePct(ref[1], spot, up)).toFixed(2) + '% down over the last '
+          + forHumans(Math.round((nowMs - ref[0]) / 1000));
+      }
+      return null;
+    }
+
     // Say WHEN it frees up, not how full it is. The bucket drains every second,
     // so a message carrying the level changes on every tick and defeats the
     // repeat-suppression in note() — the quiet hour it is meant to produce
@@ -608,7 +680,11 @@ async function main() {
     // Short on purpose: this one prints every tick until it clears.
     if (now < readyAt) return note(`cooling down, ${forHumans(readyAt - now)} left`);
 
-    if (sell) return act('poke', [(1n << 255n)], `SELL into the room above the floor · ${state}`);
+    if (sell) {
+      var hold = fallingBack();
+      if (hold) return note(hold + ' · ' + state);
+      return act('poke', [(1n << 255n)], `SELL into the room above the floor · ${state}`);
+    }
     if (buy) return act('poke', [(1n << 255n)], `BID under the floor · ${state}`);
     return note(`nothing to do · ${state}`);
   }
