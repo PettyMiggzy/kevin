@@ -97,6 +97,18 @@ contract DeployFloorV4 is Script {
         if (owner == vm.addr(pk)) {
             floor.setOperator(vm.envAddress("FLOOR_OPERATOR"));
             floor.setRails(r.maxTokens, r.maxQuote, r.dayTokens, r.dayQuote, r.cooldown);
+            // SET THE POLICY EXPLICITLY rather than inheriting the constructor
+            // defaults. The bid band in particular is a judgement about how
+            // deep a dip has to be before the treasury will catch it, and
+            // leaving that to a default nobody typed is how a deployment ends
+            // up bidding on a wobble that was never meant to qualify.
+            floor.setPolicy(
+                vm.envOr("FLOOR_GAP_BPS", uint256(1_500)),
+                vm.envOr("RATCHET_BPS", uint256(500)),
+                vm.envOr("BUY_BAND_BPS", uint256(1_000)),
+                vm.envOr("BUYBACK_BPS", uint256(3_000)),
+                vm.envOr("SELL_STOP_BPS", uint256(250))
+            );
         }
         vm.stopBroadcast();
 
@@ -107,6 +119,15 @@ contract DeployFloorV4 is Script {
         console2.log("currency1    ", c1);
         console2.log("tokenIsZero  ", floor.tokenIsZero());
         console2.log("upIsUp       ", floor.upIsUp());
+        console2.log("floorGapBps  ", floor.floorGapBps(), "  floor sits this far under spot");
+        console2.log("buyBandBps   ", floor.buyBandBps(), "  and it bids this far under the FLOOR");
+        // The two compound. A 15% gap and a 10% band do not mean "bids 10%
+        // down" — they mean the price has to be about 23.5% under the level
+        // the floor was set at before a single bid goes in.
+        console2.log(
+            "so it bids at roughly this many bps under the ratchet-time price:",
+            10_000 - ((10_000 - floor.floorGapBps()) * (10_000 - floor.buyBandBps())) / 10_000
+        );
         console2.log("owner        ", owner);
         console2.log("");
         console2.log("READ upIsUp ABOVE. WETH is 0x0Bd7... which is a very low");
