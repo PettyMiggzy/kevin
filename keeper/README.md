@@ -4,7 +4,7 @@ One program, one instance per pool driven. **Today that is the KEK pool only.**
 
 | Pool | Contract | State |
 |---|---|---|
-| KEVIN / KEK | `0x47Dd22f76129d4AeC0c93668b905BC360657A29C` | the one being driven — tuned, floor set, holds no $KEVIN yet |
+| KEVIN / KEK | `0x47Dd22f76129d4AeC0c93668b905BC360657A29C` | **live and trading** — funded, floor walking up, selling |
 | KEVIN / WETH | `0xd7309Cc9383Feb44d09202764A72951B962a25Ab` | deployed and tuned, **not driven** — no keeper, holds nothing |
 
 The WETH floor is inert by construction rather than by promise: `poke()` is
@@ -42,7 +42,11 @@ A poke reverts unless the contract has something to trade with, so turning it
 on early just burns gas on failures. The keeper refuses to poke into that now —
 it says so instead — but the fix is funding, not the guard:
 
-1. **ETH to the operator** `0x92B129f7…`, for gas. Measured on a fork of the
+1. **ETH to the operator** `0x539a943BddB3E8dcba611cc665Cae0Fcbd2717c3`, for
+   gas. This is also the address a price chart will label as the trader: the
+   contract holds the money and is the swap `sender` the PoolManager records,
+   but the operator is `tx.from`, and most chart tools attribute by that.
+   Measured on a fork of the
    real chain at 0.1919 gwei: a poke is 176k–213k gas, a ratchet 64k–98k, so
    0.01 ETH is roughly 400 pokes. The keeper stops sending below 0.002 ETH.
 2. **$KEVIN to the floor contract** so it has something to sell. Read the
@@ -110,3 +114,19 @@ Turn it on when seconds of latency are worth a bigger droplet.
 One line per tick, whether or not anything happened. A keeper that only logs
 when it acts is indistinguishable from a keeper that has died. Repeated notes
 are said once and then every twentieth tick, so a quiet hour is a line or two.
+
+## The two addresses to publish
+
+| address | what it is | what to call it |
+|---|---|---|
+| `0x47Dd22f76129d4AeC0c93668b905BC360657A29C` | the contract. Holds the $KEVIN and the war chest, and is the `sender` the v4 PoolManager records on every swap. | KEVIN Market Maker |
+| `0x539a943BddB3E8dcba611cc665Cae0Fcbd2717c3` | the operator. Signs every trade and pays the gas, holds nothing. | KEVIN Market Maker Bot |
+
+Publish both. The contract is the honest answer to "where is the money", but
+price charts label a trade by `tx.from`, which is the operator — so that is the
+one that shows up in a "wallets that traded" view. Confirmed on the first live
+sale, transaction `0xb608ee00…4b51`: the PoolManager's `Swap` names the
+contract as sender, while `tx.from` is the operator.
+
+Rotating the operator key changes the second address, and any chart tag on it
+goes stale. The contract address never changes.
