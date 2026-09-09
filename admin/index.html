@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>KEVIN — control room</title>
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/png/favicon-32.png">
+<meta name="theme-color" content="#0B0B0B">
+<style>
+:root{
+  --void:#FFE500; --ink:#0B0B0B; --red:#E8232B; --cream:#FFF6C8;
+  --panel:#141414; --line:#2a2a2a; --dim:#8a8a8a; --ok:#2fbf5f; --warn:#ffb020;
+  --mono:'Space Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#0b0b0b;color:#e9e9e9;font-family:var(--mono);font-size:13px;line-height:1.5}
+a{color:var(--void)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 18px}
+header{border-bottom:3px solid var(--void);background:#000;position:sticky;top:0;z-index:10}
+.hbar{display:flex;align-items:center;gap:14px;padding:12px 0;flex-wrap:wrap}
+.hbar h1{font-size:16px;margin:0;letter-spacing:.18em;text-transform:uppercase;color:var(--void)}
+.spacer{margin-left:auto}
+.btn{font-family:var(--mono);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  background:var(--void);color:var(--ink);border:2px solid var(--void);border-radius:8px;padding:7px 13px;cursor:pointer}
+.btn:hover{background:#fff35e}
+.btn--ghost{background:transparent;color:var(--void)}
+.btn--danger{background:var(--red);border-color:var(--red);color:#fff}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+section{margin:26px 0}
+h2{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin:0 0 10px;font-weight:700}
+.panel{background:var(--panel);border:2px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.panel h3{margin:0 0 4px;font-size:14px;color:var(--void);letter-spacing:.06em}
+.addr{font-size:11px;color:var(--dim);word-break:break-all;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.kv{background:#0e0e0e;border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+.kv span{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+.kv b{font-weight:700;font-size:14px;word-break:break-all}
+.kv.good b{color:var(--ok)} .kv.warn b{color:var(--warn)} .kv.bad b{color:var(--red)}
+.alerts{display:flex;flex-direction:column;gap:8px}
+.alert{border-radius:10px;padding:11px 14px;border:2px solid;display:flex;gap:10px;align-items:flex-start}
+.alert--warn{border-color:var(--warn);background:rgba(255,176,32,.09);color:#ffd483}
+.alert--bad{border-color:var(--red);background:rgba(232,35,43,.10);color:#ffb3b6}
+.alert--ok{border-color:var(--ok);background:rgba(47,191,95,.08);color:#9ff0bd}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+input{font-family:var(--mono);font-size:12px;background:#0e0e0e;color:#e9e9e9;border:2px solid var(--line);
+  border-radius:8px;padding:7px 10px;min-width:120px}
+.note{font-size:11px;color:var(--dim);margin-top:8px}
+code{background:#0e0e0e;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:11px}
+pre{background:#0e0e0e;border:1px solid var(--line);border-radius:8px;padding:10px;overflow-x:auto;font-size:11px;color:#cfcfcf}
+.gate{border:2px dashed var(--line);border-radius:12px;padding:14px;color:var(--dim);font-size:12px}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.pill--on{background:var(--ok);color:#04240f} .pill--off{background:#333;color:#bbb}
+.pill--red{background:var(--red);color:#fff}
+footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var(--dim);font-size:11px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap hbar">
+    <h1>Kevin · control room</h1>
+    <span id="net" class="pill pill--off">reading…</span>
+    <div class="spacer"></div>
+    <span id="who" class="note"></span>
+    <button class="btn btn--ghost" id="connect">Connect</button>
+    <button class="btn btn--ghost" id="refresh">Refresh</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section>
+    <h2>Needs attention</h2>
+    <div class="alerts" id="alerts"><div class="alert alert--ok">checking…</div></div>
+  </section>
+
+  <section>
+    <h2>Wallets</h2>
+    <div class="grid" id="wallets"></div>
+  </section>
+
+  <section>
+    <h2>Distributor</h2>
+    <div class="panel" id="airdrop"><h3>KevinAirdrop</h3><div class="addr" id="air-addr"></div><div class="grid" id="air-grid"></div></div>
+  </section>
+
+  <section>
+    <h2>Market makers</h2>
+    <div id="keepers"></div>
+  </section>
+
+  <section>
+    <h2>Controls</h2>
+    <div id="controls" class="gate">
+      Connect the owner wallet to enable the buttons.
+      <div class="note">This gate is a convenience, not a lock. Every function below is
+      <code>onlyOwner</code> or <code>onlyOperator</code> <b>on chain</b> — that is what actually
+      stops anybody else, and it would stop them just as well if they rebuilt this page
+      themselves. Nothing here is hidden and nothing here is a secret.</div>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    Reads come from the public RPC and need no wallet. Writes are built here and signed in
+    your wallet — this page never sees a key.
+    <span id="stamp"></span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+  var RPC = 'https://rpc.mainnet.chain.robinhood.com';
+  var CHAIN_ID = 4663;
+  var OWNER = '0xcdd5ff5d521d3694c2a2f31edf7cd3c0e9a6fabf';
+  var EXPLORER = 'https://robinhoodchain.blockscout.com/address/';
+
+  var AIRDROP  = '0x37F93dAFF688120d6C7793833cACd830A988A971';
+  var OPERATOR = '0x92B129f75CC5C19636E74B5ec70b13a3962B5cd7';
+  var KEVIN    = '0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A';
+
+  var KEEPERS = [
+    { name: 'KEVIN / WETH', addr: '0xd7309Cc9383Feb44d09202764A72951B962a25Ab',
+      quote: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73', qsym: 'WETH', qdp: 18 },
+    { name: 'KEVIN / KEK',  addr: '0x47Dd22f76129d4AeC0c93668b905BC360657A29C',
+      quote: '0x5a3544a0328afD50A9979e03404F35c555B88c00', qsym: 'KEK',  qdp: 18 }
+  ];
+
+  var SIG = {
+    owner:'0x8da5cb5b', operator:'0x570ca735', paused:'0x5c975abb',
+    roundCount:'0x127f0b3f', rounds:'0x8c65c81f', remaining:'0x0361bf14',
+    spot:'0x81afbc16', floor:'0x70809873', effFloor:'0x10f5e72d', decayBps:'0x959fea3f',
+    underwater:'0x614a921e', lastObserved:'0x6b171da0', warChest:'0xbb22e371', reading:'0xfffd52c6',
+    maxTok:'0x3b0ea244', maxQuote:'0x4974d391', dayTok:'0x7cb37b4a', dayQuote:'0x39e56709',
+    cooldown:'0x787a08a6', floorGap:'0x35713718', ratchetBps:'0xa4de3ed8', buyBand:'0xc6e451cd',
+    buyback:'0xbaa9f0fa', sellStop:'0xc1d93731', patience:'0xd4b82158', decayPerDay:'0x6a50b1b7',
+    maxDecay:'0x1210d687', tokBucket:'0x1cf4480a', quoteBucket:'0xe4246742',
+    lastTrade:'0x74452ec3', lastRatchet:'0x2da40f35', pendingFloor:'0x9eee6f25',
+    balanceOf:'0x70a08231',
+    pause:'0x8456cb59', unpause:'0x3f4ba83a', poke:'0x32145f90', ratchet:'0x5679abee',
+    observe:'0x14fc78fc', setFloorFromSpot:'0x000f49b6',
+    setRails:'0x108452db', setPolicy:'0x0169a27a'
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) {
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); };
+  var w = function (n) { return BigInt(n).toString(16).padStart(64, '0'); };
+  var short = function (a) { return a.slice(0, 8) + '…' + a.slice(-6); };
+
+  function units(v, dp, places) {
+    v = BigInt(v); var base = 10n ** BigInt(dp);
+    var whole = v / base, frac = v % base;
+    var s = whole.toLocaleString('en-US');
+    if (places) {
+      var f = frac.toString().padStart(dp, '0').slice(0, places).replace(/0+$/, '');
+      if (f) s += '.' + f;
+    }
+    return s;
+  }
+
+  // --- one batched JSON-RPC round trip per refresh -------------------------
+  var callId = 1;
+  async function batch(calls) {
+    var body = calls.map(function (c) {
+      return c.method === 'eth_getBalance'
+        ? { jsonrpc:'2.0', id: callId++, method:'eth_getBalance', params:[c.to, 'latest'] }
+        : { jsonrpc:'2.0', id: callId++, method:'eth_call', params:[{ to:c.to, data:c.data }, 'latest'] };
+    });
+    // A HANGING REQUEST NEVER REACHES A CATCH. Without this the page sits on
+    // "checking…" forever and looks like it is still working, which is the
+    // worst possible failure mode for a screen whose job is telling you
+    // whether anything is wrong.
+    var ctl = new AbortController();
+    var timedOut = false;
+    var timer = setTimeout(function () { timedOut = true; ctl.abort(); }, 12000);
+    var r;
+    try {
+      r = await fetch(RPC, { method:'POST', headers:{'content-type':'application/json'},
+        body: JSON.stringify(body), signal: ctl.signal });
+    } catch (e) {
+      // "signal is aborted without reason" tells the reader nothing. Say which
+      // thing did not answer and how long we waited for it.
+      throw new Error(timedOut ? 'the RPC did not answer within 12 seconds' : String(e && e.message || e));
+    } finally { clearTimeout(timer); }
+    if (!r.ok) throw new Error('RPC returned HTTP ' + r.status);
+    var j = await r.json();
+    var byId = {};
+    (Array.isArray(j) ? j : [j]).forEach(function (x) { byId[x.id] = x; });
+    return body.map(function (b) {
+      var res = byId[b.id];
+      if (!res || res.error) return null;
+      return res.result;
+    });
+  }
+
+  var n = function (hex) { return hex && hex !== '0x' ? BigInt(hex) : 0n; };
+  var addrOf = function (hex) { return hex && hex.length >= 66 ? '0x' + hex.slice(-40) : null; };
+
+  // sqrtPriceX96 -> price of KEVIN in quote, given KEVIN is currency1 (upIsUp false)
+  function kevinPrice(sq) {
+    if (!sq || sq === 0n) return 0;
+    var Q = 2 ** 96, s = Number(sq) / Q;
+    return 1 / (s * s);
+  }
+  function pctBetween(floorSq, spotSq) {
+    var pf = kevinPrice(floorSq), ps = kevinPrice(spotSq);
+    if (!ps) return null;
+    return (1 - pf / ps) * 100;
+  }
+
+  var state = { wallet: null, isOwner: false, data: null };
+
+  async function load() {
+    var calls = [];
+    var push = function (to, data) { calls.push({ to: to, data: data }); return calls.length - 1; };
+    var ix = {};
+
+    ix.airOwner = push(AIRDROP, SIG.owner);
+    ix.airCount = push(AIRDROP, SIG.roundCount);
+    ix.treasEth = calls.push({ to: OWNER, method:'eth_getBalance' }) - 1;
+    ix.opEth    = calls.push({ to: OPERATOR, method:'eth_getBalance' }) - 1;
+
+    ix.keepers = KEEPERS.map(function (k) {
+      var o = {};
+      ['owner','operator','paused','spot','floor','effFloor','decayBps','underwater','lastObserved',
+       'warChest','reading','maxTok','maxQuote','dayTok','dayQuote','cooldown','floorGap','ratchetBps',
+       'buyBand','buyback','sellStop','patience','decayPerDay','maxDecay','tokBucket','quoteBucket',
+       'lastTrade','lastRatchet','pendingFloor'].forEach(function (f) { o[f] = push(k.addr, SIG[f]); });
+      o.kevin = push(KEVIN, SIG.balanceOf + w(BigInt(k.addr)));
+      o.quoteBal = push(k.quote, SIG.balanceOf + w(BigInt(k.addr)));
+      return o;
+    });
+
+    var res = await batch(calls);
+    state.data = { res: res, ix: ix };
+    render();
+  }
+
+  function render() {
+    var res = state.data.res, ix = state.data.ix, alerts = [];
+
+    // --- wallets
+    var treas = n(res[ix.treasEth]), opEth = n(res[ix.opEth]);
+    $('wallets').innerHTML =
+      kv('Treasury (owner)', units(treas, 18, 6) + ' ETH', treas < 1000000000000000n ? 'bad' : 'good',
+         '<a href="' + EXPLORER + OWNER + '" target="_blank" rel="noopener">' + short(OWNER) + '</a>') +
+      kv('Operator (hot key)', units(opEth, 18, 6) + ' ETH', opEth === 0n ? 'bad' : opEth < 10000000000000000n ? 'warn' : 'good',
+         '<a href="' + EXPLORER + OPERATOR + '" target="_blank" rel="noopener">' + short(OPERATOR) + '</a>');
+
+    if (opEth === 0n) alerts.push(['bad',
+      'The operator wallet has no ETH. It pays for every poke and ratchet, so nothing will run at all until it is funded.']);
+    else if (opEth < 10000000000000000n) alerts.push(['warn',
+      'Operator gas is under 0.01 ETH. At roughly 0.00006 ETH a poke that is only a few hours of a five-minute cadence.']);
+    if (treas < 1000000000000000n) alerts.push(['warn',
+      'The treasury is under 0.001 ETH, which is not enough for most owner transactions.']);
+
+    // --- distributor
+    var count = n(res[ix.airCount]);
+    $('air-addr').innerHTML = '<a href="' + EXPLORER + AIRDROP + '" target="_blank" rel="noopener">' + AIRDROP + '</a>';
+    $('air-grid').innerHTML =
+      kv('Owner', addrOf(res[ix.airOwner]) && addrOf(res[ix.airOwner]).toLowerCase() === OWNER ? 'treasury ✓' : 'UNEXPECTED',
+         addrOf(res[ix.airOwner]) && addrOf(res[ix.airOwner]).toLowerCase() === OWNER ? 'good' : 'bad') +
+      kv('Rounds opened', count.toString(), count === 0n ? 'warn' : 'good');
+    if (count === 0n) alerts.push(['warn',
+      'No airdrop round has been opened, so the claim page correctly shows nothing claimable. Opening one is a deliberate, separate step.']);
+
+    // --- keepers
+    $('keepers').innerHTML = KEEPERS.map(function (k, i) {
+      var o = ix.keepers[i];
+      var spot = n(res[o.spot]), floor = n(res[o.floor]), eff = n(res[o.effFloor]);
+      var kevBal = n(res[o.kevin]), chest = n(res[o.warChest]), qBal = n(res[o.quoteBal]);
+      var paused = /1$/.test(res[o.paused] || '');
+      var rd = res[o.reading] || '';
+      var sell = rd.length >= 130 && /1$/.test(rd.slice(2, 66));
+      var buy  = rd.length >= 130 && /1$/.test(rd.slice(66, 130));
+      var gap = floor && spot ? pctBetween(floor, spot) : null;
+      var effGap = eff && spot ? pctBetween(eff, spot) : null;
+
+      if (paused) alerts.push(['bad', k.name + ' is PAUSED. It will not trade and its clock is not being advanced by poke or ratchet.']);
+      if (kevBal === 0n) alerts.push(['warn', k.name + ' holds no $KEVIN, so it has nothing to sell.']);
+      if (chest === 0n) alerts.push(['warn', k.name + ' has an empty war chest, so it cannot bid at all.']);
+      if (chest > qBal) alerts.push(['bad', k.name + ' claims a war chest of ' + units(chest, k.qdp, 4) +
+        ' ' + k.qsym + ' but only holds ' + units(qBal, k.qdp, 4) + '. Bids will revert.']);
+
+      return '<div class="panel"><h3>' + esc(k.name) + ' ' +
+        (paused ? '<span class="pill pill--red">paused</span>' : '<span class="pill pill--on">live</span>') +
+        '</h3><div class="addr"><a href="' + EXPLORER + k.addr + '" target="_blank" rel="noopener">' + k.addr + '</a></div>' +
+        '<div class="grid">' +
+          kv('Would poke now', sell ? 'SELL' : buy ? 'BUY' : 'nothing to do', sell || buy ? 'good' : '') +
+          kv('$KEVIN to sell', units(kevBal, 18, 0), kevBal === 0n ? 'warn' : 'good') +
+          kv('War chest', units(chest, k.qdp, 6) + ' ' + k.qsym, chest === 0n ? 'warn' : 'good') +
+          kv('Holds (' + k.qsym + ')', units(qBal, k.qdp, 6)) +
+          kv('Floor vs spot', gap === null ? '—' : gap.toFixed(2) + '% under') +
+          kv('Defended right now', effGap === null ? '—' : effGap.toFixed(2) + '% under',
+             effGap !== null && gap !== null && effGap > gap + 0.01 ? 'warn' : '') +
+          kv('Decay spent', n(res[o.decayBps]) / 1n + ' bps of ' + n(res[o.maxDecay]),
+             n(res[o.decayBps]) > 0n ? 'warn' : 'good') +
+          kv('Underwater clock', fmtDur(n(res[o.underwater]))) +
+          kv('Last observed', fmtAgo(n(res[o.lastObserved]))) +
+          kv('Last trade', fmtAgo(n(res[o.lastTrade]))) +
+          kv('Sold today', units(n(res[o.tokBucket]), 18, 0) + ' / ' + units(n(res[o.dayTok]), 18, 0)) +
+          kv('Bid today', units(n(res[o.quoteBucket]), k.qdp, 4) + ' / ' + units(n(res[o.dayQuote]), k.qdp, 4)) +
+          kv('Max per trade', units(n(res[o.maxTok]), 18, 0) + ' KEVIN') +
+          kv('Max bid per trade', units(n(res[o.maxQuote]), k.qdp, 6) + ' ' + k.qsym) +
+          kv('Policy bps', 'gap ' + n(res[o.floorGap]) + ' · band ' + n(res[o.buyBand]) +
+             ' · stop ' + n(res[o.sellStop]) + ' · ratchet ' + n(res[o.ratchetBps])) +
+          kv('Operator', addrOf(res[o.operator]) === '0x0000000000000000000000000000000000000000'
+             ? 'NOT SET' : short(addrOf(res[o.operator])),
+             addrOf(res[o.operator]) === '0x0000000000000000000000000000000000000000' ? 'bad' : 'good') +
+        '</div></div>';
+    }).join('');
+
+    $('alerts').innerHTML = alerts.length
+      ? alerts.map(function (a) { return '<div class="alert alert--' + a[0] + '">' + esc(a[1]) + '</div>'; }).join('')
+      : '<div class="alert alert--ok">Nothing needs attention.</div>';
+
+    $('stamp').textContent = ' · read at ' + new Date().toLocaleTimeString();
+    renderControls();
+  }
+
+  function kv(label, val, cls, sub) {
+    return '<div class="kv ' + (cls || '') + '"><span>' + esc(label) + '</span><b>' + val + '</b>' +
+      (sub ? '<div class="note">' + sub + '</div>' : '') + '</div>';
+  }
+  function fmtDur(secs) {
+    secs = Number(secs); if (!secs) return 'none';
+    if (secs < 3600) return Math.round(secs / 60) + ' min';
+    if (secs < 86400) return (secs / 3600).toFixed(1) + ' h';
+    return (secs / 86400).toFixed(1) + ' d';
+  }
+  function fmtAgo(ts) {
+    ts = Number(ts); if (!ts) return 'never';
+    return fmtDur(Math.max(0, Math.floor(Date.now() / 1000) - ts)) + ' ago';
+  }
+
+  // --- writes --------------------------------------------------------------
+  async function send(to, data, label) {
+    if (!window.ethereum) { alert('No wallet in this browser.'); return; }
+    var accs = await window.ethereum.request({ method: 'eth_accounts' });
+    if (!accs || !accs[0]) { alert('Connect a wallet first.'); return; }
+    var cid = await window.ethereum.request({ method: 'eth_chainId' });
+    if (parseInt(cid, 16) !== CHAIN_ID) { alert('Wrong network. Switch to Robinhood Chain (4663).'); return; }
+    if (!confirm(label + '\n\nTo: ' + to + '\n\nSign in your wallet to send.')) return;
+    try {
+      var tx = await window.ethereum.request({ method: 'eth_sendTransaction',
+        params: [{ from: accs[0], to: to, data: data }] });
+      alert('Sent.\n\n' + tx);
+      setTimeout(load, 4000);
+    } catch (e) { alert('Rejected or failed:\n' + (e && e.message ? e.message : e)); }
+  }
+
+  function renderControls() {
+    var box = $('controls');
+    if (!state.isOwner) {
+      box.className = 'gate';
+      box.innerHTML = 'Connect <code>' + short(OWNER) + '</code> to enable these buttons.' +
+        '<div class="note">This gate is a convenience, not a lock. Every function below is ' +
+        '<code>onlyOwner</code> or <code>onlyOperator</code> <b>on chain</b> — that is what actually ' +
+        'stops anybody else, and it would stop them just as well if they rebuilt this page ' +
+        'themselves. Nothing here is hidden and nothing here is a secret.</div>';
+      return;
+    }
+    box.className = '';
+    box.innerHTML = KEEPERS.map(function (k, i) {
+      return '<div class="panel"><h3>' + esc(k.name) + '</h3>' +
+        '<div class="row">' +
+          btn('obs' + i, 'Observe', 'btn--ghost') +
+          btn('rat' + i, 'Ratchet', 'btn--ghost') +
+          btn('pok' + i, 'Poke (max)') +
+          btn('pau' + i, 'Pause', 'btn--danger') +
+          btn('unp' + i, 'Unpause', 'btn--ghost') +
+        '</div>' +
+        '<div class="row"><input id="gap' + i + '" placeholder="gap bps e.g. 1500" size="10">' +
+          btn('flr' + i, 'Set floor from spot', 'btn--danger') + '</div>' +
+        '<div class="note">Poke and ratchet are normally the keeper\'s job. Setting the floor from spot ' +
+        'moves the high-water mark to wherever the price is right now — that is permanent in the up ' +
+        'direction and is not something to do casually.</div></div>';
+    }).join('') +
+    '<div class="panel"><h3>Anything not here</h3>' +
+      '<p class="note">Deliberately not every function. openRound, sweep, setRails, setPolicy and ' +
+      'setLockbox move real money or are one-shot, and a mistyped number in a browser field is a ' +
+      'worse way to find that out than a command you can read back before pressing return.</p>' +
+      '<pre>~/.foundry/bin/cast send &lt;contract&gt; \'setRails(uint256,uint256,uint256,uint256,uint256)\' \\\n  &lt;maxTok&gt; &lt;maxQuote&gt; &lt;dayTok&gt; &lt;dayQuote&gt; &lt;cooldown&gt; \\\n  --private-key "$PRIVATE_KEY" --rpc-url ' + RPC + '</pre></div>';
+
+    KEEPERS.forEach(function (k, i) {
+      $('obs' + i).onclick = function () { send(k.addr, SIG.observe, 'observe() on ' + k.name); };
+      $('rat' + i).onclick = function () { send(k.addr, SIG.ratchet, 'ratchet() on ' + k.name); };
+      $('pok' + i).onclick = function () {
+        send(k.addr, SIG.poke + w((1n << 256n) - 1n), 'poke(max) on ' + k.name); };
+      $('pau' + i).onclick = function () { send(k.addr, SIG.pause, 'PAUSE ' + k.name); };
+      $('unp' + i).onclick = function () { send(k.addr, SIG.unpause, 'unpause ' + k.name); };
+      $('flr' + i).onclick = function () {
+        var g = ($('gap' + i).value || '').trim();
+        if (!/^\d+$/.test(g) || +g === 0 || +g >= 10000) { alert('Gap must be 1–9999 bps.'); return; }
+        send(k.addr, SIG.setFloorFromSpot + w(g), 'setFloorFromSpot(' + g + ') on ' + k.name);
+      };
+    });
+  }
+
+  function btn(id, label, cls) {
+    return '<button class="btn ' + (cls || '') + '" id="' + id + '">' + esc(label) + '</button>';
+  }
+
+  async function connect() {
+    if (!window.ethereum) { alert('No wallet in this browser. The dashboard above still works without one.'); return; }
+    try {
+      var a = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      state.wallet = (a && a[0]) || null;
+      state.isOwner = !!state.wallet && state.wallet.toLowerCase() === OWNER;
+      $('who').textContent = state.wallet
+        ? (state.isOwner ? 'owner · ' + short(state.wallet) : 'not the owner · ' + short(state.wallet))
+        : '';
+      var cid = await window.ethereum.request({ method: 'eth_chainId' });
+      $('net').textContent = parseInt(cid, 16) === CHAIN_ID ? 'chain 4663' : 'WRONG NETWORK';
+      $('net').className = 'pill ' + (parseInt(cid, 16) === CHAIN_ID ? 'pill--on' : 'pill--red');
+      renderControls();
+    } catch (e) { /* user declined */ }
+  }
+
+  $('connect').onclick = connect;
+  $('refresh').onclick = function () { load().catch(showErr); };
+  function showErr(e) {
+    $('alerts').innerHTML = '<div class="alert alert--bad">Could not read the chain: ' +
+      esc(e && e.message ? e.message : e) + '. Nothing below is current.</div>';
+  }
+  load().then(function () { $('net').textContent = 'chain 4663'; $('net').className = 'pill pill--on'; })
+        .catch(showErr);
+  setInterval(function () { load().catch(showErr); }, 30000);
+})();
+</script>
+</body>
+</html>
