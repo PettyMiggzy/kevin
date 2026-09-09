@@ -58,3 +58,82 @@ list has to be the one people were given.
 
 Not here yet. Its constructor takes a PoolKey, so there is one blob per pool
 and the pool has to be preflighted first — see `../deploy.sh`.
+
+---
+
+## KevinFloorV4 — one blob per pool
+
+The constructor takes the PoolKey, so the pool is fixed at deploy and cannot
+be changed afterwards. Two blobs, both with `owner` = the treasury:
+
+| file | pool | poolId (checked against the live pool) |
+|---|---|---|
+| `KevinFloorV4.weth.create.hex` | KEVIN / WETH | `0xd3ca7f46…83af63` |
+
+sha256 `d09154aae3c3b251b7cf88cb22e7adf084dd153ce25f62343685c77c2e9b211a` (weth)
+and `14ed9593893d4c6d4494a2c3ef0c5cf4e7f1aad0e17e7b654dc9620091ee0f43` (kek).
+Check before broadcasting.
+
+| `KevinFloorV4.kek.create.hex`  | KEVIN / KEK  | `0x2d36afcd…dfd05b` |
+
+Both were deployed on a local chain first and read back: owner, currency0,
+currency1, fee 3000, tickSpacing 60, hooks `0xFEf8e780…`, `upIsUp` false —
+and `poolId()` equal to the id preflighted against the live pool. That last
+check is the one that matters: a v4 pool IS the hash of those five fields, so
+a matching id is proof the contract points at the real pool rather than an
+uninitialised one that would look healthy and do nothing.
+
+    curl -sL https://raw.githubusercontent.com/PettyMiggzy/kevin/claude/kevin-crypto-art-website-ymq79j/contracts/deploy/KevinFloorV4.weth.create.hex -o /tmp/mm.hex
+    ~/.foundry/bin/cast send --private-key "$PRIVATE_KEY" --rpc-url https://rpc.mainnet.chain.robinhood.com --create "$(cat /tmp/mm.hex)"
+
+## It cannot trade until you tune it, and that is deliberate
+
+Fresh out of the constructor `maxTokensPerTrade` is 0, so every poke reverts.
+Nothing can happen by accident between deploying and deciding the limits.
+
+Four owner calls, in this order. `$MM` is the address from the receipt.
+
+**1. The operator — a NEW key, never the treasury.** It signs from a hot box
+every few minutes. If it is the owner key, a keeper compromise stops being a
+capped incident and becomes total loss, and every published ceiling in the
+contract turns decorative because the thief can just call `setPolicy`.
+
+    ~/.foundry/bin/cast wallet new
+    ~/.foundry/bin/cast send $MM 'setOperator(address)' $HOT --private-key "$PRIVATE_KEY" --rpc-url $RPC
+
+**2. The rails.** Quantities, and the ones worth being conservative about.
+`maxQuotePerTrade` is the real defence against somebody farming the bid: if
+one bite is small relative to what it costs to push the price into the buy
+band, dumping to trigger it is not profitable. The band alone does not do it.
+
+    ~/.foundry/bin/cast send $MM 'setRails(uint256,uint256,uint256,uint256,uint256)' \
+      250000000000000000000000 <MAX_QUOTE> 2000000000000000000000000 <DAY_QUOTE> 300 \
+      --private-key "$PRIVATE_KEY" --rpc-url $RPC
+
+THE QUOTE FIGURES ARE IN THE QUOTE TOKEN. For the WETH pool they are WETH;
+for the KEK pool they are KEK, and a number that made sense for WETH will be
+nonsense there.
+
+**3. The policy.** `1000` is the 10% bid band.
+
+    ~/.foundry/bin/cast send $MM 'setPolicy(uint256,uint256,uint256,uint256,uint256)' \
+      1500 500 1000 3000 250 --private-key "$PRIVATE_KEY" --rpc-url $RPC
+
+Those two dials COMPOUND. The floor sits 15% under spot and the band is
+measured from the floor, so nothing is bid until the price is about 23.5%
+under the level the floor was set at — not 10%.
+
+**4. Arm the floor.** Nothing trades before this; `floorSqrtPriceX96` is 0
+and every poke reverts `NoFloorYet`.
+
+    ~/.foundry/bin/cast send $MM 'setFloorFromSpot(uint256)' 1500 --private-key "$PRIVATE_KEY" --rpc-url $RPC
+
+## Funding it
+
+- **$KEVIN** — a plain transfer to `$MM`. This is what it sells.
+- **The quote** (WETH or KEK) — `approve($MM, amount)` on the quote token,
+  then `fundWarChestToken(amount)`. This is what it bids with.
+- **ETH** — none. Neither side of these pools is native, so the contract has
+  no use for it. Gas comes from the OPERATOR wallet; keep a little there.
+
+Send a small amount first and drive one `poke` before sending anything real.
