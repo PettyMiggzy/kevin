@@ -5,7 +5,7 @@ Two processes, one per pool. Same program, different `FLOOR_ADDRESS`.
 | Pool | Contract | State |
 |---|---|---|
 | KEVIN / WETH | `0xd7309Cc9383Feb44d09202764A72951B962a25Ab` | tuned, floor set, holds no $KEVIN yet |
-| KEVIN / KEK | `0x47Dd22f76129d4AeC0c93668b905BC360657A29C` | rails all zero — cannot trade until set |
+| KEVIN / KEK | `0x47Dd22f76129d4AeC0c93668b905BC360657A29C` | tuned, floor set, holds no $KEVIN yet |
 
 The keeper holds no money and decides nothing that matters. Every limit that
 protects the treasury lives in the contract, where the keeper cannot reach it.

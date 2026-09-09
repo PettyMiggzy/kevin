@@ -6,7 +6,7 @@
 |---|---|---|
 | KevinAirdrop | `0x37F93dAFF688120d6C7793833cACd830A988A971` | owner = treasury, `roundCount()` 0 — holds nothing |
 | KevinFloorV4 (KEVIN/WETH) | `0xd7309Cc9383Feb44d09202764A72951B962a25Ab` | operator, rails, policy and floor all set — holds no KEVIN yet |
-| KevinFloorV4 (KEVIN/KEK) | `0x47Dd22f76129d4AeC0c93668b905BC360657A29C` | rails and floor all 0 — cannot trade until tuned |
+| KevinFloorV4 (KEVIN/KEK) | `0x47Dd22f76129d4AeC0c93668b905BC360657A29C` | operator, rails, policy and floor all set — holds no KEVIN yet |
 
 Both verified against the chain rather than the receipt. The airdrop's runtime
 bytecode is a byte-exact match for the compiled artefact. The keeper has
