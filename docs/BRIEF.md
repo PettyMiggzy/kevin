@@ -54,7 +54,8 @@ every reply.
 3. **No dates for anything unshipped.** Three contracts are written and
    tested; none are deployed. Do not imply otherwise.
 4. **The GME round is not open.** The snapshot is taken and the full
-   list is published at /claim; the distributor is not deployed and there
+   list is published at /claim; the distributor is deployed but empty, no
+   round is open, and there
    is no date. Its window has already closed, so nobody can buy their way
    onto the list — which is exactly why "hold to qualify" is never said:
    it is telling someone to buy for something already decided.

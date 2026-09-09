@@ -464,21 +464,22 @@
         </ul>
       </div>
       <div class="card card--cream">
-        <h3>On chain, and doing nothing yet</h3>
-        <p style="opacity:.7;font-size:13px">Deployed. Not funded, not armed.</p>
+        <h3>On chain, and one of them is running</h3>
+        <p style="opacity:.7;font-size:13px">Every number below is readable on chain. Do not take it from here.</p>
         <ul>
-          <li><b>The distributor</b> — <a href="https://robinhoodchain.blockscout.com/address/0x37F93dAFF688120d6C7793833cACd830A988A971" target="_blank" rel="noopener"><code>0x37F93dAFF688120d6C7793833cACd830A988A971</code></a>. It holds no tokens and has no round open, so there is nothing to claim from it yet.</li>
-          <li><b>The keeper, on the WETH pool</b> — <a href="https://robinhoodchain.blockscout.com/address/0xd7309Cc9383Feb44d09202764A72951B962a25Ab" target="_blank" rel="noopener"><code>0xd7309Cc9383Feb44d09202764A72951B962a25Ab</code></a>. Limits set, floor set, and it holds nothing, so there is nothing for it to sell yet.</li>
-          <li><b>The keeper, on the KEK pool</b> — <a href="https://robinhoodchain.blockscout.com/address/0x47Dd22f76129d4AeC0c93668b905BC360657A29C" target="_blank" rel="noopener"><code>0x47Dd22f76129d4AeC0c93668b905BC360657A29C</code></a>. Limits set, floor set, and it holds nothing, so there is nothing for it to sell yet.</li>
+          <li><b>The market maker, on the KEK pool</b> — <a href="https://robinhoodchain.blockscout.com/address/0x47Dd22f76129d4AeC0c93668b905BC360657A29C" target="_blank" rel="noopener"><code>0x47Dd22f76129d4AeC0c93668b905BC360657A29C</code></a>. <b>Funded and trading.</b> It was given 2,000,000 $KEVIN and sold all of it into the room above its floor, in slices, stopping at the floor every time. It now holds no $KEVIN and a war chest of about 677,000 KEK, which is the only thing it can do anything with: bid, if the price falls 10% under the floor. It cannot sell again until somebody sends it more $KEVIN.</li>
+          <li><b>The bot that drives it</b> — <a href="https://robinhoodchain.blockscout.com/address/0x539a943BddB3E8dcba611cc665Cae0Fcbd2717c3" target="_blank" rel="noopener"><code>0x539a943BddB3E8dcba611cc665Cae0Fcbd2717c3</code></a>. It signs the trades and pays the gas and holds nothing else. Every trade the market maker has ever made was signed by this address, so it is the one a price chart will show. It cannot move the money; the limits that stop it live in the contract above.</li>
+          <li><b>The market maker, on the WETH pool</b> — <a href="https://robinhoodchain.blockscout.com/address/0xd7309Cc9383Feb44d09202764A72951B962a25Ab" target="_blank" rel="noopener"><code>0xd7309Cc9383Feb44d09202764A72951B962a25Ab</code></a>. Deployed and configured, deliberately <b>not running</b>. No bot points at it and it holds nothing, so nothing calls it.</li>
+          <li><b>The distributor</b> — <a href="https://robinhoodchain.blockscout.com/address/0x37F93dAFF688120d6C7793833cACd830A988A971" target="_blank" rel="noopener"><code>0x37F93dAFF688120d6C7793833cACd830A988A971</code></a>. Deployed, holds no tokens, and no round is open, so there is nothing to claim from it yet.</li>
           <li><b>195 tests, all passing.</b> Several of them are attacks that actually worked, found by trying to break the contracts on purpose, and kept forever as tests that now have to keep failing.</li>
-          <li>Deploying is not funding. Both are visible above and both are empty; you can check that yourself rather than take it from here.</li>
+          <li>Deploying is not funding, and funding is not a promise. One of the four above has money in it. The other three are empty and you can check that yourself.</li>
         </ul>
       </div>
       <div class="card">
         <h3>Not promised</h3>
         <p style="opacity:.7;font-size:13px">Said plainly so nobody has to guess.</p>
         <ul>
-          <li>A date for the GME round. The list exists and is published at <a href="../claim/">/claim</a>; the distributor is not deployed and no date is set.</li>
+          <li>A date for the GME round. The list exists and is published at <a href="../claim/">/claim</a>; the distributor is deployed but holds nothing, no round is open, and no date is set.</li>
           <li>Any date for anything in the middle column.</li>
           <li>Any price, any target, any outcome.</li>
           <li>A roadmap with dates on it. (§8.2 is a roadmap with no dates on it. He caved. See §8.2.)</li>
@@ -768,7 +769,7 @@
       <li><b>Three pools means three prices.</b> They drift apart and bots close the gap for profit. If you buy in one pool and immediately see a stranger's transaction in another, that is usually a bot doing arbitrage one block later. It is not aimed at you and it did not take your money.</li>
       <li><b>There is no floor.</b> No price is defended. No contract owes you a bid. Nobody is standing underneath this. Anybody who tells you there is a floor is either confused or selling you something.</li>
       <li><b>Confidence is not a mechanism.</b> Kevin is certain. His certainty does not appear anywhere in the code and cannot be redeemed.</li>
-      <li><b>The GME round is not open.</b> The snapshot has been taken and the full list is published at <a href="../claim/">/claim</a> — but the distributor is not deployed, there is no date, and nothing can be claimed. The window it was taken over has already closed, so <b>buying now cannot put you on the list</b>: the list cannot change. Anybody telling you to buy or hold to qualify is either confused or selling you something, and is not speaking for this project.</li>
+      <li><b>The GME round is not open.</b> The snapshot has been taken and the full list is published at <a href="../claim/">/claim</a> — the distributor is deployed but holds no tokens, no round has been opened, there is no date, and nothing can be claimed. The window it was taken over has already closed, so <b>buying now cannot put you on the list</b>: the list cannot change. Anybody telling you to buy or hold to qualify is either confused or selling you something, and is not speaking for this project.</li>
       <li><b>Scammers will target you.</b> Fake groups, fake contracts, fake support. He does not DM first, there is no allocation for you, and the only real contract address is the one pinned in the official group. Check it character by character.</li>
       <li><b>Nothing here is financial advice</b> and none of it is an offer to sell a security. It is a joke on the internet with a website attached.</li>
       <li><b>Nobody is coming to fix it.</b> There is no support desk, no recovery, and no reversing a transaction. See <a href="#support">§12</a>, which is shorter than you would like.</li>

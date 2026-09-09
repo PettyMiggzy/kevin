@@ -73,7 +73,8 @@ not dress them up.
 
 - Any date for anything unshipped.
 - The GME round. The snapshot is taken and the list is published at /claim.
-  The distributor is not deployed and there is no date. Its window has already
+  The distributor is deployed but holds nothing and no round is open, so
+  there is no date. Its window has already
   closed, so nobody can buy their way onto the list.
 - That there is a floor, a defended price, or downside protection.
 - Utility. There isn't any. That is not a weakness of the pitch; pretending
