@@ -326,12 +326,16 @@ async function main() {
   // ZERO touching $KEVIN — a polling keeper would have made calls for all of
   // that and learnt nothing.
   //
-  // THE COST IS BANDWIDTH, NOT REQUESTS. It is the whole chain unfiltered, at
-  // roughly 311 KB/s — about 27 GB a day, 800 GB a month. That fits inside a
-  // basic droplet's 1 TB transfer allowance but eats most of it, so it is off
-  // by default and the timer still runs underneath as a safety net: if the
-  // socket dies at 3am the keeper must not go quiet, it must fall back to
-  // asking.
+  // THE COST IS BANDWIDTH, NOT REQUESTS. It is the whole chain unfiltered and
+  // uncompressed — the socket negotiates no permessage-deflate, so wire bytes
+  // and payload bytes are the same number, measured ratio 1.00. Sampled twice:
+  // 358 KB/s when quiet, 493 KB/s when busy, which is 32 to 44 GB a day and
+  // 950 to 1,310 GB a month for ONE keeper. A basic droplet includes 1 TB, so
+  // this ranges from eating most of the allowance to going through it.
+  //
+  // Hence off by default, with the timer still running underneath as a safety
+  // net: if the socket dies at 3am the keeper must not go quiet, it must fall
+  // back to asking.
   let feed = null;
   if (cfg.feedUrl) {
     // Match on the TOKEN, not the PoolManager. The manager serves every pool

@@ -440,7 +440,7 @@ watch it think before it has any money.
   FLOOR_ADDRESS       the contract
   ROBINHOOD_RPC_URL   your RPC
   TICK_MS             how often to look, default 45s
-  FEED_URL            optional sequencer feed; off by default, ~32 GB/day
+  FEED_URL            optional sequencer feed; off by default, 32-44 GB/day
   IDLE_MS             the backstop tick when the feed is on, default 5m
   MIN_GAS_WEI         stop sending under this operator balance, default 0.002 ETH
   keeper/.operator.key    the hot key, chmod 600, gitignored

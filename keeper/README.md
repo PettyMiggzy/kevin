@@ -88,16 +88,22 @@ substring matcher fired correctly on a control address that was trading.
 It is off by default because of the bandwidth. That is the whole chain
 unfiltered:
 
-| | |
-|---|---|
-| rate | 358 KB/s |
-| per day | 31.7 GB |
-| per month, one keeper | ~950 GB |
-| per month, both keepers | ~1.9 TB |
+Measured twice, at different times of day, and the chain's own busyness moves
+the number a lot:
 
-A basic droplet includes 1 TB. So the feed buys latency — seconds instead of
-up to 45 — at most of a month's transfer allowance, and it does not make the
-keeper any more correct. Turn it on when the latency is worth money.
+| | quiet sample | busy sample |
+|---|---|---|
+| rate | 358 KB/s | 493 KB/s |
+| per day | 31.7 GB | 43.6 GB |
+| per month, one keeper | ~950 GB | ~1,310 GB |
+
+There is no compression to hope for: the socket negotiates no
+`permessage-deflate`, so wire bytes and payload bytes come out identical,
+ratio 1.00. A basic droplet includes 1 TB, so a single keeper on this feed
+ranges from eating most of the month's allowance to **exceeding it outright**.
+
+It does not make the keeper any more correct — the timer already covers it.
+Turn it on when seconds of latency are worth a bigger droplet.
 
 ## Reading the log
 
