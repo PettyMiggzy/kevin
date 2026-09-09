@@ -1,0 +1,32 @@
+# Announces what the market maker did, labelled as itself.
+#
+#   cp keeper/kevin-makerwatch.service /etc/systemd/system/
+#   mkdir -p /etc/systemd/system/kevin-makerwatch.service.d
+#   (write local.conf with MAKER_CHAT_ID and LIVE=1)
+#   systemctl daemon-reload && systemctl enable --now kevin-makerwatch
+#
+# It holds no key that can spend anything. It reads the chain and posts text
+# with the bot token the bot already uses.
+[Unit]
+Description=Kevin market maker announcements
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/kevin
+ExecStart=/usr/bin/env node keeper/makerwatch.mjs
+Environment=CHAIN_ID=4663
+Environment=FLOOR_ADDRESS=0x47Dd22f76129d4AeC0c93668b905BC360657A29C
+Environment=QUOTE_SYMBOL=KEK
+# MAKER_CHAT_ID and LIVE=1 go in a drop-in, so a git pull cannot wipe them.
+Restart=always
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kevin-makerwatch
+
+[Install]
+WantedBy=multi-user.target

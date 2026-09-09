@@ -156,6 +156,31 @@ else
 EOF
 fi
 
+# --- the market maker watch --------------------------------------------------
+# Separate from the buy watch on purpose: a bid from the floor keeper looks
+# exactly like a stranger buying to anything that nets ERC-20 transfers, and
+# announcing the treasury's own bot as "Somebody buy KEVIN" is the sort of
+# thing that is indistinguishable from lying.
+say "Market maker watch"
+
+MAKERWATCH_DROPIN=/etc/systemd/system/kevin-makerwatch.service.d/local.conf
+install -m 644 keeper/kevin-makerwatch.service /etc/systemd/system/kevin-makerwatch.service
+ok "unit installed"
+
+MAKERWATCH_READY=0
+if [ -s "$MAKERWATCH_DROPIN" ] && grep -q MAKER_CHAT_ID "$MAKERWATCH_DROPIN"; then
+  MAKERWATCH_READY=1
+  ok "configured: $MAKERWATCH_DROPIN"
+  grep -q "LIVE=1" "$MAKERWATCH_DROPIN" && ok "LIVE — trades get announced" || bad "dry run — it will post nothing"
+else
+  bad "not configured, so not starting. Write $MAKERWATCH_DROPIN:"
+  cat >&2 <<'EOF'
+        [Service]
+        Environment=MAKER_CHAT_ID=-100...
+        Environment=LIVE=1
+EOF
+fi
+
 # --- the burn watch ----------------------------------------------------------
 # A timer, not a daemon: a burn is a rare deliberate act and the public RPC
 # rate-limits, so polling harder buys nothing.
@@ -195,6 +220,10 @@ if [ "$BUYWATCH_READY" = "1" ]; then
   systemctl enable --now kevin-buywatch >/dev/null 2>&1 || true
   systemctl restart kevin-buywatch
 fi
+if [ "$MAKERWATCH_READY" = "1" ]; then
+  systemctl enable --now kevin-makerwatch >/dev/null 2>&1 || true
+  systemctl restart kevin-makerwatch
+fi
 if [ "$BURNWATCH_READY" = "1" ]; then
   systemctl enable --now kevin-burnwatch.timer >/dev/null 2>&1 || true
   systemctl restart kevin-burnwatch.timer
@@ -207,6 +236,7 @@ say "State"
 UNITS="kevin-scores kevin-bot"
 for pool in $KEEPER_POOLS; do UNITS="$UNITS kevin-floor@$pool"; done
 [ "$BUYWATCH_READY" = "1" ] && UNITS="$UNITS kevin-buywatch"
+[ "$MAKERWATCH_READY" = "1" ] && UNITS="$UNITS kevin-makerwatch"
 for unit in $UNITS; do
   if systemctl is-active --quiet "$unit"; then ok "$unit running"; else
     bad "$unit is NOT running — journalctl -u $unit -n 30 --no-pager"
@@ -226,6 +256,7 @@ cat <<'EOF'
   journalctl -u 'kevin-floor@*' -f  watch both floor keepers
   journalctl -u kevin-buywatch -f   watch the buy watch
   journalctl -u kevin-burnwatch -f  watch the burn watch
+  journalctl -u kevin-makerwatch -f watch the market maker announcer
 
   In Telegram: /link  -> the bot DMs you a code
   Then: /top and /shifts read the board.

@@ -58,6 +58,24 @@ export const PLUMBING = new Set([
   '0xe4acdb51b6554246da8488d1e68e8fad1b93f383', // launchpad factory
 ]);
 
+/**
+ * The treasury's own market makers. NOT plumbing — these are real trades with
+ * real price impact, and they get announced. They are separated here so they
+ * are never announced as SOMEBODY ELSE.
+ *
+ * Without this, a bid from the floor keeper reads to this file exactly like a
+ * stranger buying, and the group gets "Somebody buy KEVIN" for the treasury
+ * buying its own token. Today that is hidden by luck rather than design: the
+ * KEK pool moves no WETH, so `paid` is 0 and the minEth floor drops it. The
+ * moment the WETH market maker runs, or minEth is lowered, the luck runs out.
+ *
+ * keeper/makerwatch.mjs is what announces these, honestly labelled.
+ */
+export const MARKET_MAKERS = new Set([
+  '0x47dd22f76129d4aec0c93668b905bc360657a29c', // KevinFloorV4, KEVIN/KEK
+  '0xd7309cc9383feb44d09202764a72951b962a25ab', // KevinFloorV4, KEVIN/WETH
+]);
+
 const addrOf = (topic) => '0x' + topic.slice(26).toLowerCase();
 
 /**
@@ -76,7 +94,7 @@ const addrOf = (topic) => '0x' + topic.slice(26).toLowerCase();
  *               that moves one wei of KEVIN to a stranger while refunding its
  *               own msg.value produces a headline buy alert for the price of
  *               gas.
- * @returns {{buyers: Array<{who,tokens,paid}>, sellers: Array}}
+ * @returns {{buyers: Array<{who,tokens,paid}>, sellers: Array, makers: Array}}
  */
 export function netTransaction(logs, token, weth, value = 0n, sender = null) {
   const tok = token.toLowerCase();
@@ -101,6 +119,7 @@ export function netTransaction(logs, token, weth, value = 0n, sender = null) {
 
   const buyers = [];
   const sellers = [];
+  const makers = [];
   const from = (sender || '').toLowerCase();
   for (const [who, net] of dTok) {
     if (PLUMBING.has(who)) continue;
@@ -112,10 +131,14 @@ export function netTransaction(logs, token, weth, value = 0n, sender = null) {
     const wethOut = -(dWeth.get(who) ?? 0n);
     const ownValue = from && who === from ? value : 0n;
     const paid = wethOut > 0n ? wethOut : ownValue;
+    if (MARKET_MAKERS.has(who)) {
+      makers.push({ who: getAddress(who), tokens: net > 0n ? net : -net, bought: net > 0n, paid });
+      continue;
+    }
     if (net > 0n) buyers.push({ who: getAddress(who), tokens: net, paid });
     else sellers.push({ who: getAddress(who), tokens: -net, got: wethOut < 0n ? -wethOut : (dWeth.get(who) ?? 0n) });
   }
-  return { buyers, sellers };
+  return { buyers, sellers, makers };
 }
 
 // --- the runner --------------------------------------------------------------
