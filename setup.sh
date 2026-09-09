@@ -17,6 +17,21 @@ say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 # obvious mistake — it satisfies a grep for the variable name, so the service
 # starts, reports itself configured, and then fails on every single post. Check
 # the VALUE, not just the presence of the key.
+# Install a unit file and say whether it CHANGED. Re-running this script to
+# configure a watcher used to restart the bot and the scores service too, every
+# time — which meant kicking a running Telegram bot mid-conversation for a
+# change that had nothing to do with it. Three runs in five minutes while
+# setting up the watchers looked exactly like a bot that had stopped working.
+# Restart what changed, leave the rest alone.
+install_unit() {
+  local src="$1" dst="$2"
+  if [ -f "$dst" ] && cmp -s "$src" "$dst"; then
+    return 1   # unchanged
+  fi
+  install -m 644 "$src" "$dst"
+  return 0     # changed
+}
+
 chat_id_ok() {
   local line v
   line=$(grep -E "^[[:space:]]*Environment=$2=" "$1" 2>/dev/null | tail -1)
@@ -55,12 +70,14 @@ ADMIN_KEY="$(cat server/.admin.key)"
 # --- the scores service ------------------------------------------------------
 say "Scores service"
 mkdir -p server/data
-install -m 644 server/kevin-scores.service /etc/systemd/system/kevin-scores.service
-ok "unit installed"
+SCORES_CHANGED=0
+install_unit server/kevin-scores.service /etc/systemd/system/kevin-scores.service && SCORES_CHANGED=1
+[ "$SCORES_CHANGED" = "1" ] && ok "unit installed (changed)" || ok "unit unchanged"
 
 # --- the bot -----------------------------------------------------------------
 say "Bot"
-install -m 644 bot/kevin-bot.service /etc/systemd/system/kevin-bot.service
+BOT_CHANGED=0
+install_unit bot/kevin-bot.service /etc/systemd/system/kevin-bot.service && BOT_CHANGED=1
 
 # A drop-in rather than editing the unit: `git pull` replaces the unit file, and
 # anything written into it would be lost on the next update. This survives.
@@ -73,7 +90,15 @@ Environment=KEVIN_ADMIN_KEY=${ADMIN_KEY}
 Environment=KEVIN_BOT=${KEVIN_BOT:-Iamkevinzbot}
 EOF
 chmod 600 /etc/systemd/system/kevin-bot.service.d/local.conf
-ok "unit + drop-in installed (bot talks to scores over localhost)"
+if ! cmp -s /etc/systemd/system/kevin-bot.service.d/local.conf.prev \
+            /etc/systemd/system/kevin-bot.service.d/local.conf 2>/dev/null; then
+  BOT_CHANGED=1
+fi
+cp /etc/systemd/system/kevin-bot.service.d/local.conf \
+   /etc/systemd/system/kevin-bot.service.d/local.conf.prev 2>/dev/null || true
+chmod 600 /etc/systemd/system/kevin-bot.service.d/local.conf.prev 2>/dev/null || true
+[ "$BOT_CHANGED" = "1" ] && ok "unit + drop-in installed (changed, will restart)" \
+                         || ok "unit + drop-in unchanged (bot left alone)"
 
 # --- the floor keepers -------------------------------------------------------
 # One systemd template unit, one instance per pool driven. Installed always,
@@ -230,9 +255,17 @@ fi
 say "Starting"
 systemctl daemon-reload
 systemctl enable --now kevin-scores >/dev/null 2>&1 || true
-systemctl restart kevin-scores
+if [ "$SCORES_CHANGED" = "1" ] || ! systemctl is-active --quiet kevin-scores; then
+  systemctl restart kevin-scores; ok "kevin-scores restarted"
+else
+  ok "kevin-scores left running (nothing changed)"
+fi
 systemctl enable --now kevin-bot >/dev/null 2>&1 || true
-systemctl restart kevin-bot
+if [ "$BOT_CHANGED" = "1" ] || ! systemctl is-active --quiet kevin-bot; then
+  systemctl restart kevin-bot; ok "kevin-bot restarted"
+else
+  ok "kevin-bot left running (nothing changed) — it keeps its Telegram poll"
+fi
 for pool in $KEEPER_POOLS; do
   systemctl enable --now "kevin-floor@$pool" >/dev/null 2>&1 || true
   systemctl restart "kevin-floor@$pool"
