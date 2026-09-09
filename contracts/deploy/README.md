@@ -1,5 +1,24 @@
 # Ready-to-broadcast bytecode
 
+## Already deployed, chain 4663
+
+| what | address | state |
+|---|---|---|
+| KevinAirdrop | `0x37F93dAFF688120d6C7793833cACd830A988A971` | owner = treasury, `roundCount()` 0 — holds nothing |
+| KevinFloorV4 (KEVIN/WETH) | `0xd7309Cc9383Feb44d09202764A72951B962a25Ab` | rails and floor all 0 — cannot trade until tuned |
+
+Both verified against the chain rather than the receipt. The airdrop's runtime
+bytecode is a byte-exact match for the compiled artefact. The keeper has
+immutables, so its runtime differs from the artefact only inside the 39 slots
+the compiler declares for them, and everything outside those slots matches
+exactly — its `poolId()` is the live KEVIN/WETH pool, and
+`MAX_OBSERVATION` (3600) and `MAX_FLOOR_DECAY_BPS` (3000) are present, which
+is what proves the deployed code is the post-audit version rather than the one
+the audit found the clock bug in.
+
+The KEK blob has NOT been deployed.
+
+
 `forge` needs `contracts/lib/` — v4-core, OpenZeppelin, forge-std — which is
 gitignored and 27MB of Solidity to compile. On a 1 vCPU / 1GB droplet that
 build is likely to run out of memory, and there is no reason to run it there:

@@ -464,13 +464,13 @@
         </ul>
       </div>
       <div class="card card--cream">
-        <h3>Built, not deployed</h3>
-        <p style="opacity:.7;font-size:13px">Written and tested. No addresses.</p>
+        <h3>On chain, and doing nothing yet</h3>
+        <p style="opacity:.7;font-size:13px">Deployed. Not funded, not armed.</p>
         <ul>
-          <li>Three contracts in the open repo.</li>
-          <li><b>130 tests, all passing.</b></li>
-          <li>Three of those tests are attacks that actually worked, found by trying to break the contracts on purpose, and kept forever as tests that now have to keep failing.</li>
-          <li><b>None of it is on chain.</b> Not one address. When that changes, this page prints the address.</li>
+          <li><b>The distributor</b> — <a href="https://robinhoodchain.blockscout.com/address/0x37F93dAFF688120d6C7793833cACd830A988A971" target="_blank" rel="noopener"><code>0x37F93dAFF688120d6C7793833cACd830A988A971</code></a>. It holds no tokens and has no round open, so there is nothing to claim from it yet.</li>
+          <li><b>The keeper</b> — <a href="https://robinhoodchain.blockscout.com/address/0xd7309Cc9383Feb44d09202764A72951B962a25Ab" target="_blank" rel="noopener"><code>0xd7309Cc9383Feb44d09202764A72951B962a25Ab</code></a>, on the KEVIN/WETH pool. Its trade limits are all zero, which means it cannot trade at all until they are set on purpose.</li>
+          <li><b>195 tests, all passing.</b> Several of them are attacks that actually worked, found by trying to break the contracts on purpose, and kept forever as tests that now have to keep failing.</li>
+          <li>Deploying is not funding. Both are visible above and both are empty; you can check that yourself rather than take it from here.</li>
         </ul>
       </div>
       <div class="card">
@@ -656,12 +656,16 @@
       <div class="stop stop--now">
         <div class="stop__pin">2</div>
         <div class="card">
-          <div class="stop__when">Phase two · Still on the shift</div>
-          <h3>Written, tested, no addresses</h3>
+          <div class="stop__when">Phase two · Done</div>
+          <h3>Both have addresses now</h3>
           <p style="opacity:.75;font-size:14px;margin-top:0">
-            Two contracts, 130 passing tests, and <b>neither of them is
-            deployed.</b> This phase is finished when one of them has an
-            address printed on this page, and not before.
+            This phase said it was finished when one of them had an address
+            printed on this page, and not before. Both do:
+            <a href="https://robinhoodchain.blockscout.com/address/0x37F93dAFF688120d6C7793833cACd830A988A971" target="_blank" rel="noopener"><code>0x37F93dAFF688120d6C7793833cACd830A988A971</code></a>
+            is the distributor and
+            <a href="https://robinhoodchain.blockscout.com/address/0xd7309Cc9383Feb44d09202764A72951B962a25Ab" target="_blank" rel="noopener"><code>0xd7309Cc9383Feb44d09202764A72951B962a25Ab</code></a>
+            is the keeper. <b>195 passing tests.</b> Neither holds anything and
+            neither is switched on — that is the next phase, not this one.
           </p>
           <ul>
             <li><b>The distributor.</b> A way to hand things to holders where anybody can check the list and check their own share, instead of trusting a screenshot.</li>
@@ -682,9 +686,10 @@
         <div class="stop__pin">3</div>
         <div class="card">
           <div class="stop__when">Phase three · After the shift</div>
-          <h3>Put an address on one of them</h3>
+          <h3>Switch them on</h3>
           <ul>
-            <li>Either of the two. That is the entire phase. There is nothing clever in it.</li>
+            <li>Fund the distributor and open a round, so the published list becomes claimable.</li>
+            <li>Set the keeper's limits and its floor. Until that happens it is a contract that cannot trade, which is deliberate — nothing should start moving by accident.</li>
             <li>Turn the buy bot on, so the group sees what he sees at the same time he sees it.</li>
             <li>☐ Sleep.</li>
           </ul>
