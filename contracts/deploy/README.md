@@ -146,6 +146,20 @@ THE QUOTE FIGURES ARE IN THE QUOTE TOKEN. For the WETH pool they are WETH;
 for the KEK pool they are KEK, and a number that made sense for WETH will be
 nonsense there.
 
+THERE IS NO SUCH NUMBER AS "NO CAP". `setRails` has no upper bound, so it takes
+`type(uint256).max` without complaint — and then every poke reverts. `_tick()`
+drains the bucket by `cap * elapsed / 86400`, and that multiplication overflows
+for any elapsed time above one second. Verified on a fork of this chain: the
+call succeeded, and a poke an hour later failed with an arithmetic overflow
+panic. Calling `setRails` again with a sane number recovers it, but until then
+the contract cannot trade at all.
+
+For a rail that is unlimited in every practical sense, use the token's whole
+supply — `1000000000000000000000000000`, which is 1e27 wei, a billion tokens.
+Nothing can ever exceed it, and the drain has about fifty orders of magnitude
+of headroom before it overflows. Also verified: rails set to the full supply
+survived a simulated year with no trade and then poked normally.
+
 **3. The policy.** `1000` is the 10% bid band.
 
     ~/.foundry/bin/cast send $MM 'setPolicy(uint256,uint256,uint256,uint256,uint256)' \

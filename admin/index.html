@@ -384,7 +384,15 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
       '<p class="note">Deliberately not every function. openRound, sweep, setRails, setPolicy and ' +
       'setLockbox move real money or are one-shot, and a mistyped number in a browser field is a ' +
       'worse way to find that out than a command you can read back before pressing return.</p>' +
-      '<pre>~/.foundry/bin/cast send &lt;contract&gt; \'setRails(uint256,uint256,uint256,uint256,uint256)\' \\\n  &lt;maxTok&gt; &lt;maxQuote&gt; &lt;dayTok&gt; &lt;dayQuote&gt; &lt;cooldown&gt; \\\n  --private-key "$PRIVATE_KEY" --rpc-url ' + RPC + '</pre></div>';
+      '<pre>~/.foundry/bin/cast send &lt;contract&gt; \'setRails(uint256,uint256,uint256,uint256,uint256)\' \\\n  &lt;maxTok&gt; &lt;maxQuote&gt; &lt;dayTok&gt; &lt;dayQuote&gt; &lt;cooldown&gt; \\\n  --private-key "$PRIVATE_KEY" --rpc-url ' + RPC + '</pre>' +
+      '<p class="note"><b>There is no such number as "no cap".</b> setRails has no upper bound, so it ' +
+      'will accept 2^256-1 without complaint — and then every poke reverts, because the bucket drains ' +
+      'by <code>cap &times; elapsed &divide; 86400</code> and that multiplication overflows. Verified on a fork of ' +
+      'this chain: the call succeeded, and one hour later a poke failed with an arithmetic overflow ' +
+      'panic. It is recoverable, by calling setRails again with a sane number, but until you do the ' +
+      'contract cannot trade at all. For an effectively unlimited rail use the token\'s entire supply, ' +
+      '<code>1000000000000000000000000000</code> (1e27 wei = 1,000,000,000 tokens) — nothing can ever ' +
+      'exceed it and it has ~50 orders of magnitude of headroom before the drain overflows.</p></div>';
 
     KEEPERS.forEach(function (k, i) {
       $('obs' + i).onclick = function () { send(k.addr, SIG.observe, 'observe() on ' + k.name); };
