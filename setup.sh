@@ -11,6 +11,27 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+
+# A Telegram chat id is a number, optionally negative. The examples printed by
+# this script use "-100..." as a placeholder, and pasting that verbatim is the
+# obvious mistake — it satisfies a grep for the variable name, so the service
+# starts, reports itself configured, and then fails on every single post. Check
+# the VALUE, not just the presence of the key.
+chat_id_ok() {
+  local line v
+  line=$(grep -E "^[[:space:]]*Environment=$2=" "$1" 2>/dev/null | tail -1)
+  [ -n "$line" ] || return 1
+  v=${line#*=}          # MAKER_CHAT_ID=-1001234567890
+  v=${v#*=}             # -1001234567890
+  v=${v%\"}; v=${v#\"}
+  # A chat id is digits, optionally with one leading minus. Anything else —
+  # empty, a placeholder with dots, an angle bracket — is not one.
+  case "$v" in
+    ''|*[!0-9-]*) return 1 ;;
+    -) return 1 ;;
+    *) return 0 ;;
+  esac
+}
 ok()  { printf '  ok  %s\n' "$*"; }
 bad() { printf '  !!  %s\n' "$*" >&2; }
 
@@ -142,12 +163,12 @@ install -m 644 keeper/kevin-buywatch.service /etc/systemd/system/kevin-buywatch.
 ok "unit installed"
 
 BUYWATCH_READY=0
-if [ -s "$BUYWATCH_DROPIN" ] && grep -q BUY_CHAT_ID "$BUYWATCH_DROPIN"; then
+if [ -s "$BUYWATCH_DROPIN" ] && chat_id_ok "$BUYWATCH_DROPIN" BUY_CHAT_ID; then
   BUYWATCH_READY=1
   ok "configured: $BUYWATCH_DROPIN"
   grep -q "LIVE=1" "$BUYWATCH_DROPIN" && ok "LIVE — it will post to the group" || bad "dry run — it will post nothing"
 else
-  bad "not configured, so not starting. Write $BUYWATCH_DROPIN:"
+  bad "no usable BUY_CHAT_ID (a real one is a number, not -100...). Write $BUYWATCH_DROPIN:"
   cat >&2 <<'EOF'
         [Service]
         Environment=BUY_CHAT_ID=-100...
@@ -168,12 +189,12 @@ install -m 644 keeper/kevin-makerwatch.service /etc/systemd/system/kevin-makerwa
 ok "unit installed"
 
 MAKERWATCH_READY=0
-if [ -s "$MAKERWATCH_DROPIN" ] && grep -q MAKER_CHAT_ID "$MAKERWATCH_DROPIN"; then
+if [ -s "$MAKERWATCH_DROPIN" ] && chat_id_ok "$MAKERWATCH_DROPIN" MAKER_CHAT_ID; then
   MAKERWATCH_READY=1
   ok "configured: $MAKERWATCH_DROPIN"
   grep -q "LIVE=1" "$MAKERWATCH_DROPIN" && ok "LIVE — trades get announced" || bad "dry run — it will post nothing"
 else
-  bad "not configured, so not starting. Write $MAKERWATCH_DROPIN:"
+  bad "no usable MAKER_CHAT_ID (a real one is a number, not -100...). Write $MAKERWATCH_DROPIN:"
   cat >&2 <<'EOF'
         [Service]
         Environment=MAKER_CHAT_ID=-100...
@@ -192,12 +213,12 @@ install -m 644 keeper/kevin-burnwatch.timer /etc/systemd/system/kevin-burnwatch.
 ok "unit + timer installed"
 
 BURNWATCH_READY=0
-if [ -s "$BURNWATCH_DROPIN" ] && grep -q BURN_CHAT_ID "$BURNWATCH_DROPIN"; then
+if [ -s "$BURNWATCH_DROPIN" ] && chat_id_ok "$BURNWATCH_DROPIN" BURN_CHAT_ID; then
   BURNWATCH_READY=1
   ok "configured: $BURNWATCH_DROPIN"
   grep -q "LIVE=1" "$BURNWATCH_DROPIN" && ok "LIVE — burns get announced" || bad "dry run — it will post nothing"
 else
-  bad "not configured, so not starting. Write $BURNWATCH_DROPIN:"
+  bad "no usable BURN_CHAT_ID (a real one is a number, not -100...). Write $BURNWATCH_DROPIN:"
   cat >&2 <<'EOF'
         [Service]
         Environment=BURN_CHAT_ID=-100...
