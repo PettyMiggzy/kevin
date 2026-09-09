@@ -5,7 +5,8 @@
 | what | address | state |
 |---|---|---|
 | KevinAirdrop | `0x37F93dAFF688120d6C7793833cACd830A988A971` | owner = treasury, `roundCount()` 0 — holds nothing |
-| KevinFloorV4 (KEVIN/WETH) | `0xd7309Cc9383Feb44d09202764A72951B962a25Ab` | rails and floor all 0 — cannot trade until tuned |
+| KevinFloorV4 (KEVIN/WETH) | `0xd7309Cc9383Feb44d09202764A72951B962a25Ab` | operator, rails, policy and floor all set — holds no KEVIN yet |
+| KevinFloorV4 (KEVIN/KEK) | `0x47Dd22f76129d4AeC0c93668b905BC360657A29C` | rails and floor all 0 — cannot trade until tuned |
 
 Both verified against the chain rather than the receipt. The airdrop's runtime
 bytecode is a byte-exact match for the compiled artefact. The keeper has
@@ -16,7 +17,19 @@ exactly — its `poolId()` is the live KEVIN/WETH pool, and
 is what proves the deployed code is the post-audit version rather than the one
 the audit found the clock bug in.
 
-The KEK blob has NOT been deployed.
+Both keeper blobs are now spent. Rails are per-pool and NOT interchangeable:
+the WETH pool is priced in fractions of an ETH, the KEK pool in millions of
+KEK, and the same figures in the wrong one would be off by nine orders of
+magnitude.
+
+Measured off the live pools:
+
+| | KEVIN/WETH | KEVIN/KEK |
+|---|---|---|
+| one 2.5% poke sells | 1,562,341 KEVIN | 1,916,064 KEVIN |
+| raising | 0.0055 WETH | 784,946 KEK |
+| pushing 23.5% into the bid band costs an attacker | 0.055 WETH | 7,822,383 KEK |
+| so maxQuotePerTrade (~18% of that) | 0.01 WETH | 1,400,000 KEK |
 
 
 `forge` needs `contracts/lib/` — v4-core, OpenZeppelin, forge-std — which is
