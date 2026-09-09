@@ -80,6 +80,11 @@ check('the KEK market maker is known to the buy watch',
 check('the WETH one too',
   MARKET_MAKERS.has('0xd7309cc9383feb44d09202764a72951b962a25ab'), true);
 
+// Sells are logged but not posted unless ANNOUNCE_SELLS=1. The decision lives
+// in the loop rather than in announce(), so announce() must still be able to
+// render a sale — that is what the operator's log and a future opt-in use.
+has('announce() can still render a sale', announce(s, 'KEK'), 'sold into the room');
+
 console.log(ok.map((x) => '  ok   ' + x).join('\n'));
 if (bad.length) console.log(bad.map((x) => '  FAIL ' + x).join('\n'));
 console.log(`\n${ok.length} passed, ${bad.length} failed`);

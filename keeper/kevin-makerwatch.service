@@ -21,6 +21,8 @@ ExecStart=/usr/bin/env node keeper/makerwatch.mjs
 Environment=CHAIN_ID=4663
 Environment=FLOOR_ADDRESS=0x47Dd22f76129d4AeC0c93668b905BC360657A29C
 Environment=QUOTE_SYMBOL=KEK
+# Buys are announced, sells are logged but not posted. ANNOUNCE_SELLS=1 posts both.
+Environment=ANNOUNCE_SELLS=0
 # MAKER_CHAT_ID and LIVE=1 go in a drop-in, so a git pull cannot wipe them.
 Restart=always
 RestartSec=15

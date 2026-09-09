@@ -38,6 +38,16 @@ const cfg = {
   floor: process.env.FLOOR_ADDRESS || '0x47Dd22f76129d4AeC0c93668b905BC360657A29C',
   qsym: process.env.QUOTE_SYMBOL || 'KEK',
   chat: process.env.MAKER_CHAT_ID || '',
+  // ANNOUNCE BUYS, NOT SELLS — the owner's call, and off by default.
+  //
+  // Worth being clear-eyed about what this is: posting only the buying is
+  // selective. The selling is not hidden by it — every Sold event is on chain,
+  // in the same contract, and shows on any price chart — but the group hears
+  // one side and not the other. Set ANNOUNCE_SELLS=1 to post both.
+  //
+  // The log prints both regardless, so the operator always sees everything
+  // even when the group does not.
+  announceSells: process.env.ANNOUNCE_SELLS === '1',
   live: process.env.LIVE === '1',
   everyMs: Number(process.env.TICK_MS || 60_000),
   // How far back to look on a cold start. Not the whole chain: this posts to a
@@ -164,6 +174,7 @@ async function main() {
   say('  chain   ', cfg.chainId, cfg.rpc);
   say('  chat    ', cfg.chat || '(none — dry run)');
   say('  mode    ', cfg.live ? 'LIVE, it will post' : 'DRY RUN, it will post nothing');
+  say('  posts   ', cfg.announceSells ? 'buys and sells' : 'buys only — sells are logged, not posted');
 
   // The cursor alone is not enough: a hiccup mid-chunk replays the chunk, and
   // every trade in it gets announced twice. Remember the hashes too.
@@ -203,8 +214,12 @@ async function main() {
           if (!t) continue;
           seen.add(key);
           const text = announce(t, cfg.qsym);
+          const quiet = t.kind === 'sold' && !cfg.announceSells;
+          // Logged either way. The group's feed is a choice; the operator's
+          // record is not.
           say(`${t.kind.toUpperCase()} ${human(t.tokens)} KEVIN / ${human(t.quote)} ${cfg.qsym}`
-            + `  ${l.transactionHash.slice(0, 18)}`);
+            + `  ${l.transactionHash.slice(0, 18)}${quiet ? '  (not announced)' : ''}`);
+          if (quiet) continue;
           if (!cfg.live) {
             console.log(text.split('\n').map((x) => '      ' + x).join('\n'));
             continue;
