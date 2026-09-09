@@ -37,20 +37,28 @@ Safe to run again after every `git pull` — it keeps every key it finds and onl
 creates one that does not exist. **Run it after every pull**; a droplet that has
 only pulled is running the old code with the old unit files.
 
-The three services:
+The services:
 
 | | what it does | starts by default |
 |---|---|---|
 | `kevin-scores` | the game's score API on localhost:8787 | yes |
 | `kevin-bot` | the Telegram bot | yes |
-| `kevin-floor` | the floor keeper — [contracts/FLOOR.md](../contracts/FLOOR.md) | **only once configured** |
+| `kevin-floor@weth` | the floor keeper on the WETH pool | **only once configured** |
+| `kevin-floor@kek` | the floor keeper on the KEK pool | **only once configured** |
+| `kevin-buywatch` | posts buys to Telegram | only once configured |
+| `kevin-burnwatch` | posts burns to Telegram (a timer) | only once configured |
 
-`kevin-floor` is the one service here that can spend money, so it does not come
-up by accident. `setup.sh` installs it and then refuses to start it until
-`/etc/systemd/system/kevin-floor.service.d/local.conf` exists with a
-`FLOOR_ADDRESS` in it, and it prints the block to write. Even then it starts in
-**dry run** — it reads, decides, and sends nothing — until `LIVE=1` is added,
-which `setup.sh` will warn you about on every run so it is never a surprise.
+The floor keepers are the only services here that can spend money, so they do
+not come up by accident. There are two of them, one per pool, from one systemd
+template unit — `kevin-floor@.service` — and the bit after the `@` picks the
+settings file: `/etc/kevin/floor-weth.env`, `/etc/kevin/floor-kek.env`.
+
+`setup.sh` installs the template, seeds each env file from its example the
+first time and never overwrites it after that, and refuses to start an instance
+whose file has no `FLOOR_ADDRESS`. Even configured, each starts in **dry run**
+— it reads, decides, and sends nothing — until `LIVE=1` is added to that
+pool's file, one pool at a time, which `setup.sh` warns about on every run so
+it is never a surprise. See [keeper/README.md](../keeper/README.md).
 
 The bot gets its settings from a systemd **drop-in**
 (`/etc/systemd/system/kevin-bot.service.d/local.conf`) rather than from the unit

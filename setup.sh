@@ -54,14 +54,28 @@ EOF
 chmod 600 /etc/systemd/system/kevin-bot.service.d/local.conf
 ok "unit + drop-in installed (bot talks to scores over localhost)"
 
-# --- the floor keeper --------------------------------------------------------
-# Installed always, started only when it has been told what to drive. It is the
-# one service here that can spend money, so it does not come up by accident.
-say "Floor keeper"
+# --- the floor keepers -------------------------------------------------------
+# TWO of them now, one per pool, from one systemd template unit. Installed
+# always, started only when told what to drive. They are the only services here
+# that can spend money, so they do not come up by accident.
+say "Floor keepers"
 
-KEEPER_DROPIN=/etc/systemd/system/kevin-floor.service.d/local.conf
-install -m 644 keeper/kevin-floor.service /etc/systemd/system/kevin-floor.service
-ok "unit installed"
+install -m 644 'keeper/kevin-floor@.service' '/etc/systemd/system/kevin-floor@.service'
+mkdir -p /etc/kevin
+ok "template unit installed"
+
+# The single kevin-floor.service this replaces. Left running it would be a
+# second keeper on the same contract, pulling against the new one.
+if [ -e /etc/systemd/system/kevin-floor.service ]; then
+  systemctl disable --now kevin-floor >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/kevin-floor.service
+  bad "the old single kevin-floor service was stopped and removed"
+  if [ -s /etc/systemd/system/kevin-floor.service.d/local.conf ]; then
+    bad "  its settings are still at kevin-floor.service.d/local.conf — move"
+    bad "  anything you want kept into /etc/kevin/floor-weth.env by hand."
+    bad "  LIVE is NOT carried over: the new keepers start in dry run."
+  fi
+fi
 
 # viem is the keeper's only dependency and the first one this repo has ever had
 # at runtime, so a droplet that has only ever pulled will not have it.
@@ -80,49 +94,26 @@ else
   bad "keeper/.operator.key is missing — the keeper can only dry-run"
 fi
 
-KEEPER_READY=0
-if [ -s "$KEEPER_DROPIN" ] && grep -q FLOOR_ADDRESS "$KEEPER_DROPIN"; then
-  KEEPER_READY=1
-  ok "configured: $KEEPER_DROPIN"
-  grep -q "LIVE=1" "$KEEPER_DROPIN" \
-    && bad "LIVE=1 is set — this keeper SENDS TRANSACTIONS" \
-    || ok "dry run (no LIVE=1)"
-else
-  bad "not configured, so not starting. Write $KEEPER_DROPIN:"
-  cat >&2 <<'EOF'
-        [Service]
-        Environment=FLOOR_ADDRESS=0x...
-        Environment=ROBINHOOD_RPC_URL=https://...
-        Environment=LOCK_ADDRESS=0x...        # optional, the treasury lockbox
-        # Environment=LIVE=1                  # ONLY after a day of dry run
-EOF
-fi
-
-# --- the warm-up bell --------------------------------------------------------
-# Same shape as the floor keeper: installed always, started only once it knows
-# what to drive. It cannot trade and it cannot move anybody's tokens — the only
-# call it makes is activate(), which is permissionless and can only ever help
-# the account it names.
-say "Warm-up bell"
-
-ACTIVATE_DROPIN=/etc/systemd/system/kevin-activate.service.d/local.conf
-install -m 644 keeper/kevin-activate.service /etc/systemd/system/kevin-activate.service
-ok "unit installed"
-
-ACTIVATE_READY=0
-if [ -s "$ACTIVATE_DROPIN" ] && grep -q STAKING_ADDRESS "$ACTIVATE_DROPIN"; then
-  ACTIVATE_READY=1
-  ok "configured: $ACTIVATE_DROPIN"
-  grep -q "LIVE=1" "$ACTIVATE_DROPIN" && ok "LIVE" || bad "dry run — it will NOT ring the bell"
-else
-  bad "not configured, so not starting. Write $ACTIVATE_DROPIN:"
-  cat >&2 <<'EOF'
-        [Service]
-        Environment=STAKING_ADDRESS=0x...
-        Environment=ROBINHOOD_RPC_URL=https://...
-        Environment=LIVE=1
-EOF
-fi
+# One instance per pool. The env file is seeded from the example the first time
+# and never overwritten after that, so a re-run cannot undo your tuning.
+KEEPER_POOLS=""
+for pool in weth kek; do
+  envf="/etc/kevin/floor-$pool.env"
+  if [ ! -e "$envf" ]; then
+    install -m 640 "keeper/floor-$pool.env.example" "$envf"
+    ok "$pool: seeded $envf"
+  fi
+  if grep -qE '^FLOOR_ADDRESS=0x[0-9a-fA-F]{40}' "$envf"; then
+    KEEPER_POOLS="$KEEPER_POOLS $pool"
+    if grep -qE '^LIVE=1' "$envf"; then
+      bad "$pool: LIVE=1 — this keeper SENDS TRANSACTIONS"
+    else
+      ok "$pool: dry run (no LIVE=1)"
+    fi
+  else
+    bad "$pool: no FLOOR_ADDRESS in $envf, so not starting it"
+  fi
+done
 
 # --- the buy watch -----------------------------------------------------------
 # Reads the chain, posts with the bot token the bot already uses. It holds no
@@ -179,14 +170,10 @@ systemctl enable --now kevin-scores >/dev/null 2>&1 || true
 systemctl restart kevin-scores
 systemctl enable --now kevin-bot >/dev/null 2>&1 || true
 systemctl restart kevin-bot
-if [ "$KEEPER_READY" = "1" ]; then
-  systemctl enable --now kevin-floor >/dev/null 2>&1 || true
-  systemctl restart kevin-floor
-fi
-if [ "$ACTIVATE_READY" = "1" ]; then
-  systemctl enable --now kevin-activate >/dev/null 2>&1 || true
-  systemctl restart kevin-activate
-fi
+for pool in $KEEPER_POOLS; do
+  systemctl enable --now "kevin-floor@$pool" >/dev/null 2>&1 || true
+  systemctl restart "kevin-floor@$pool"
+done
 if [ "$BUYWATCH_READY" = "1" ]; then
   systemctl enable --now kevin-buywatch >/dev/null 2>&1 || true
   systemctl restart kevin-buywatch
@@ -201,8 +188,7 @@ sleep 2
 # --- did it work -------------------------------------------------------------
 say "State"
 UNITS="kevin-scores kevin-bot"
-[ "$KEEPER_READY" = "1" ] && UNITS="$UNITS kevin-floor"
-[ "$ACTIVATE_READY" = "1" ] && UNITS="$UNITS kevin-activate"
+for pool in $KEEPER_POOLS; do UNITS="$UNITS kevin-floor@$pool"; done
 [ "$BUYWATCH_READY" = "1" ] && UNITS="$UNITS kevin-buywatch"
 for unit in $UNITS; do
   if systemctl is-active --quiet "$unit"; then ok "$unit running"; else
@@ -220,8 +206,7 @@ say "Done"
 cat <<'EOF'
   journalctl -u kevin-bot -f        watch the bot
   journalctl -u kevin-scores -f     watch the scores service
-  journalctl -u kevin-floor -f      watch the floor keeper
-  journalctl -u kevin-activate -f   watch the warm-up bell
+  journalctl -u 'kevin-floor@*' -f  watch both floor keepers
   journalctl -u kevin-buywatch -f   watch the buy watch
   journalctl -u kevin-burnwatch -f  watch the burn watch
 

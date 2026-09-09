@@ -64,6 +64,11 @@ const cfg = {
   // How often to look. The contract has its own cooldown; this only decides how
   // often we ask, and asking is a free eth_call.
   everyMs: Number(process.env.TICK_MS || 45_000),
+  // Optional Nitro sequencer feed. Off unless set — see startFeed() for why.
+  feedUrl: process.env.FEED_URL || null,
+  // With the feed on, how long to wait before asking anyway. A backstop, not
+  // a poll: a dead socket must not turn into a silent keeper.
+  idleMs: Number(process.env.IDLE_MS || 300_000),
   // Stop sending if the operator wallet gets this low — a keeper that cannot
   // pay for gas should say so once, not fail a transaction every tick.
   minGasWei: BigInt(process.env.MIN_GAS_WEI || 2_000_000_000_000_000n), // 0.002 ETH
@@ -74,6 +79,15 @@ const chain = defineChain({
   name: 'Robinhood Chain',
   nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
   rpcUrls: { default: { http: [cfg.rpc] } },
+  // Multicall3 is deployed at the canonical address on this chain (verified:
+  // eth_getCode returns the standard runtime). It matters because a tick reads
+  // seventeen separate view functions, and without this that is seventeen HTTP
+  // requests every time. With it, viem folds the reads fired together into one
+  // eth_call. Same answers, and the actual way to stop a 24/7 keeper draining
+  // an RPC key — no websocket and no bandwidth bill required.
+  contracts: {
+    multicall3: { address: '0xcA11bde05977b3631167028862bE2a173976CA11' },
+  },
 });
 
 // Only what this keeper calls. A short ABI is a short list of things it can do.
@@ -83,6 +97,10 @@ const ABI = [
     { name: 'spot', type: 'uint160' }, { name: 'floorAt', type: 'uint160' }] },
   { type: 'function', name: 'poke', stateMutability: 'nonpayable',
     inputs: [{ name: 'size', type: 'uint256' }], outputs: [] },
+  { type: 'function', name: 'currency0', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'currency1', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'tokenIsZero', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
+  { type: 'function', name: 'observe', stateMutability: 'nonpayable', inputs: [], outputs: [] },
   { type: 'function', name: 'ratchet', stateMutability: 'nonpayable', inputs: [], outputs: [] },
   { type: 'function', name: 'floorSqrtPriceX96', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint160' }] },
   { type: 'function', name: 'spotSqrtPriceX96', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint160' }] },
@@ -93,7 +111,7 @@ const ABI = [
   { type: 'function', name: 'upIsUp', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
   { type: 'function', name: 'effectiveFloorSqrtPriceX96', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint160' }] },
   { type: 'function', name: 'floorDecayBps', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'floorHeldSince', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'underwaterSeconds', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'maxDecayBps', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'patience', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'decayBpsPerDay', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -102,9 +120,9 @@ const ABI = [
   { type: 'function', name: 'lastRatchetAt', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'ratchetCooldown', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'lockbox', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'tokensSoldInWindow', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'tokensInBucket', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'dailyTokenCap', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'quoteSpentInWindow', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'quoteInBucket', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'dailyQuoteCap', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 ];
 
@@ -157,13 +175,28 @@ function gapPct(a, b) {
 
 // --- the loop ---------------------------------------------------------------
 
+let poolMoved = null;   // set by the loop, called by the feed
+let feedHits = 0, feedBytes = 0;
+let watchHex = '';      // the address whose appearance means "our pool moved"
+
 async function main() {
   if (!cfg.floor) {
     warn('FLOOR_ADDRESS is not set. Nothing to drive.');
     process.exit(1);
   }
 
-  const pub = createPublicClient({ chain, transport: http(cfg.rpc) });
+  // Two different savings, and they stack. `batch: { multicall: true }` on the
+  // CLIENT folds the tick's view calls into one Multicall3 eth_call; `batch:
+  // true` on the TRANSPORT puts whatever is left into a single HTTP body.
+  // Measured through a counting proxy, not estimated: a tick that cost 17
+  // JSON-RPC calls in 2 HTTP requests now costs 3 in 2. The three left are the
+  // Multicall3 call, eth_getBlockByNumber, and the second read group, which
+  // lands outside the first batching window.
+  const pub = createPublicClient({
+    chain,
+    batch: { multicall: true },
+    transport: http(cfg.rpc, { batch: true }),
+  });
   const key = loadKey('.operator.key');
   let wallet = null;
   let account = null;
@@ -192,6 +225,15 @@ async function main() {
   // block below assigns it, and a `let` further down would be in its temporal
   // dead zone by then — a ReferenceError on the first tick, not at parse time.
   let token = null;
+
+  // The token this contract sells, cached. currency0/currency1/tokenIsZero are
+  // immutables — they cannot change for the life of the contract, so they are
+  // read once rather than three extra calls on every tick forever. Declared
+  // HERE, above the loop, for the same reason `token` is: the loop below calls
+  // tick(), and a `let` further down would still be in its temporal dead zone
+  // when the first tick reads it. Written the other way once, and every tick
+  // failed with "Cannot access 'sellToken' before initialization".
+  let sellToken = null;
 
   // Sanity, once, loudly. Getting the orientation wrong is the one mistake that
   // turns this from a floor into a dumper, so it is stated at startup rather
@@ -243,23 +285,122 @@ async function main() {
   let quiet = 0;      // consecutive ticks with nothing to do
   let lastSaid = '';  // so a long quiet spell does not fill the journal
 
+  // THE SEQUENCER FEED, IF YOU WANT IT.
+  //
+  // wss://feed.mainnet.chain.robinhood.com is the chain's Nitro sequencer
+  // feed. It pushes every sequenced batch as raw L2 bytes, so the keeper can
+  // wait to be TOLD that something happened instead of asking on a timer, and
+  // only spend an eth_call when its own pool actually moved. Measured live:
+  // 928 messages in 35 seconds, 429 of them touching the PoolManager, and
+  // ZERO touching $KEVIN — a polling keeper would have made calls for all of
+  // that and learnt nothing.
+  //
+  // THE COST IS BANDWIDTH, NOT REQUESTS. It is the whole chain unfiltered, at
+  // roughly 311 KB/s — about 27 GB a day, 800 GB a month. That fits inside a
+  // basic droplet's 1 TB transfer allowance but eats most of it, so it is off
+  // by default and the timer still runs underneath as a safety net: if the
+  // socket dies at 3am the keeper must not go quiet, it must fall back to
+  // asking.
+  let feed = null;
+  if (cfg.feedUrl) {
+    // Match on the TOKEN, not the PoolManager. The manager serves every pool
+    // on the chain and turned up in 429 of 928 batches in a live sample; the
+    // token appears only when this pool is genuinely touched.
+    const watched = await resolveSellToken();
+    watchHex = watched.slice(2).toLowerCase();
+    say('  feed     ', `watching for ${watched} in the sequencer stream`);
+    await startFeed();
+  }
+
   for (;;) {
     try {
       await tick();
     } catch (e) {
       warn('tick failed:', e.shortMessage || e.message);
     }
-    await new Promise((r) => setTimeout(r, cfg.everyMs));
+    // With the feed on, the timer becomes a slow backstop rather than the
+    // driver — the feed wakes it the moment the pool is touched.
+    await waitForWork(feed ? cfg.idleMs : cfg.everyMs);
+  }
+
+  /** Resolve early if the feed reports our pool moved, else after ms. */
+  function waitForWork(ms) {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; clearTimeout(timer); poolMoved = null; resolve(); } };
+      const timer = setTimeout(finish, ms);
+      poolMoved = finish;
+    });
+  }
+
+  async function startFeed() {
+    let WS;
+    try { WS = (await import('ws')).default; }
+    catch {
+      warn('FEED_URL is set but the ws package is not installed.');
+      warn('  npm i ws   — or unset FEED_URL to stay on the timer.');
+      return;
+    }
+    // A feed that is quietly eating the month's bandwidth and never matching
+    // must not be indistinguishable from a feed that is working. Half-hourly,
+    // it says what it has cost and what it has caught.
+    setInterval(() => {
+      const gb = feedBytes / 1e9;
+      say('  feed     ',
+        `${feedHits} wake${feedHits === 1 ? '' : 's'} on $KEVIN`
+        + ` · ${gb < 1 ? `${(feedBytes / 1e6).toFixed(0)} MB` : `${gb.toFixed(2)} GB`} read since start`);
+    }, 30 * 60_000).unref();
+
+    const connect = () => {
+      const sock = new WS(cfg.feedUrl);
+      sock.on('open', () => say('  feed     ', 'connected to ' + cfg.feedUrl));
+      sock.on('message', (buf) => {
+        feedBytes += buf.length;
+        let j; try { j = JSON.parse(String(buf)); } catch { return; }
+        for (const m of j.messages || []) {
+          const l2 = m?.message?.message?.l2Msg;
+          if (!l2) continue;
+          // A substring match on the raw batch, not a decode. Decoding every
+          // Nitro batch to find out whether it is worth a single eth_call
+          // would cost more than the call it saves.
+          const hex = Buffer.from(l2, 'base64').toString('hex');
+          if (hex.includes(watchHex)) { feedHits++; if (poolMoved) poolMoved(); return; }
+        }
+      });
+      sock.on('close', () => { warn('feed closed, reconnecting in 5s'); setTimeout(connect, 5000); });
+      sock.on('error', (e) => { warn('feed error:', String(e.message).slice(0, 60)); try { sock.close(); } catch {} });
+      feed = sock;
+    };
+    connect();
+  }
+
+  /** The token this contract sells, read once and remembered. */
+  async function resolveSellToken() {
+    if (!sellToken) {
+      const [c0, c1, isZero] = await Promise.all([
+        read('currency0'), read('currency1'), read('tokenIsZero'),
+      ]);
+      sellToken = isZero ? c0 : c1;
+    }
+    return sellToken;
+  }
+
+  /** What the contract actually owns of the token it is meant to sell. */
+  async function inventory() {
+    return pub.readContract({
+      address: await resolveSellToken(), abi: ERC20_ABI,
+      functionName: 'balanceOf', args: [cfg.floor],
+    });
   }
 
   async function tick() {
-    const [reading, paused, last, cool, sold, capT, spent, capQ, chest, mark, decay, gapBps, up, blk] =
+    const [reading, paused, last, cool, sold, capT, spent, capQ, chest, mark, decay, gapBps, up, blk, held] =
       await Promise.all([
         read('reading'), read('paused'), read('lastTradeAt'), read('cooldown'),
-        read('tokensSoldInWindow'), read('dailyTokenCap'),
-        read('quoteSpentInWindow'), read('dailyQuoteCap'), read('warChest'),
+        read('tokensInBucket'), read('dailyTokenCap'),
+        read('quoteInBucket'), read('dailyQuoteCap'), read('warChest'),
         read('floorSqrtPriceX96'), read('floorDecayBps'),
-        read('floorGapBps'), read('upIsUp'), pub.getBlock(),
+        read('floorGapBps'), read('upIsUp'), pub.getBlock(), inventory(),
       ]);
     const [ratchetedAt, ratchetCool] = await Promise.all([
       read('lastRatchetAt'), read('ratchetCooldown'),
@@ -276,9 +417,33 @@ async function main() {
     // number in a healthy market and the difference is the whole of the
     // yielding, so both are read and both are printed.
     const [sell, buy, spot, floorAt] = reading;
-
+    // SAY WHAT IS ACTUALLY WRONG. reading() answers "is there room above the
+    // floor", which is a fact about the POOL and is true whether or not this
+    // contract owns a single token or has any allowance left. In dry run
+    // against the live WETH keeper, which held nothing, it printed
+    // WOULD POKE · SELL — technically true and completely useless.
+    //
+    // No gas is at stake: act() simulates before it sends, so an empty
+    // contract's poke dies in the simulation and costs nothing. What is at
+    // stake is the log. Without these, a keeper that cannot possibly trade
+    // says "declined by the contract: NothingToDo" forever, which reads like
+    // a working keeper in a quiet market. With them it says which of the
+    // three things to go and do.
     if (paused) return note('paused by the owner');
     if (floorAt === 0n) return note('no floor set yet — setFloorFromSpot() first, it does nothing until then');
+    if (sell && held === 0n) {
+      return note('room above the floor, but the contract holds no $KEVIN'
+        + ` — send some to ${cfg.floor} before it can sell`);
+    }
+    if (sell && capT === 0n) {
+      return note('room above the floor, but dailyTokenCap is 0 — setRails() first, it cannot sell a thing');
+    }
+    if (buy && chest === 0n) {
+      return note('under the buy band, but the war chest is empty — fundWarChestToken() first');
+    }
+    if (buy && capQ === 0n) {
+      return note('under the buy band, but dailyQuoteCap is 0 — setRails() first, it cannot bid');
+    }
 
     const state =
       `spot ${readable(spot)} floor ${readable(floorAt)} (${gapPct(floorAt, spot).toFixed(2)}%)` +

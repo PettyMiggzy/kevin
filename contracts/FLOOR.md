@@ -440,10 +440,15 @@ watch it think before it has any money.
   FLOOR_ADDRESS       the contract
   ROBINHOOD_RPC_URL   your RPC
   TICK_MS             how often to look, default 45s
+  FEED_URL            optional sequencer feed; off by default, ~32 GB/day
+  IDLE_MS             the backstop tick when the feed is on, default 5m
   MIN_GAS_WEI         stop sending under this operator balance, default 0.002 ETH
   keeper/.operator.key    the hot key, chmod 600, gitignored
 
-`keeper/kevin-floor.service` is the systemd unit, and it starts in dry run.
+`keeper/kevin-floor@.service` is the systemd unit. It is a template — one
+instance per pool, `kevin-floor@weth` and `kevin-floor@kek`, each reading
+`/etc/kevin/floor-<pool>.env` — and every instance starts in dry run.
+[keeper/README.md](../keeper/README.md) has the install and the running costs.
 
 It has been driven end to end against a local anvil with a real v4 PoolManager,
 a real pool and real liquidity, through the whole cycle: it sold into the room
