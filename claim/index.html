@@ -186,6 +186,8 @@
    the page says there is no round rather than inventing one. */
 (function () {
   var CHAIN_ID = 4663;
+  // null = not checked yet, false = the chain says no such round.
+  var roundLive = null;
   // READ-ONLY, AND DELIBERATELY NOT THROUGH A WALLET. The whole promise of this
   // page is that looking costs nothing and needs no wallet, so the claimed/
   // unclaimed state has to be readable without one too. Writes still go through
@@ -216,7 +218,14 @@
   // person who pressed Claim would have paid gas to deploy their own claim
   // calldata and received nothing, while this page told them "Sent." in green.
   var isAddress = function (v) { return /^0x[0-9a-fA-F]{40}$/.test(v || ''); };
-  function roundIsOpen(d) { return isAddress(d && d.airdrop) && !!(d && d.payout && d.payout.symbol); }
+  // A FILE CANNOT MAKE A ROUND EXIST. This used to be true as soon as
+  // round.json named a distributor, which meant the gap between deploying the
+  // contract and funding the round — a gap that is deliberate and can last
+  // days — showed a live Claim button for a round the chain would reject.
+  function fileNamesADistributor(d) {
+    return isAddress(d && d.airdrop) && !!(d && d.payout && d.payout.symbol);
+  }
+  function roundIsOpen(d) { return fileNamesADistributor(d) && roundLive === true; }
 
   fetch('round.json', { cache: 'no-store' })
     .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
@@ -229,7 +238,11 @@
       set('s-min', fmt(d.minBalance) + ' KEVIN');
       set('s-total', fmt(d.total) + (sym ? ' ' + sym : ''));
       set('s-root', d.root);
-      set('s-airdrop', open ? d.airdrop : 'not deployed');
+      // The address is a fact the FILE knows. Whether a round is open is a
+      // fact only the CHAIN knows, and the two were being printed as one — so
+      // a deployed distributor with no round yet read as "not deployed",
+      // which is simply untrue and is the sort of thing people screenshot.
+      set('s-airdrop', fileNamesADistributor(d) ? d.airdrop : 'not deployed');
       if (open) {
         // The served copy says the round is closed, because it is. Replace the
         // prose only when the file says otherwise, and leave the numbers where
@@ -242,6 +255,33 @@
       }
       lookup.hidden = false;
       renderEveryone();
+
+      if (fileNamesADistributor(d)) {
+        readRoundState(d.airdrop, d.roundId || 0).then(function (st) {
+          if (!st.exists) {
+            roundLive = false;
+            set('s-airdrop', d.airdrop + ' — deployed, no round opened yet');
+            return;
+          }
+          if (st.root.toLowerCase() !== String(d.root).toLowerCase()) {
+            // The published list is not the one the contract is paying out.
+            // Refuse loudly rather than let anybody build a proof against it.
+            roundLive = false;
+            state.innerHTML = '<p class="lead"><b>This page and the chain disagree.</b></p>' +
+              '<p>The contract at ' + esc(d.airdrop) + ' is paying out a different list ' +
+              'from the one published here. Do not claim anything and ask in the group.</p>';
+            return;
+          }
+          roundLive = true;
+          renderEveryone();
+          if (document.getElementById('addr').value.trim()) {
+            document.getElementById('check').click();
+          }
+        }).catch(function () {
+          // Could not ask. Stay closed — never open a claim on a failed read.
+          roundLive = false;
+        });
+      }
     })
     .catch(function () {
       // No file, or an unreadable one, means no round. Never imply otherwise —
@@ -278,9 +318,14 @@
       (open
         ? '<div class="row"><button class="btn" id="doclaim">Claim it</button></div>' +
           '<p class="muted" style="margin-top:14px">You pay the gas. Nothing moves until you sign.</p>'
-        : '<p class="muted" style="margin-top:14px">There is nothing to claim from yet — the ' +
-          'distributor is not deployed. This amount is what the published list says you are ' +
-          'owed when it opens. No wallet will be asked to sign anything today.</p>') +
+        : '<p class="muted" style="margin-top:14px">There is nothing to claim from yet — ' +
+          (fileNamesADistributor(round)
+            ? 'the distributor is deployed but no round has been opened in it. Deploying and '
+              + 'funding are separate steps on purpose, and nothing can be claimed until the '
+              + 'second one happens.'
+            : 'the distributor is not deployed.') +
+          ' This amount is what the published list says you are owed when it opens. ' +
+          'No wallet will be asked to sign anything today.</p>') +
       '</div>';
     if (open) document.getElementById('doclaim').onclick = function () { send(c, key); };
   }
@@ -343,6 +388,37 @@
 
   function short(a) { return a.slice(0, 6) + '…' + a.slice(-4); }
 
+  /// A DEPLOYED DISTRIBUTOR IS NOT AN OPEN ROUND, and the page used to treat
+  /// them as the same thing: put an address in round.json and the Claim button
+  /// went live. Deploying and funding are deliberately separate steps in this
+  /// contract, so between them `roundCount()` is 0 and every claim would
+  /// revert NoSuchRound after the holder had paid gas to find out.
+  ///
+  /// This asks the chain two questions the file cannot answer: does the round
+  /// exist, and does its root match the list published here. The second is the
+  /// stronger one — it is exactly the check the docs tell strangers to make.
+  async function readRoundState(distributor, roundId) {
+    var call = function (data) {
+      return fetch(READ_RPC, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call',
+          params: [{ to: distributor, data: data }, 'latest'] }),
+      }).then(function (r) { return r.json(); });
+    };
+    var w = function (n) { return BigInt(n).toString(16).padStart(64, '0'); };
+    var cnt = await call('0x127f0b3f'); // roundCount()
+    if (cnt.error) throw new Error(cnt.error.message);
+    var count = BigInt(cnt.result || '0x0');
+    if (count <= BigInt(roundId)) return { exists: false, count: count };
+    var r = await call('0x8c65c81f' + w(roundId)); // rounds(uint256)
+    if (r.error) throw new Error(r.error.message);
+    // The struct is ABI-encoded behind an offset; root is the second word of
+    // the struct body, and the body starts one word in.
+    var hex = (r.result || '').slice(2);
+    var root = '0x' + hex.slice(64 * 2, 64 * 3);
+    return { exists: true, count: count, root: root };
+  }
+
   async function readIsClaimed(distributor, roundId, index) {
     // isClaimed(uint256,uint256) -> bool
     var sel = '0xf364c90c'; // verified with `cast sig`, not guessed
@@ -373,7 +449,7 @@
     });
 
     var sym = (round.payout && round.payout.symbol) || '';
-    var live = isAddress(round && round.airdrop);
+    var live = isAddress(round && round.airdrop) && roundLive === true;
     var typed = (document.getElementById('addr').value || '').trim().toLowerCase();
 
     body.innerHTML = rows.map(function (r) {
@@ -390,8 +466,11 @@
     }).join('');
 
     if (!live) {
-      note.textContent = 'Status stays blank until a distributor exists. Nothing has been '
-        + 'claimed because there is nothing to claim from yet.';
+      note.textContent = fileNamesADistributor(round)
+        ? 'The distributor is deployed, but no round has been opened in it yet, so nothing '
+          + 'can have been claimed. Status fills in per row once a round exists.'
+        : 'Status stays blank until a distributor exists. Nothing has been claimed because '
+          + 'there is nothing to claim from yet.';
       return;
     }
 
