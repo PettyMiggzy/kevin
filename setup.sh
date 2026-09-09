@@ -55,9 +55,13 @@ chmod 600 /etc/systemd/system/kevin-bot.service.d/local.conf
 ok "unit + drop-in installed (bot talks to scores over localhost)"
 
 # --- the floor keepers -------------------------------------------------------
-# TWO of them now, one per pool, from one systemd template unit. Installed
-# always, started only when told what to drive. They are the only services here
-# that can spend money, so they do not come up by accident.
+# One systemd template unit, one instance per pool driven. Installed always,
+# started only for a pool you have written a file for. They are the only
+# services here that can spend money, so they do not come up by accident.
+#
+# Today that is the KEK pool only. The WETH floor is deployed and tuned but
+# deliberately not driven, and with no /etc/kevin/floor-weth.env it never
+# starts — the contract holds nothing and nothing pokes it.
 say "Floor keepers"
 
 install -m 644 'keeper/kevin-floor@.service' '/etc/systemd/system/kevin-floor@.service'
@@ -94,14 +98,19 @@ else
   bad "keeper/.operator.key is missing — the keeper can only dry-run"
 fi
 
-# One instance per pool. The env file is seeded from the example the first time
-# and never overwritten after that, so a re-run cannot undo your tuning.
+# One instance per pool, and A POOL IS ONLY DRIVEN IF YOU CREATED ITS FILE.
+#
+# This used to seed /etc/kevin/floor-<pool>.env from the example, which meant a
+# single ./setup.sh silently started a keeper on EVERY pool that has a contract
+# deployed — including one the owner had decided not to run. That is exactly
+# the "does not come up by accident" rule this section claims to follow, broken
+# by the thing meant to be convenient. Copying one file is not a hardship.
 KEEPER_POOLS=""
 for pool in weth kek; do
   envf="/etc/kevin/floor-$pool.env"
   if [ ! -e "$envf" ]; then
-    install -m 640 "keeper/floor-$pool.env.example" "$envf"
-    ok "$pool: seeded $envf"
+    ok "$pool: no $envf, so not driving that pool (this is the default)"
+    continue
   fi
   if grep -qE '^FLOOR_ADDRESS=0x[0-9a-fA-F]{40}' "$envf"; then
     KEEPER_POOLS="$KEEPER_POOLS $pool"
@@ -111,9 +120,17 @@ for pool in weth kek; do
       ok "$pool: dry run (no LIVE=1)"
     fi
   else
-    bad "$pool: no FLOOR_ADDRESS in $envf, so not starting it"
+    bad "$pool: $envf has no FLOOR_ADDRESS, so not starting it"
   fi
 done
+
+if [ -z "$KEEPER_POOLS" ]; then
+  bad "no pool is being driven. To drive the KEK pool:"
+  cat >&2 <<'EOF'
+        cp keeper/floor-kek.env.example /etc/kevin/floor-kek.env
+        ./setup.sh
+EOF
+fi
 
 # --- the buy watch -----------------------------------------------------------
 # Reads the chain, posts with the bot token the bot already uses. It holds no

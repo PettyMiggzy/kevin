@@ -124,9 +124,40 @@ const ABI = [
   { type: 'function', name: 'dailyTokenCap', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'quoteInBucket', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'dailyQuoteCap', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'bucketDrainedAt', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  // THE ERRORS BELONG IN THE ABI TOO, and leaving them out was not cosmetic.
+  // A revert with a custom error carries only a 4-byte selector, and viem can
+  // only name it if the ABI declares it. Without these, every ordinary refusal
+  // — cooldown not up, daily cap reached — came back as the literal string
+  // 'The contract function "poke" reverted with the following signature:
+  // 0x6fed7d85', which act()'s classifier could not match. So the keeper logged
+  // "!! send failed" for the system working exactly as designed. Caught by
+  // running the keeper LIVE against a fork of the real chain, where it printed
+  // that warning every three seconds forever.
+  { type: 'error', name: 'NotOperator', inputs: [] },
+  { type: 'error', name: 'NotManager', inputs: [] },
+  { type: 'error', name: 'NothingToDo', inputs: [] },
+  { type: 'error', name: 'TooSoon', inputs: [] },
+  { type: 'error', name: 'OverDailyCap', inputs: [] },
+  { type: 'error', name: 'NoFloorYet', inputs: [] },
+  { type: 'error', name: 'BadParam', inputs: [] },
+];
+
+// The lockbox's errors, for the same reason. Note its TooSoon carries a
+// timestamp, so it is a DIFFERENT error from the floor's identically named one
+// and needs its own entry.
+const LOCK_ERRORS = [
+  { type: 'error', name: 'NotBeneficiary', inputs: [] },
+  { type: 'error', name: 'NothingToRelease', inputs: [] },
+  { type: 'error', name: 'OnlySlower', inputs: [] },
+  { type: 'error', name: 'NoExitPending', inputs: [] },
+  { type: 'error', name: 'TooSoon', inputs: [{ type: 'uint256' }] },
+  { type: 'error', name: 'ExitExpired', inputs: [{ type: 'uint256' }] },
+  { type: 'error', name: 'BadParam', inputs: [] },
 ];
 
 const LOCK_ABI = [
+  ...LOCK_ERRORS,
   { type: 'function', name: 'releasable', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'release', stateMutability: 'nonpayable', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'ratePerDay', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -394,11 +425,13 @@ async function main() {
   }
 
   async function tick() {
-    const [reading, paused, last, cool, sold, capT, spent, capQ, chest, mark, decay, gapBps, up, blk, held] =
+    const [reading, paused, last, cool, storedSold, capT, storedSpent, capQ, chest, drainedAt,
+      mark, decay, gapBps, up, blk, held] =
       await Promise.all([
         read('reading'), read('paused'), read('lastTradeAt'), read('cooldown'),
         read('tokensInBucket'), read('dailyTokenCap'),
         read('quoteInBucket'), read('dailyQuoteCap'), read('warChest'),
+        read('bucketDrainedAt'),
         read('floorSqrtPriceX96'), read('floorDecayBps'),
         read('floorGapBps'), read('upIsUp'), pub.getBlock(), inventory(),
       ]);
@@ -443,6 +476,46 @@ async function main() {
     }
     if (buy && capQ === 0n) {
       return note('under the buy band, but dailyQuoteCap is 0 — setRails() first, it cannot bid');
+    }
+    // THE BUCKETS DRAIN LAZILY, AND READING THEM RAW IS A LIE.
+    //
+    // The contract only writes tokensInBucket/quoteInBucket down inside
+    // _tick(), which runs during a trade. Between trades the stored number
+    // stays exactly where the last sale left it while the real allowance
+    // refills continuously underneath. So a keeper that reads the slot sees a
+    // full bucket hours after it actually emptied — and a guard built on that
+    // reading refuses to trade when the contract would happily have traded.
+    // Caught on a fork: a full simulated day passed, the contract had drained,
+    // and the keeper still reported the day's selling used up.
+    //
+    // This mirrors _tick()'s arithmetic exactly, including the rounding down,
+    // so the keeper's view matches what the contract will compute.
+    const dt = blk.timestamp > drainedAt ? blk.timestamp - drainedAt : 0n;
+    const drained = (stored, cap) => {
+      const out = (cap * dt) / 86_400n;
+      return out >= stored ? 0n : stored - out;
+    };
+    const sold = drained(storedSold, capT);
+    const spent = drained(storedSpent, capQ);
+
+    // THE DAY'S ALLOWANCE IS ALREADY KNOWN. Both numbers are in hand and
+    // printed in every line, so poking while the bucket is full is asking a
+    // question the keeper has already answered. Running LIVE against a fork
+    // with the bucket over cap, it tried and was refused on every single tick
+    // — a wall of identical failures that hides anything real underneath.
+    // Say WHEN it frees up, not how full it is. The bucket drains every second,
+    // so a message carrying the level changes on every tick and defeats the
+    // repeat-suppression in note() — the quiet hour it is meant to produce
+    // becomes eighty lines counting down. The wait is the useful number, and
+    // it is stable enough to say once.
+    const freeIn = (level, cap) => (cap === 0n ? 0n : ((level - cap) * 86_400n) / cap);
+    if (sell && sold >= capT) {
+      return note("the day's selling is used up"
+        + ` (${formatUnits(capT, 18)} $KEVIN a day) — room again in ${forHumans(freeIn(sold, capT))}`);
+    }
+    if (buy && spent >= capQ) {
+      return note("the day's buying is used up"
+        + ` (${formatEther(capQ)} a day) — room again in ${forHumans(freeIn(spent, capQ))}`);
     }
 
     const state =
@@ -601,7 +674,14 @@ async function main() {
     } catch (e) {
       const m = e.shortMessage || e.message || String(e);
       // These are the contract saying no, which is the system working.
-      if (/NothingToDo|TooSoon|OverDailyCap|NothingToRelease/.test(m)) return say('  declined by the contract:', m.split('\n')[0]);
+      // Match the NAME, and the raw SELECTOR as a fallback: if the ABI ever
+      // drifts from the deployed contract again, a refusal must still be
+      // recognised as a refusal rather than shouted about as a failure.
+      const DECLINED = /NothingToDo|TooSoon|OverDailyCap|NothingToRelease|NoFloorYet/;
+      const SELECTORS = /0x5c52a868|0x6fed7d85|0xc4891db5|0xfd8d3df4/;
+      if (DECLINED.test(m) || SELECTORS.test(m)) {
+        return say('  declined by the contract:', m.split('\n')[0]);
+      }
       warn('  send failed:', m.split('\n')[0]);
     }
   }

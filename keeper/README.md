@@ -1,11 +1,16 @@
 # The floor keepers
 
-Two processes, one per pool. Same program, different `FLOOR_ADDRESS`.
+One program, one instance per pool driven. **Today that is the KEK pool only.**
 
 | Pool | Contract | State |
 |---|---|---|
-| KEVIN / WETH | `0xd7309Cc9383Feb44d09202764A72951B962a25Ab` | tuned, floor set, holds no $KEVIN yet |
-| KEVIN / KEK | `0x47Dd22f76129d4AeC0c93668b905BC360657A29C` | tuned, floor set, holds no $KEVIN yet |
+| KEVIN / KEK | `0x47Dd22f76129d4AeC0c93668b905BC360657A29C` | the one being driven — tuned, floor set, holds no $KEVIN yet |
+| KEVIN / WETH | `0xd7309Cc9383Feb44d09202764A72951B962a25Ab` | deployed and tuned, **not driven** — no keeper, holds nothing |
+
+The WETH floor is inert by construction rather than by promise: `poke()` is
+`onlyOperator`, so with no keeper process running, nothing calls it. It also
+holds no $KEVIN and no war chest, so a poke would revert even if something did.
+Leaving it deployed costs nothing and keeps the option open.
 
 The keeper holds no money and decides nothing that matters. Every limit that
 protects the treasury lives in the contract, where the keeper cannot reach it.
@@ -14,18 +19,22 @@ moment, until it runs out of daily allowance.
 
 ## Running it
 
+A pool is driven only if you created its file. `setup.sh` does not seed them:
+that is the difference between "installed" and "running", and it should be a
+decision, not a default.
+
 ```sh
-cp 'keeper/kevin-floor@.service' /etc/systemd/system/
-mkdir -p /etc/kevin
-cp keeper/floor-weth.env.example /etc/kevin/floor-weth.env
-cp keeper/floor-kek.env.example  /etc/kevin/floor-kek.env
-systemctl daemon-reload
-systemctl enable --now kevin-floor@weth kevin-floor@kek
-journalctl -fu kevin-floor@weth -u kevin-floor@kek
+cp keeper/floor-kek.env.example /etc/kevin/floor-kek.env   # the KEK pool, and only it
+./setup.sh
+journalctl -fu 'kevin-floor@kek'
 ```
 
-Both start in **dry run**. They print what they would do and send nothing.
-`LIVE=1` in one pool's env file turns that pool on, and no other.
+To drive the WETH pool later, copy `floor-weth.env.example` the same way and
+re-run `setup.sh`. Until that file exists, no WETH keeper is installed, enabled
+or started.
+
+It starts in **dry run**: it prints what it would do and sends nothing. `LIVE=1`
+in that pool's env file turns that pool on, and no other.
 
 ## Before LIVE=1
 
@@ -33,11 +42,24 @@ A poke reverts unless the contract has something to trade with, so turning it
 on early just burns gas on failures. The keeper refuses to poke into that now —
 it says so instead — but the fix is funding, not the guard:
 
-1. **ETH to the operator** `0x92B129f7…`, for gas. About 0.01 ETH is 170 pokes.
-2. **$KEVIN to the floor contract** so it has something to sell.
-3. **WETH / KEK via `fundWarChestToken()`** so it has something to buy with.
-   A plain transfer does not count — the war chest is a number the contract
-   keeps, and only that function credits it.
+1. **ETH to the operator** `0x92B129f7…`, for gas. Measured on a fork of the
+   real chain at 0.1919 gwei: a poke is 176k–213k gas, a ratchet 64k–98k, so
+   0.01 ETH is roughly 400 pokes. The keeper stops sending below 0.002 ETH.
+2. **$KEVIN to the floor contract** so it has something to sell. Read the
+   sizing note below before choosing the amount — it will sell what you send.
+3. **KEK via `fundWarChestToken()`** so it has something to buy with. That
+   function uses `transferFrom`, so `approve()` the floor first. A plain
+   transfer does not count: the war chest is a number the contract keeps, and
+   only that function credits it.
+
+### One key, or two
+
+Both floors currently name the same operator. If you ever drive both pools at
+once, give the second one its own hot key and `setOperator()` it: two processes
+signing from one address pick the same nonce and one transaction is silently
+lost. Demonstrated against anvil — the second send fails with "nonce provided
+is lower than the current nonce" and never lands. Driving one pool, as now,
+this does not arise.
 
 ## What it costs to watch
 
