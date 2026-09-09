@@ -180,10 +180,26 @@ p { margin: 0 0 1em; }
   gap: 18px;
   padding: 10px 0;
 }
-.nav__brand { display: flex; align-items: center; gap: 12px; text-decoration: none; margin-right: auto; }
+/* THE BRAND USED TO BE `margin-right: auto` WITH NOTHING TO STOP THE LINKS.
+   A flex item will not shrink below its content by default, so once the row
+   overflowed the links simply ran over the top of the wordmark — at 1440px
+   "KEVIN" and "Plan" were printed on top of each other and the first link was
+   unreadable. Fixed at the cause (there are fewer links now) and made
+   structurally impossible here: the brand never shrinks, the links are the
+   only thing allowed to give, and giving means scrolling rather than
+   overlapping. */
+.nav__brand {
+  display: flex; align-items: center; gap: 12px; text-decoration: none;
+  flex: 0 0 auto; min-width: 0;
+}
 .nav__brand img { width: 46px; height: 46px; border: 3px solid var(--ink); border-radius: 50%; }
 .nav__brand span { font-family: var(--display); font-size: 28px; letter-spacing: 0.04em; }
-.nav__links { display: flex; gap: 15px; align-items: center; }
+.nav__links {
+  display: flex; gap: 20px; align-items: center;
+  flex: 1 1 auto; min-width: 0; justify-content: center;
+  overflow-x: auto; scrollbar-width: none;
+}
+.nav__links::-webkit-scrollbar { display: none; }
 .nav__social { display: flex; gap: 8px; align-items: center; flex: 0 0 auto; }
 .nav__links a {
   text-decoration: none;
@@ -208,6 +224,12 @@ p { margin: 0 0 1em; }
   .nav__links {
     order: 3;
     width: 100%;
+    /* NOT centred here. Centring a row that overflows its scroll container
+       centres the CONTENT, so the scroll position starts in the middle and
+       the first links sit off-screen to the left — "Chain" was invisible on a
+       phone until you dragged the row backwards, which nobody would think to
+       do. Centring is only safe on desktop, where the row fits. */
+    justify-content: flex-start;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
