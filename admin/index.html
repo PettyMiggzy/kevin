@@ -162,7 +162,7 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
     maxDecay:'0x1210d687', tokBucket:'0x1cf4480a', quoteBucket:'0xe4246742',
     lastTrade:'0x74452ec3', lastRatchet:'0x2da40f35', pendingFloor:'0x9eee6f25',
     balanceOf:'0x70a08231',
-    pause:'0x8456cb59', unpause:'0x3f4ba83a', poke:'0x32145f90', ratchet:'0x5679abee',
+    pause:'0x8456cb59', unpause:'0x3f4ba83a', poke:'0x8029e7c0', ratchet:'0x5679abee',
     observe:'0x14fc78fc', setFloorFromSpot:'0x000f49b6',
     setRails:'0x108452db', setPolicy:'0x0169a27a'
   };
@@ -615,8 +615,15 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
     KEEPERS.forEach(function (k, i) {
       $('obs' + i).onclick = function () { send(k.addr, SIG.observe, 'observe() on ' + k.name); };
       $('rat' + i).onclick = function () { send(k.addr, SIG.ratchet, 'ratchet() on ' + k.name); };
+      // poke(size, minRateX96) — a zero rate means "no opinion on the price",
+      // which is right for a button pressed by hand: the person clicking it
+      // has looked at the chart, and there is no earlier block to price
+      // against. The KEEPER always passes a real rate; this is the rescue path.
       $('pok' + i).onclick = function () {
-        send(k.addr, SIG.poke + w((1n << 256n) - 1n), 'poke(max) on ' + k.name); };
+        if (!confirm('poke(max) with NO slippage bound.\n\nThe keeper always names a price. '
+          + 'This button does not, so a sandwich in the same block would go through. '
+          + 'Use it when the keeper is down and you have looked at the chart.')) return;
+        send(k.addr, SIG.poke + w((1n << 256n) - 1n) + w(0n), 'poke(max, no bound) on ' + k.name); };
       $('pau' + i).onclick = function () { send(k.addr, SIG.pause, 'PAUSE ' + k.name); };
       $('unp' + i).onclick = function () { send(k.addr, SIG.unpause, 'unpause ' + k.name); };
       $('flr' + i).onclick = function () {

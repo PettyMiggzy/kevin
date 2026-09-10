@@ -17,6 +17,7 @@ import {PoolModifyLiquidityTest} from "v4-core/src/test/PoolModifyLiquidityTest.
 import {PoolSwapTest} from "v4-core/src/test/PoolSwapTest.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * Against a REAL v4 PoolManager and a real initialised pool, not a mock — the
@@ -214,7 +215,7 @@ contract KevinFloorV4Test is Test {
         for (uint256 i = 0; i < 12; i++) {
             _tock();
             vm.prank(operator);
-            try floor.poke(type(uint256).max) {} catch {}
+            try floor.poke(type(uint256).max, 0) {} catch {}
         }
 
         // upIsUp is false here, so "not past the floor" means spot <= floorAt.
@@ -225,7 +226,7 @@ contract KevinFloorV4Test is Test {
         _arm(200); // a tight floor: only a little room
         uint256 before = kevin.balanceOf(address(floor));
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         uint256 sold = before - kevin.balanceOf(address(floor));
         assertGt(sold, 0, "it sold something");
         assertLt(sold, before, "and kept the rest rather than dumping it");
@@ -239,23 +240,23 @@ contract KevinFloorV4Test is Test {
         assertFalse(sell, "no room above the floor");
         vm.prank(operator);
         vm.expectRevert(KevinFloorV4.NothingToDo.selector);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
     }
 
     function test_buyPressureOpensRoomAndItSellsIntoIt() public {
         _arm(200);
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         uint256 afterFirst = kevin.balanceOf(address(floor));
 
         vm.prank(operator);
         vm.expectRevert(); // the room it had is gone
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
 
         _buyPressure(30 ether); // somebody buys
         vm.warp(block.timestamp + 5 minutes);
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         assertLt(kevin.balanceOf(address(floor)), afterFirst, "it sold into the buying");
     }
 
@@ -316,14 +317,14 @@ contract KevinFloorV4Test is Test {
     function test_aShareOfEverySaleIsHeldBackToBidWith() public {
         _arm(1_500);
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         assertGt(floor.warChest(), 0, "30% of the proceeds kept");
     }
 
     function test_itBidsWhenThePriceFallsUnderTheBand() public {
         _arm(1_500);
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         uint256 chest = floor.warChest();
         assertGt(chest, 0);
 
@@ -334,7 +335,7 @@ contract KevinFloorV4Test is Test {
         vm.warp(block.timestamp + 5 minutes);
         uint256 tokensBefore = kevin.balanceOf(address(floor));
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         assertLt(floor.warChest(), chest, "it spent some of the chest");
         assertGt(kevin.balanceOf(address(floor)), tokensBefore, "and got tokens back");
     }
@@ -356,10 +357,10 @@ contract KevinFloorV4Test is Test {
         vm.prank(owner);
         floor.setRails(1 ether, 50 ether, 2_000_000 ether, 200 ether, 5 minutes);
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         vm.prank(operator);
         vm.expectRevert(KevinFloorV4.TooSoon.selector);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
     }
 
     function test_dailyCapBoundsALeakedKey() public {
@@ -373,7 +374,7 @@ contract KevinFloorV4Test is Test {
         for (uint256 i = 0; i < 20; i++) {
             vm.warp(block.timestamp + 5 minutes);
             vm.prank(operator);
-            try floor.poke(type(uint256).max) {} catch {}
+            try floor.poke(type(uint256).max, 0) {} catch {}
         }
         uint256 sold = before - kevin.balanceOf(address(floor));
         assertLe(sold, floor.dailyTokenCap(), "a day of abuse is one day's allowance");
@@ -395,7 +396,7 @@ contract KevinFloorV4Test is Test {
         vm.stopPrank();
         uint256 before = kevin.balanceOf(address(floor));
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         assertEq(before - kevin.balanceOf(address(floor)), 1 ether, "clamped to the cap");
     }
 
@@ -405,7 +406,7 @@ contract KevinFloorV4Test is Test {
         _arm(1_500);
         uint256 before = kevin.balanceOf(address(floor));
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         uint256 sold = before - kevin.balanceOf(address(floor));
         assertGt(sold, 0, "it sold what fitted");
         assertLt(sold, floor.maxTokensPerTrade(), "and stopped well short of the cap");
@@ -417,7 +418,7 @@ contract KevinFloorV4Test is Test {
         _arm(1_500);
         vm.prank(stranger);
         vm.expectRevert(KevinFloorV4.NotOperator.selector);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
     }
 
     function test_operatorCannotMoveTheFloor() public {
@@ -447,13 +448,13 @@ contract KevinFloorV4Test is Test {
         floor.pause();
         vm.prank(operator);
         vm.expectRevert(Pausable.EnforcedPause.selector);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
     }
 
     function test_itDoesNothingBeforeTheFloorIsSet() public {
         vm.prank(operator);
         vm.expectRevert(KevinFloorV4.NoFloorYet.selector);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
     }
 
     function test_ownerSweeps() public {
@@ -476,7 +477,7 @@ contract KevinFloorV4Test is Test {
 
         uint160 before = _spot();
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         uint160 after_ = _spot();
         // In PRICE terms, which is what sellStopBps is denominated in and what
         // anybody looking at the chart would measure.
@@ -492,7 +493,7 @@ contract KevinFloorV4Test is Test {
         floor.setPolicy(1_500, 500, 800, 3_000, MAX_STOP); // the loosest stop allowed
         uint160 floorAt = floor.floorSqrtPriceX96();
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         assertLe(_spot(), floorAt, "the floor, not the stop, was the limit");
     }
 
@@ -539,7 +540,7 @@ contract KevinFloorV4Test is Test {
 
         uint256 before = kevin.balanceOf(address(floor));
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         assertLt(kevin.balanceOf(address(floor)), before, "and it actually sold");
     }
 
@@ -622,7 +623,7 @@ contract KevinFloorV4Test is Test {
 
         uint160 mark = _mark();
         vm.prank(operator);
-        floor.poke(type(uint256).max); // the keeper wakes up
+        floor.poke(type(uint256).max, 0); // the keeper wakes up
         assertEq(floor.floorDecayBps(), 0, "and it is still zero afterwards");
         assertLe(_spot(), mark, "so the sale was against the full floor");
     }
@@ -636,7 +637,7 @@ contract KevinFloorV4Test is Test {
         vm.warp(block.timestamp + 30 days); // nobody watching, chart fine
         _sellPressure(400_000 ether); // now it dips under the floor
         vm.prank(operator);
-        try floor.poke(type(uint256).max) {} catch {}
+        try floor.poke(type(uint256).max, 0) {} catch {}
         assertLt(
             floor.floorDecayBps(),
             floor.maxDecayBps(),
@@ -683,7 +684,7 @@ contract KevinFloorV4Test is Test {
             for (uint256 i = 0; i < 6; i++) {
                 _tock();
                 vm.prank(operator);
-                try floor.poke(type(uint256).max) {} catch {}
+                try floor.poke(type(uint256).max, 0) {} catch {}
             }
             if (kevin.balanceOf(address(floor)) < held) everSold = true;
             uint256 earned = floor.floorDecayBps();
@@ -802,7 +803,7 @@ contract KevinFloorV4Test is Test {
     function test_theBuyBandIsAPricePercentage() public {
         _arm(1_500);
         vm.prank(operator);
-        floor.poke(type(uint256).max); // fills the chest so `buy` can be true
+        floor.poke(type(uint256).max, 0); // fills the chest so `buy` can be true
         uint160 mark = _mark();
 
         // Walk the price down a token at a time and watch where it starts
@@ -925,12 +926,12 @@ contract KevinFloorV4Test is Test {
         floor.setRails(1 ether, 50 ether, 1.5 ether, 200 ether, 60);
 
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         assertEq(floor.tokensInBucket(), 1 ether, "the first trade took its fill");
 
         _tock();
         vm.prank(operator);
-        floor.poke(type(uint256).max); // used to revert OverDailyCap here
+        floor.poke(type(uint256).max, 0); // used to revert OverDailyCap here
         // The bucket drains continuously, so 61 seconds of a 1.5/day allowance
         // has already leaked back out by the time the second poke lands. It is
         // ~1.06e15 wei of slack, not a rounding artefact to paper over.
@@ -947,7 +948,7 @@ contract KevinFloorV4Test is Test {
         for (uint256 i = 0; i < 10; i++) {
             _tock();
             vm.prank(operator);
-            try floor.poke(type(uint256).max) {} catch {}
+            try floor.poke(type(uint256).max, 0) {} catch {}
         }
         // A leaky bucket has no boundary to sit on: the cap holds over every
         // window, so the most that can ever be outstanding is the cap itself.
@@ -970,7 +971,7 @@ contract KevinFloorV4Test is Test {
 
         if (pressure > 0) _buyPressure(pressure);
         vm.prank(operator);
-        try floor.poke(offer) {} catch {}
+        try floor.poke(offer, 0) {} catch {}
 
         // Buying by others can take the price past the floor in the GOOD
         // direction; this contract must never take it past in the bad one.
@@ -995,12 +996,136 @@ contract KevinFloorV4Test is Test {
         for (uint256 i = 0; i < 4; i++) {
             _tock();
             vm.prank(operator);
-            try floor.poke(offer) {} catch {}
+            try floor.poke(offer, 0) {} catch {}
         }
         assertLe(
             _worseByBps(_spot(), mark),
             (earned > notOurs ? earned : notOurs) + 1,
             "never past what waiting has earned"
         );
+    }
+
+    // --- the sandwich, and the parameter that stops it ----------------------
+
+    /// @dev What one $KEVIN is worth in ETH right now, as output-per-input in
+    ///      Q96 — the same shape `poke`'s `minRateX96` takes. This pool is
+    ///      ETH / $KEVIN, so sqrtPrice is $KEVIN per ETH and the rate a seller
+    ///      of $KEVIN cares about is its reciprocal, squared.
+    function _fairSellRateX96() internal view returns (uint256) {
+        uint256 sqrtP = uint256(_spot());
+        uint256 q = Math.mulDiv(1 << 96, 1 << 96, sqrtP); // (2^96 / sqrtP) * 2^96
+        return Math.mulDiv(q, 1 << 96, sqrtP);
+    }
+
+    /// HIGH, from the audit: `poke` took no slippage bound, and could not have
+    /// enforced one from inside the call even if it wanted to.
+    ///
+    /// The sell limit is `sellStopBps` under `spotSqrtPriceX96()` READ DURING
+    /// THE SWAP. An attacker who moves spot in the same block moves the stop
+    /// with it, so the contract recomputes a limit around the price the
+    /// attacker just set and fills all the way down to it. The floor still
+    /// holds. Everything between the honest price and the floor does not.
+    ///
+    /// Both halves are asserted, because only the pair is the finding: the
+    /// same poke that the keeper's rate REFUSES is one the old signature would
+    /// have executed without complaint.
+    function test_aSandwichIsRefusedWhenTheKeeperNamesItsPrice() public {
+        _arm(2_000); // floor 20% under, so there is a long way to fall
+        _buyPressure(10 ether); // and the price has run up since
+
+        // The keeper reads the price in an earlier block and decides what a
+        // fair fill looks like. 6% of room: the 2.5% stop, the 0.3% fee, and
+        // slack for a block of honest drift.
+        uint256 minRate = (_fairSellRateX96() * 9_400) / 10_000;
+
+        uint256 snap = vm.snapshotState();
+
+        // The attacker gets in front and crushes the price, staying above the
+        // floor so the sale still looks available.
+        _sellPressure(8 ether);
+
+        vm.prank(operator);
+        vm.expectPartialRevert(KevinFloorV4.Slipped.selector);
+        floor.poke(type(uint256).max, minRate);
+
+        // Same block, same manipulated price, no rate named: it goes through.
+        // That is the hole, and it is why the parameter is not optional.
+        vm.prank(operator);
+        floor.poke(type(uint256).max, 0);
+        assertGt(floor.warChest(), 0, "the unprotected poke filled");
+
+        // And with no attacker in front of it, the keeper's own rate is not
+        // in the way of an honest fill.
+        vm.revertToState(snap);
+        vm.prank(operator);
+        floor.poke(type(uint256).max, minRate);
+        assertGt(floor.warChest(), 0, "an honest fill clears the same bound");
+    }
+
+    /// The bid has the same exposure pointed the other way: its limit is the
+    /// floor, so an attacker who lifts the price before the keeper's bid lands
+    /// makes the contract pay up to the floor for fewer tokens.
+    function test_theBidAlsoRefusesAPriceItDidNotAgreeTo() public {
+        _arm(1_500);
+        // Fill the war chest by selling into a rally first.
+        vm.prank(operator);
+        floor.poke(type(uint256).max, 0);
+        assertGt(floor.warChest(), 0, "war chest funded");
+        _tock();
+
+        // Now the price falls under the buy band and the keeper wants to bid.
+        vm.warp(block.timestamp + 6 minutes);
+        _sellPressure(25 ether);
+        (, bool wantsToBuy,,) = floor.reading();
+        assertTrue(wantsToBuy, "the contract wants to bid");
+
+        // Tokens per ETH is the sqrt price squared, in this pool's orientation.
+        uint256 sqrtP = uint256(_spot());
+        uint256 fair = Math.mulDiv(sqrtP, sqrtP, 1 << 96);
+        uint256 minRate = (fair * 9_400) / 10_000;
+
+        uint256 snap = vm.snapshotState();
+
+        // The attacker lifts the price into the keeper's bid.
+        _buyPressure(5 ether);
+        vm.prank(operator);
+        vm.expectPartialRevert(KevinFloorV4.Slipped.selector);
+        floor.poke(type(uint256).max, minRate);
+
+        vm.revertToState(snap);
+        uint256 chestBefore = floor.warChest();
+        vm.prank(operator);
+        floor.poke(type(uint256).max, minRate);
+        assertLt(floor.warChest(), chestBefore, "an honest bid still goes out");
+    }
+
+    /// A rate of zero is the rescue path and has to keep working, because the
+    /// owner may need to move the contract by hand with no keeper running.
+    function test_aZeroRateStillMeansNoOpinion() public {
+        _arm(1_000);
+        _buyPressure(30 ether);
+        vm.prank(operator);
+        floor.poke(type(uint256).max, 0);
+        assertGt(floor.warChest(), 0, "zero disables the check, as documented");
+    }
+
+    /// The bound is a RATE, not an amount, precisely because the pool decides
+    /// the fill size here. The same fair price has to be acceptable whether
+    /// the keeper offers one token or everything it holds — an amount-shaped
+    /// bound would need the caller to predict a fill it cannot see.
+    function test_theBoundDoesNotDependOnTheSizeOffered() public {
+        _arm(1_000);
+        _buyPressure(10 ether);
+        uint256 minRate = (_fairSellRateX96() * 9_400) / 10_000;
+
+        uint256 snap = vm.snapshotState();
+        vm.prank(operator);
+        floor.poke(1 ether, minRate);
+        assertGt(floor.warChest(), 0, "a one-token offer clears the bound");
+
+        vm.revertToState(snap);
+        vm.prank(operator);
+        floor.poke(type(uint256).max, minRate);
+        assertGt(floor.warChest(), 0, "and so does everything it holds");
     }
 }

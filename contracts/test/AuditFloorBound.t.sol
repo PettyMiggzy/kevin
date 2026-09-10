@@ -105,7 +105,7 @@ contract AuditFloorBound is Test {
 
         uint160 before_ = _spot();
         vm.prank(operator);
-        try floor.poke(offer) {} catch { return; } // nothing to do is not a failure
+        try floor.poke(offer, 0) {} catch { return; } // nothing to do is not a failure
         uint160 after_ = _spot();
 
         uint256 survived = _survivedBps(before_, after_);

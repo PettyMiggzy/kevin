@@ -131,7 +131,7 @@ contract KevinFloorV4Erc20Test is Test {
         _arm(1_500);
         uint256 before = kevin.balanceOf(address(floor));
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         assertLt(kevin.balanceOf(address(floor)), before, "it sold");
         assertGt(quote.balanceOf(address(floor)), 0, "and was paid in the quote token");
         assertGt(floor.warChest(), 0, "a share of which is held back to bid with");
@@ -146,7 +146,7 @@ contract KevinFloorV4Erc20Test is Test {
         for (uint256 i = 0; i < 12; i++) {
             vm.warp(block.timestamp + 61);
             vm.prank(operator);
-            try floor.poke(type(uint256).max) {} catch {}
+            try floor.poke(type(uint256).max, 0) {} catch {}
         }
         assertGe(_spot(), floorAt, "upIsUp: never below the floor means never a smaller sqrt");
     }
@@ -154,7 +154,7 @@ contract KevinFloorV4Erc20Test is Test {
     function test_itBidsWithTheQuoteToken() public {
         _arm(1_500);
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         uint256 chest = floor.warChest();
         assertGt(chest, 0);
 
@@ -165,7 +165,7 @@ contract KevinFloorV4Erc20Test is Test {
         vm.warp(block.timestamp + 5 minutes);
         uint256 tokensBefore = kevin.balanceOf(address(floor));
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         assertLt(floor.warChest(), chest, "it spent quote tokens");
         assertGt(kevin.balanceOf(address(floor)), tokensBefore, "and got $KEVIN back");
     }
@@ -188,7 +188,7 @@ contract KevinFloorV4Erc20Test is Test {
     function test_sweepingTheFreeProfitLeavesTheWarChestFunded() public {
         _arm(1_500);
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         uint256 chest = floor.warChest();
         assertGt(chest, 0);
         uint256 bal = quote.balanceOf(address(floor));
@@ -206,7 +206,7 @@ contract KevinFloorV4Erc20Test is Test {
     function test_sweepingPastTheProfitDoesDebitTheWarChest() public {
         _arm(1_500);
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         uint256 chest = floor.warChest();
         uint256 bal = quote.balanceOf(address(floor));
 
@@ -219,7 +219,7 @@ contract KevinFloorV4Erc20Test is Test {
     function test_sweepingStrayEthLeavesTheWarChestAlone() public {
         _arm(1_500);
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         uint256 chest = floor.warChest();
 
         vm.deal(address(floor), 1 ether); // somebody sent ETH to a WETH-paired contract
@@ -233,7 +233,7 @@ contract KevinFloorV4Erc20Test is Test {
     function test_theBidStillWorksAfterAPartialSweep() public {
         _arm(1_500);
         vm.prank(operator);
-        floor.poke(type(uint256).max);
+        floor.poke(type(uint256).max, 0);
         uint256 chest = floor.warChest();
 
         vm.prank(owner);
@@ -242,7 +242,7 @@ contract KevinFloorV4Erc20Test is Test {
         _sellPressure(300_000 ether);
         vm.warp(block.timestamp + 5 minutes);
         vm.prank(operator);
-        floor.poke(type(uint256).max); // reverted on a phantom balance before
+        floor.poke(type(uint256).max, 0); // reverted on a phantom balance before
         assertLt(floor.warChest(), chest / 2 + 1, "it bid with what was actually there");
     }
 
