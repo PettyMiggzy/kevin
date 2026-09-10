@@ -227,11 +227,22 @@
   }
   function roundIsOpen(d) { return fileNamesADistributor(d) && roundLive === true; }
 
+  /** Replace the closed-round prose once the chain has confirmed a live round.
+   *  Idempotent: called again on a re-render, it must not strip more text. */
+  function showRoundOpen() {
+    var lead = state.querySelector('.lead');
+    if (!lead || lead.dataset.open === '1') return;
+    lead.dataset.open = '1';
+    lead.innerHTML = '<b>One round is open.</b> The full list and the root are below — ' +
+      'check them before you claim anything.';
+    var body = lead.nextElementSibling;
+    if (body && body.tagName === 'P') body.remove();
+  }
+
   fetch('round.json', { cache: 'no-store' })
     .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function (d) {
       round = d;
-      var open = roundIsOpen(d);
       var sym = (d.payout && d.payout.symbol) || '';
       var set = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
       set('s-holders', d.holders);
@@ -243,16 +254,6 @@
       // a deployed distributor with no round yet read as "not deployed",
       // which is simply untrue and is the sort of thing people screenshot.
       set('s-airdrop', fileNamesADistributor(d) ? d.airdrop : 'not deployed');
-      if (open) {
-        // The served copy says the round is closed, because it is. Replace the
-        // prose only when the file says otherwise, and leave the numbers where
-        // they are so nothing moves.
-        var lead = state.querySelector('.lead');
-        if (lead) lead.innerHTML = 'One round is open. The full list and the root are below — ' +
-          'check them before you claim anything.';
-        var body = lead && lead.nextElementSibling;
-        if (body && body.tagName === 'P') body.remove();
-      }
       lookup.hidden = false;
       renderEveryone();
 
@@ -273,6 +274,19 @@
             return;
           }
           roundLive = true;
+          // SWAP THE PROSE HERE, NOT EARLIER.
+          //
+          // This used to run synchronously inside the round.json handler,
+          // guarded by roundIsOpen(), which requires roundLive === true. But
+          // roundLive is null until THIS callback, so the guard was never once
+          // satisfied and the whole block was unreachable. The page would have
+          // gone on saying "the round is not open yet" and "not deployed" on
+          // the very day a round opened, directly above a working Claim
+          // button — the one moment it has to be right.
+          //
+          // A fact the chain owns cannot be rendered before the chain has been
+          // asked.
+          showRoundOpen();
           renderEveryone();
           if (document.getElementById('addr').value.trim()) {
             document.getElementById('check').click();
