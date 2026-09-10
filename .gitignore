@@ -62,3 +62,21 @@ data/.burnwatch.announced
 # promoted to a properly named regression test instead.
 contracts/test/Zz*.t.sol
 contracts/test/ZZ*.t.sol
+
+# Throwaway probe scripts. Reading the chain needs the repo's node_modules, so
+# these have to live at the root rather than in a scratch directory — but none
+# of them is worth committing, and forgetting to delete one leaves the tree
+# dirty. Anything matching this is temporary by construction.
+/.probe-*.mjs
+/.arb*.mjs
+/.px.mjs
+/.pools.mjs
+/.render.mjs
+/.shot.mjs
+/.rpccount.mjs
+/.verify.mjs
+/.errshape.mjs
+/.noncetest.mjs
+/.liveread.mjs
+/.treasury.mjs
+/.feedprobe.mjs
