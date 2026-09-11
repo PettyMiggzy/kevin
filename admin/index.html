@@ -164,7 +164,14 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
     balanceOf:'0x70a08231',
     pause:'0x8456cb59', unpause:'0x3f4ba83a', poke:'0x8029e7c0', ratchet:'0x5679abee',
     observe:'0x14fc78fc', setFloorFromSpot:'0x000f49b6',
-    setRails:'0x108452db', setPolicy:'0x0169a27a'
+    setRails:'0x108452db', setPolicy:'0x0169a27a',
+    // The war-chest rescue. `warChest` is a COUNTER, not a balance: the bid
+    // side spends the number, not the tokens, so quote sitting in the contract
+    // that was never funded through fundWarChestToken is invisible to it and
+    // the contract bids nothing while visibly holding money. The only way back
+    // is out and in again, because fundWarChestToken does a transferFrom and
+    // cannot credit what is already there.
+    sweep:'0x62c06767', approve:'0x095ea7b3', fundWarChestToken:'0x8ec6b4a3'
   };
 
   // Which pools a keeper process is actually driving. The WETH floor is
@@ -596,12 +603,28 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
           btn('flr' + i, 'Set floor from spot', 'btn--danger') + '</div>' +
         '<div class="note">Poke and ratchet are normally the keeper\'s job. Setting the floor from spot ' +
         'moves the high-water mark to wherever the price is right now — that is permanent in the up ' +
-        'direction and is not something to do casually.</div></div>';
+        'direction and is not something to do casually.</div>' +
+        // THE STRANDED-QUOTE RESCUE. warChest is a counter the bid side spends,
+        // not the contract's balance. Quote that arrived any other way — a
+        // plain transfer, or proceeds credited before a sweep — leaves the
+        // contract holding money it cannot bid with, and the status panel
+        // above says "War chest 0" next to a non-zero balance. These three
+        // buttons are the only route back, in this order.
+        '<hr><div class="note"><b>War chest</b> is a counter, not the balance. If the panel above shows ' +
+        'a war chest of 0 next to ' + k.qsym + ' it is holding, the bid side cannot see that money. ' +
+        'Send these three in order, waiting for each.</div>' +
+        '<div class="row"><input id="wc' + i + '" placeholder="' + k.qsym + ' amount in wei" size="30"></div>' +
+        '<div class="row">' + btn('wc1' + i, '1 · Pull ' + k.qsym + ' out', 'btn--danger') +
+          btn('wc2' + i, '2 · Approve it back') +
+          btn('wc3' + i, '3 · Register as war chest') + '</div>' +
+        '<div class="row"><input id="sw' + i + '" placeholder="$KEVIN amount in wei" size="30">' +
+          btn('swk' + i, 'Sweep $KEVIN out', 'btn--danger') + '</div></div>';
     }).join('') +
     '<div class="panel"><h3>Anything not here</h3>' +
-      '<p class="note">Deliberately not every function. openRound, sweep, setRails, setPolicy and ' +
-      'setLockbox move real money or are one-shot, and a mistyped number in a browser field is a ' +
-      'worse way to find that out than a command you can read back before pressing return.</p>' +
+      '<p class="note">Deliberately not every function. openRound, setRails, setPolicy and ' +
+      'setLockbox are one-shot or take five numbers at once, and a mistyped one in a browser field is a ' +
+      'worse way to find that out than a command you can read back before pressing return. ' +
+      'Sweep is here because the war-chest rescue needs it and there is no other route.</p>' +
       '<pre>~/.foundry/bin/cast send &lt;contract&gt; \'setRails(uint256,uint256,uint256,uint256,uint256)\' \\\n  &lt;maxTok&gt; &lt;maxQuote&gt; &lt;dayTok&gt; &lt;dayQuote&gt; &lt;cooldown&gt; \\\n  --private-key "$PRIVATE_KEY" --rpc-url ' + RPC + '</pre>' +
       '<p class="note"><b>There is no such number as "no cap".</b> setRails has no upper bound, so it ' +
       'will accept 2^256-1 without complaint — and then every poke reverts, because the bucket drains ' +
@@ -630,6 +653,36 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
         var g = ($('gap' + i).value || '').trim();
         if (!/^\d+$/.test(g) || +g === 0 || +g >= 10000) { alert('Gap must be 1–9999 bps.'); return; }
         send(k.addr, SIG.setFloorFromSpot + w(g), 'setFloorFromSpot(' + g + ') on ' + k.name);
+      };
+      // Whole-number wei only. A decimal typed here would reach BigInt() and
+      // throw inside the click handler, which in a browser means the button
+      // silently does nothing — the worst possible failure for a money button.
+      var amt = function (id) {
+        var v = ($(id).value || '').trim().replace(/[ ,_]/g, '');
+        if (!/^\d+$/.test(v) || v === '0') { alert('Amount must be a whole number of wei, and not zero.'); return null; }
+        return v;
+      };
+      $('wc1' + i).onclick = function () {
+        var v = amt('wc' + i); if (!v) return;
+        send(k.addr, SIG.sweep + w(k.quote) + w(OWNER) + w(v),
+          'sweep ' + units(BigInt(v), k.qdp, 6) + ' ' + k.qsym + ' out of ' + k.name + ' to your wallet');
+      };
+      $('wc2' + i).onclick = function () {
+        var v = amt('wc' + i); if (!v) return;
+        send(k.quote, SIG.approve + w(k.addr) + w(v),
+          'approve ' + k.name + ' to take ' + units(BigInt(v), k.qdp, 6) + ' ' + k.qsym + ' from you');
+      };
+      $('wc3' + i).onclick = function () {
+        var v = amt('wc' + i); if (!v) return;
+        send(k.addr, SIG.fundWarChestToken + w(v),
+          'fundWarChestToken — hand ' + units(BigInt(v), k.qdp, 6) + ' ' + k.qsym + ' to ' + k.name + ' as bidding money');
+      };
+      $('swk' + i).onclick = function () {
+        var v = amt('sw' + i); if (!v) return;
+        if (!confirm('This takes $KEVIN OUT of ' + k.name + '.\n\nWith no inventory it cannot sell. '
+          + 'Only do this if you mean to stop it.')) return;
+        send(k.addr, SIG.sweep + w(KEVIN) + w(OWNER) + w(v),
+          'sweep ' + units(BigInt(v), 18, 0) + ' $KEVIN out of ' + k.name + ' to your wallet');
       };
     });
   }
