@@ -567,8 +567,11 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
     if (!window.ethereum) { alert('No wallet in this browser.'); return; }
     var accs = await window.ethereum.request({ method: 'eth_accounts' });
     if (!accs || !accs[0]) { alert('Connect a wallet first.'); return; }
+    // Try to fix a wrong network on the spot rather than just refusing — the
+    // person may have switched chains in their wallet since connecting.
+    await ensureChain(window.ethereum);
     var cid = await window.ethereum.request({ method: 'eth_chainId' });
-    if (parseInt(cid, 16) !== CHAIN_ID) { alert('Wrong network. Switch to Robinhood Chain (4663).'); return; }
+    if (parseInt(cid, 16) !== CHAIN_ID) { alert('Still on the wrong network after asking your wallet to switch. Switch to Robinhood Chain (4663) by hand, then try again.'); return; }
     if (!confirm(label + '\n\nTo: ' + to + '\n\nSign in your wallet to send.')) return;
     try {
       var tx = await window.ethereum.request({ method: 'eth_sendTransaction',
@@ -691,6 +694,38 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
     return '<button class="btn ' + (cls || '') + '" id="' + id + '">' + esc(label) + '</button>';
   }
 
+  // Ask the wallet to switch to Robinhood Chain itself, and add it if it does
+  // not know the network yet — same pattern the launchpad's wallet layer uses
+  // (pad/assets/wallet.js: ensureChain). Without this the page could only
+  // report "wrong network" and leave the person to find the switch by hand,
+  // which on a wallet with more than one chain of a similar name is a maze.
+  var HEX_CHAIN_ID = '0x' + CHAIN_ID.toString(16); // 0x1237
+  async function ensureChain(eip) {
+    var current = await eip.request({ method: 'eth_chainId' });
+    if (current && current.toLowerCase() === HEX_CHAIN_ID) return true;
+    try {
+      await eip.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: HEX_CHAIN_ID }] });
+      return true;
+    } catch (e) {
+      // 4902 (or the message some wallets use instead of the code) means the
+      // wallet has never seen this chain — offer to add it rather than fail.
+      if (e && (e.code === 4902 || /unrecognized/i.test(e.message || ''))) {
+        try {
+          await eip.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: HEX_CHAIN_ID, chainName: 'Robinhood Chain',
+              nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+              rpcUrls: [RPC], blockExplorerUrls: ['https://robinhoodchain.blockscout.com'],
+            }],
+          });
+          return true;
+        } catch (e2) { return false; } // the person said no in the wallet UI
+      }
+      return false; // the person said no to the switch itself
+    }
+  }
+
   async function connect() {
     if (!window.ethereum) { alert('No wallet in this browser. The dashboard above still works without one.'); return; }
     try {
@@ -700,6 +735,7 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
       $('who').textContent = state.wallet
         ? (state.isOwner ? 'owner · ' + short(state.wallet) : 'not the owner · ' + short(state.wallet))
         : '';
+      await ensureChain(window.ethereum);
       var cid = await window.ethereum.request({ method: 'eth_chainId' });
       $('net').textContent = parseInt(cid, 16) === CHAIN_ID ? 'chain 4663' : 'WRONG NETWORK';
       $('net').className = 'pill ' + (parseInt(cid, 16) === CHAIN_ID ? 'pill--on' : 'pill--red');
