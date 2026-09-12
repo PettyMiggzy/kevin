@@ -21,6 +21,8 @@
  *   QUOTE_SYMBOL    what the pool is quoted in, for the text (default KEK)
  *   MAKER_CHAT_ID   the Telegram chat
  *   LIVE=1          actually post; otherwise it prints and sends nothing
+ *   ANNOUNCE_BUYS=1   post to the group when it buys (off by default)
+ *   ANNOUNCE_SELLS=1  post to the group when it sells (off by default)
  *
  * It holds no key that can spend anything. It reads the chain and posts text.
  */
@@ -38,15 +40,17 @@ const cfg = {
   floor: process.env.FLOOR_ADDRESS || '0x47Dd22f76129d4AeC0c93668b905BC360657A29C',
   qsym: process.env.QUOTE_SYMBOL || 'KEK',
   chat: process.env.MAKER_CHAT_ID || '',
-  // ANNOUNCE BUYS, NOT SELLS — the owner's call, and off by default.
+  // ANNOUNCE NEITHER SIDE BY DEFAULT — the owner's call.
   //
-  // Worth being clear-eyed about what this is: posting only the buying is
-  // selective. The selling is not hidden by it — every Sold event is on chain,
-  // in the same contract, and shows on any price chart — but the group hears
-  // one side and not the other. Set ANNOUNCE_SELLS=1 to post both.
+  // Both buys and sells post only on explicit opt-in (ANNOUNCE_BUYS=1 /
+  // ANNOUNCE_SELLS=1). Buys used to be hardcoded on; on a volatile day the
+  // floor keeper can bid dozens of times, and each one posted immediately —
+  // that read as spam, not as news, so it got the same off-by-default
+  // treatment sells already had.
   //
   // The log prints both regardless, so the operator always sees everything
   // even when the group does not.
+  announceBuys: process.env.ANNOUNCE_BUYS === '1',
   announceSells: process.env.ANNOUNCE_SELLS === '1',
   live: process.env.LIVE === '1',
   everyMs: Number(process.env.TICK_MS || 60_000),
@@ -174,7 +178,10 @@ async function main() {
   say('  chain   ', cfg.chainId, cfg.rpc);
   say('  chat    ', cfg.chat || '(none — dry run)');
   say('  mode    ', cfg.live ? 'LIVE, it will post' : 'DRY RUN, it will post nothing');
-  say('  posts   ', cfg.announceSells ? 'buys and sells' : 'buys only — sells are logged, not posted');
+  say('  posts   ', [
+    cfg.announceBuys ? 'buys' : null,
+    cfg.announceSells ? 'sells' : null,
+  ].filter(Boolean).join(' and ') || 'nothing — logged only, ANNOUNCE_BUYS/ANNOUNCE_SELLS are both off');
 
   // The cursor alone is not enough: a hiccup mid-chunk replays the chunk, and
   // every trade in it gets announced twice. Remember the hashes too.
@@ -214,7 +221,8 @@ async function main() {
           if (!t) continue;
           seen.add(key);
           const text = announce(t, cfg.qsym);
-          const quiet = t.kind === 'sold' && !cfg.announceSells;
+          const quiet = (t.kind === 'sold' && !cfg.announceSells)
+            || (t.kind === 'bought' && !cfg.announceBuys);
           // Logged either way. The group's feed is a choice; the operator's
           // record is not.
           say(`${t.kind.toUpperCase()} ${human(t.tokens)} KEVIN / ${human(t.quote)} ${cfg.qsym}`
