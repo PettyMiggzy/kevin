@@ -162,7 +162,7 @@ rails are NOT the ones printed below for the other two pools; do not reuse
 those numbers here, they would be roughly nine orders of magnitude too big
 for the money actually in this pool.
 
-sha256 `d890d20b3f92debb71ae1ceecbdd9aa68ac2cf8f9aedcde0ee647b46d69131dc`.
+sha256 `3697e8f3d7a6992b6e658ea7cc230cc5ae4f9cc34d5ba2217466fd52385040b2`.
 Check before broadcasting.
 
 **The hooks address is DIFFERENT from the other two pools** — this is not the
