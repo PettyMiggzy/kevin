@@ -73,6 +73,7 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
     <h1>Kevin · control room</h1>
     <span id="net" class="pill pill--off">reading…</span>
     <div class="spacer"></div>
+    <a class="btn btn--ghost" href="watch.html">Just watch them →</a>
     <span id="who" class="note"></span>
     <button class="btn btn--ghost" id="connect">Connect</button>
     <button class="btn btn--ghost" id="refresh">Refresh</button>
@@ -148,7 +149,9 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
     { name: 'KEVIN / WETH', addr: '0xd7309Cc9383Feb44d09202764A72951B962a25Ab',
       quote: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73', qsym: 'WETH', qdp: 18 },
     { name: 'KEVIN / KEK',  addr: '0x47Dd22f76129d4AeC0c93668b905BC360657A29C',
-      quote: '0x5a3544a0328afD50A9979e03404F35c555B88c00', qsym: 'KEK',  qdp: 18 }
+      quote: '0x5a3544a0328afD50A9979e03404F35c555B88c00', qsym: 'KEK',  qdp: 18 },
+    { name: 'KEK / WETH',   addr: '0xbbAA0104FfAb5e19b1Ec23765ad93C7a9f13F5c5',
+      quote: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73', qsym: 'WETH', qdp: 18 }
   ];
 
   var SIG = {
@@ -177,7 +180,7 @@ footer{border-top:2px solid var(--line);margin-top:40px;padding:18px 0;color:var
   // Which pools a keeper process is actually driving. The WETH floor is
   // deployed and tuned but has no systemd instance, so the panel must say so
   // rather than reporting it as idle and leaving you to wonder.
-  var DRIVEN = ['0x47dd22f76129d4aec0c93668b905bc360657a29c'];
+  var DRIVEN = ['0x47dd22f76129d4aec0c93668b905bc360657a29c', '0xbbaa0104ffab5e19b1ec23765ad93c7a9f13f5c5'];
 
   var ZERO = '0x0000000000000000000000000000000000000000';
 

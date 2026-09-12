@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>KEVIN — bots</title>
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/png/favicon-32.png">
+<meta name="theme-color" content="#0B0B0B">
+<style>
+:root{
+  --void:#FFE500; --ink:#0B0B0B; --panel:#141414; --line:#2a2a2a; --dim:#9a9a9a;
+  --ok:#2fbf5f; --warn:#ffb020; --bad:#E8232B; --mono:'Space Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#0b0b0b;color:#f0f0f0;font-family:var(--mono);font-size:15px;line-height:1.55;
+  padding:16px;padding-bottom:60px}
+.wrap{max-width:640px;margin:0 auto}
+h1{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--void);margin:0 0 4px}
+.sub{color:var(--dim);font-size:12px;margin-bottom:18px}
+.card{background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.card h2{margin:0 0 10px;font-size:16px;color:#fff}
+.badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;margin-left:8px;vertical-align:middle}
+.badge--run{background:var(--ok);color:#04240f}
+.badge--pause{background:var(--bad);color:#fff}
+.badge--err{background:#555;color:#ddd}
+.line{margin:8px 0;color:#e2e2e2}
+.line b{color:#fff}
+.dim{color:var(--dim);font-size:12px}
+.warn-line{color:var(--warn)}
+.bad-line{color:var(--bad)}
+.stamp{color:var(--dim);font-size:11px;text-align:center;margin-top:20px}
+.reload{display:block;width:100%;font-family:var(--mono);font-size:13px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.08em;background:transparent;color:var(--void);border:2px solid var(--void);
+  border-radius:10px;padding:10px;margin-top:6px;cursor:pointer}
+.link{color:var(--void);text-decoration:none}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>Kevin's bots</h1>
+      <div class="sub">just watching — nothing here can send a transaction</div>
+    </div>
+    <a class="link" href="index.html">control room →</a>
+  </div>
+
+  <div id="cards"><div class="card"><div class="dim">reading the chain…</div></div></div>
+
+  <button class="reload" id="reload">Refresh now</button>
+  <div class="stamp" id="stamp"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var RPC = 'https://rpc.mainnet.chain.robinhood.com';
+
+  // token metadata used for plain-English amounts
+  var TOK = {
+    '0x63d7fa99022794f594f724e7c38ff0be3f9e284a': { sym: 'KEVIN', dp: 18 },
+    '0x5a3544a0328afd50a9979e03404f35c555b88c00': { sym: 'KEK',   dp: 18 },
+    '0x0bd7d308f8e1639fab988df18a8011f41eacad73': { sym: 'WETH',  dp: 18 },
+  };
+
+  var BOTS = [
+    { name: 'KEVIN / WETH', addr: '0xd7309Cc9383Feb44d09202764A72951B962a25Ab',
+      token: '0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A',
+      quote: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73', driven: false },
+    { name: 'KEVIN / KEK', addr: '0x47Dd22f76129d4AeC0c93668b905BC360657A29C',
+      token: '0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A',
+      quote: '0x5a3544a0328afD50A9979e03404F35c555B88c00', driven: true },
+    { name: 'KEK / WETH', addr: '0xbbAA0104FfAb5e19b1Ec23765ad93C7a9f13F5c5',
+      token: '0x5a3544a0328afD50A9979e03404F35c555B88c00',
+      quote: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73', driven: true },
+  ];
+
+  var SIG = {
+    paused: '0x5c975abb', warChest: '0xbb22e371',
+    lastTrade: '0x74452ec3', balanceOf: '0x70a08231',
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  }); };
+  var pad32 = function (a) { return '0x' + a.replace(/^0x/, '').toLowerCase().padStart(64, '0'); };
+  var addrFrom = function (hex) { return '0x' + hex.slice(-40); };
+
+  var rid = 0;
+  function call(to, data) {
+    return fetch(RPC, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: ++rid, method: 'eth_call', params: [{ to: to, data: data }, 'latest'] }),
+    }).then(function (r) { return r.json(); }).then(function (j) { return j.result || null; });
+  }
+  function balanceOf(token, holder) { return call(token, SIG.balanceOf + pad32(holder).slice(2)); }
+
+  function fmt(hexOrBig, dp) {
+    if (!hexOrBig) return 0;
+    var n = Number(BigInt(hexOrBig)) / Math.pow(10, dp);
+    if (n === 0) return 0;
+    if (n < 0.01) return n.toFixed(6);
+    if (n < 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  }
+
+  function timeAgo(unixSecHex) {
+    var t = Number(BigInt(unixSecHex || '0x0'));
+    if (!t) return 'never';
+    var mins = Math.floor((Date.now() / 1000 - t) / 60);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + ' minute' + (mins === 1 ? '' : 's') + ' ago';
+    var hrs = Math.floor(mins / 60);
+    if (hrs < 48) return hrs + ' hour' + (hrs === 1 ? '' : 's') + ' ago';
+    return Math.floor(hrs / 24) + ' days ago';
+  }
+
+  function renderBot(b, s) {
+    var tok = TOK[b.token.toLowerCase()], q = TOK[b.quote.toLowerCase()];
+    var el = document.createElement('div');
+    el.className = 'card';
+
+    if (s.error) {
+      el.innerHTML = '<h2>' + esc(b.name) + '<span class="badge badge--err">unreadable</span></h2>' +
+        '<div class="line bad-line">Could not read this contract right now — RPC may be having trouble. Try refresh.</div>';
+      return el;
+    }
+
+    var paused = BigInt(s.paused) !== 0n;
+    var chest = fmt(s.warChest, q.dp);
+    var inv = fmt(s.inv, tok.dp);
+    var ago = timeAgo(s.lastTrade);
+
+    var h = '<h2>' + esc(b.name);
+    h += paused ? '<span class="badge badge--pause">Paused</span>' : '<span class="badge badge--run">Running</span>';
+    h += '</h2>';
+
+    if (!b.driven) {
+      h += '<div class="line warn-line">⚠ Nobody is running this one right now — it\'s configured but not watched by any process. It will not trade until a keeper is started for it.</div>';
+    }
+
+    h += '<div class="line">Has <b>' + inv + ' ' + tok.sym + '</b> ready to sell into a pump.</div>';
+    h += '<div class="line">Has <b>' + chest + ' ' + q.sym + '</b> ready to buy dips with.</div>';
+    if (Number(chest) === 0) {
+      h += '<div class="line warn-line">⚠ War chest is empty — it can\'t buy anything until it\'s topped up.</div>';
+    }
+    h += '<div class="line dim">Last trade: ' + ago + '</div>';
+
+    el.innerHTML = h;
+    return el;
+  }
+
+  function load() {
+    $('cards').innerHTML = '<div class="card"><div class="dim">reading the chain…</div></div>';
+    Promise.all(BOTS.map(function (b) {
+      return Promise.all([
+        call(b.addr, SIG.paused),
+        call(b.addr, SIG.warChest),
+        call(b.addr, SIG.lastTrade),
+        balanceOf(b.token, b.addr),
+      ]).then(function (r) {
+        return { paused: r[0], warChest: r[1], lastTrade: r[2], inv: r[3] };
+      }).catch(function () { return { error: true }; });
+    })).then(function (results) {
+      $('cards').innerHTML = '';
+      BOTS.forEach(function (b, i) { $('cards').appendChild(renderBot(b, results[i] || { error: true })); });
+      $('stamp').textContent = 'checked ' + new Date().toLocaleTimeString();
+    });
+  }
+
+  $('reload').addEventListener('click', load);
+  load();
+  setInterval(load, 30000);
+})();
+</script>
+</body>
+</html>
