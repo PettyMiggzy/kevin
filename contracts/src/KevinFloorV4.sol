@@ -298,6 +298,9 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
     event Swept(address indexed asset, address indexed to, uint256 amount);
 
     error NotOperator();
+    /// @dev What a poke actually got per unit spent, and the least the caller
+    ///      was willing to accept. Both are Q96 fixed point.
+    error Slipped(uint256 rate, uint256 minRate);
     error NotManager();
     error NothingToDo();
     error TooSoon();
@@ -475,24 +478,65 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
 
     /**
      * @notice Sell into whatever room is above the floor, or bid under it.
+     *
      * @param  size how much to offer. Clamped to the per-trade cap. Offering
      *              more than the pool can take is not a mistake here — the
      *              price limit decides the fill, so `type(uint256).max` means
      *              "as much as fits above the floor, up to the cap".
+     *
+     * @param  minRateX96 the WORST average execution price the caller will
+     *              accept, as output-per-input in Q96. Zero disables the
+     *              check, which is only ever right for a rescue by hand.
+     *
+     * @dev THE PRICE LIMIT IS NOT SLIPPAGE PROTECTION, AND THIS IS WHY.
+     *
+     *      `sqrtPriceLimitX96` bounds where the price ENDS UP. It says nothing
+     *      about the average the fill went out at, and — worse — the sell
+     *      limit is derived from `spotSqrtPriceX96()` READ DURING THE SWAP.
+     *      Move spot before the call lands and the stop moves with it, so the
+     *      contract obligingly recomputes a limit around the manipulated
+     *      price and sells into it. The floor still holds; everything between
+     *      spot and the floor does not.
+     *
+     *      That is an ordinary sandwich, and this pool has an audience for it:
+     *      five distinct searchers ran closed loops across these pools in the
+     *      last 400k blocks (`docs/ARBITRAGE.md`). The exposure was measured
+     *      at about 1.9% of whatever the keeper traded.
+     *
+     *      The fix has to come from OUTSIDE the transaction, because every
+     *      number inside it is downstream of a spot price the attacker just
+     *      set. So the caller passes the rate it expects, computed from a
+     *      price it read in an earlier block, and a fill worse than that
+     *      reverts. `minRateX96` is a RATE and not an amount on purpose: the
+     *      pool decides the fill size here, so the caller cannot know the
+     *      amount in advance, but it can always know what a fair price is.
      */
-    function poke(uint256 size) external nonReentrant whenNotPaused onlyOperator {
+    function poke(uint256 size, uint256 minRateX96)
+        external
+        nonReentrant
+        whenNotPaused
+        onlyOperator
+    {
         if (floorSqrtPriceX96 == 0) revert NoFloorYet();
         // Before deciding anything: if the price is back at the floor, the
         // waiting is over and the floor is at full height again.
         _observe();
         (bool sell, bool buy,,) = reading();
         if (sell) {
-            _sell(size);
+            _sell(size, minRateX96);
         } else if (buy) {
-            _buy(size);
+            _buy(size, minRateX96);
         } else {
             revert NothingToDo();
         }
+    }
+
+    /// @dev Revert unless the fill's average price is at least `minRateX96`.
+    ///      Called after the swap, so the revert unwinds it.
+    function _requireRate(uint256 spent, uint256 got, uint256 minRateX96) internal pure {
+        if (minRateX96 == 0) return;
+        uint256 rate = Math.mulDiv(got, 1 << 96, spent);
+        if (rate < minRateX96) revert Slipped(rate, minRateX96);
     }
 
     /**
@@ -602,7 +646,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
 
     // --- the two things it does ---------------------------------------------
 
-    function _sell(uint256 size) internal {
+    function _sell(uint256 size, uint256 minRateX96) internal {
         _tick();
         uint256 have = IERC20(_token()).balanceOf(address(this));
         uint256 amountIn = size < have ? size : have;
@@ -630,6 +674,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         uint160 limit = _isBetter(stop, defended) ? stop : defended;
         (uint256 spent, uint256 got) = _swap(true, amountIn, limit);
         if (spent == 0) revert NothingToDo();
+        _requireRate(spent, got, minRateX96);
 
         uint256 reserved = (got * buybackBps) / BPS;
         warChest += reserved;
@@ -638,7 +683,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         emit Sold(spent, got, reserved, spotSqrtPriceX96());
     }
 
-    function _buy(uint256 size) internal {
+    function _buy(uint256 size, uint256 minRateX96) internal {
         _tick();
         uint256 amountIn = size < warChest ? size : warChest;
         if (amountIn > maxQuotePerTrade) amountIn = maxQuotePerTrade;
@@ -651,6 +696,7 @@ contract KevinFloorV4 is Ownable2Step, ReentrancyGuard, Pausable, IUnlockCallbac
         // floor: past it the contract would be bidding above its own level.
         (uint256 spent, uint256 got) = _swap(false, amountIn, effectiveFloorSqrtPriceX96());
         if (spent == 0) revert NothingToDo();
+        _requireRate(spent, got, minRateX96);
 
         warChest -= spent;
         quoteInBucket += spent;

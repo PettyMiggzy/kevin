@@ -70,7 +70,7 @@ contract AuditRegressions is KevinFloorV4Test {
 
         vm.prank(operator);
         vm.expectRevert();
-        floor.poke(type(uint256).max); // nothing to sell, so nothing commits
+        floor.poke(type(uint256).max, 0); // nothing to sell, so nothing commits
 
         _watch(10 days); // but anyone can still keep the clock honest
         assertGt(floor.floorDecayBps(), 0, "the clock ran because somebody watched it");
@@ -92,7 +92,7 @@ contract AuditRegressions is KevinFloorV4Test {
         for (uint256 i = 0; i < 4; i++) { // spend the allowance
             _tock();
             vm.prank(operator);
-            try floor.poke(type(uint256).max) {} catch {}
+            try floor.poke(type(uint256).max, 0) {} catch {}
         }
         uint256 firstBatch = mid - kevin.balanceOf(address(floor));
         assertGt(firstBatch, 1.9 ether, "the allowance really was spent");
@@ -103,7 +103,7 @@ contract AuditRegressions is KevinFloorV4Test {
         for (uint256 i = 0; i < 4; i++) {
             _tock();
             vm.prank(operator);
-            try floor.poke(type(uint256).max) {} catch {}
+            try floor.poke(type(uint256).max, 0) {} catch {}
         }
         uint256 secondBatch = beforeSecond - kevin.balanceOf(address(floor));
         assertLt(secondBatch, 0.05 ether, "no second full allowance astride the boundary");

@@ -82,6 +82,13 @@ const cfg = {
   momentumMs: Number(process.env.MOMENTUM_MS || 900_000),   // 15 minutes
   momentumTolBps: Number(process.env.MOMENTUM_TOL_BPS || 50), // 0.5% of slack
 
+  // SLIPPAGE. Every poke names the worst average price it will accept, worked
+  // out from a spot the keeper read in an EARLIER block — see minRate(). This
+  // is the slack on top of the contract's own limit: enough that honest drift
+  // between the read and the landing does not cost a fill, small enough that a
+  // sandwich does. Zero would mean no bound at all, so it is clamped.
+  slipBufferBps: Math.max(1, Number(process.env.SLIP_BUFFER_BPS || 100)), // 1%
+
   // Optional Nitro sequencer feed. Off unless set — see startFeed() for why.
   feedUrl: process.env.FEED_URL || null,
   // With the feed on, how long to wait before asking anyway. A backstop, not
@@ -113,8 +120,16 @@ const ABI = [
   { type: 'function', name: 'reading', stateMutability: 'view', inputs: [], outputs: [
     { name: 'sell', type: 'bool' }, { name: 'buy', type: 'bool' },
     { name: 'spot', type: 'uint160' }, { name: 'floorAt', type: 'uint160' }] },
+  // BOTH SHAPES, on purpose. The slippage bound is a NEW contract — the two
+  // floors on chain today are the old one — so the keeper probes the deployed
+  // bytecode at startup and calls whichever is actually there. viem resolves
+  // the overload from the number of arguments passed.
+  { type: 'function', name: 'poke', stateMutability: 'nonpayable',
+    inputs: [{ name: 'size', type: 'uint256' }, { name: 'minRateX96', type: 'uint256' }], outputs: [] },
   { type: 'function', name: 'poke', stateMutability: 'nonpayable',
     inputs: [{ name: 'size', type: 'uint256' }], outputs: [] },
+  { type: 'function', name: 'sellStopBps', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'poolFee', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint24' }] },
   { type: 'function', name: 'currency0', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'currency1', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'tokenIsZero', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
@@ -159,6 +174,8 @@ const ABI = [
   { type: 'error', name: 'OverDailyCap', inputs: [] },
   { type: 'error', name: 'NoFloorYet', inputs: [] },
   { type: 'error', name: 'BadParam', inputs: [] },
+  { type: 'error', name: 'Slipped', inputs: [
+    { name: 'rate', type: 'uint256' }, { name: 'minRate', type: 'uint256' }] },
 ];
 
 // The lockbox's errors, for the same reason. Note its TooSoon carries a
@@ -279,6 +296,23 @@ async function main() {
   say('  operator ', account ? account.address : '(none — dry run)');
   say('  mode     ', cfg.live ? 'LIVE, it will send transactions' : 'DRY RUN, it will send nothing');
   say('  tick     ', `${cfg.everyMs / 1000}s`);
+
+  // WHICH POKE IS DEPLOYED. `poke(uint256,uint256)` takes the slippage bound;
+  // `poke(uint256)` is the old one that could not be given a price. Selectors
+  // live verbatim in the dispatch table at the top of the runtime, so looking
+  // for the four bytes in the code is exact — no call, no gas, no guessing.
+  // Getting this wrong in either direction is worse than either shape alone:
+  // the new call against the old contract reverts every tick, and the old call
+  // against the new one silently gives up the protection.
+  const code = await pub.getCode({ address: cfg.floor }) || '';
+  const guarded = code.includes('8029e7c0');
+  if (guarded) {
+    say('  slippage ', `every poke names its price, ${cfg.slipBufferBps} bps of slack`);
+  } else {
+    warn('  this contract has the OLD poke(uint256) and cannot be given a price.'
+      + ' It will trade UNPROTECTED against anyone willing to move the pool in front of it.'
+      + ' Deploy the current KevinFloorV4 to close it — see docs/ARBITRAGE.md for who is watching.');
+  }
 
   const read = (name, args = []) =>
     pub.readContract({ address: cfg.floor, abi: ABI, functionName: name, args });
@@ -475,8 +509,9 @@ async function main() {
         read('floorSqrtPriceX96'), read('floorDecayBps'),
         read('floorGapBps'), read('upIsUp'), pub.getBlock(), inventory(),
       ]);
-    const [ratchetedAt, ratchetCool] = await Promise.all([
+    const [ratchetedAt, ratchetCool, isZero, stopBps, feePpm] = await Promise.all([
       read('lastRatchetAt'), read('ratchetCooldown'),
+      read('tokenIsZero'), read('sellStopBps'), read('poolFee'),
     ]);
     const [lockReady, lockRate, floorHas] = cfg.lock
       ? await Promise.all([
@@ -702,9 +737,21 @@ async function main() {
     if (sell) {
       var hold = fallingBack();
       if (hold) return note(hold + ' · ' + state);
-      return act('poke', [(1n << 255n)], `SELL into the room above the floor · ${state}`);
+      // The rate is worked out from `spot`, which was read at the top of this
+      // tick — an earlier block than the one the poke lands in. That gap is
+      // the whole protection: a price the attacker sets after this line cannot
+      // change the number the contract is held to.
+      const args = guarded
+        ? [(1n << 255n), minRate(true, spot, floorAt, up, isZero, stopBps, feePpm)]
+        : [(1n << 255n)];
+      return act('poke', args, `SELL into the room above the floor · ${state}`);
     }
-    if (buy) return act('poke', [(1n << 255n)], `BID under the floor · ${state}`);
+    if (buy) {
+      const args = guarded
+        ? [(1n << 255n), minRate(false, spot, floorAt, up, isZero, stopBps, feePpm)]
+        : [(1n << 255n)];
+      return act('poke', args, `BID under the floor · ${state}`);
+    }
     return note(`nothing to do · ${state}`);
   }
 
@@ -740,6 +787,60 @@ async function main() {
     return BigInt(Math.floor(Number(x) * Math.sqrt(Number(num) / Number(den))));
   }
 
+  /**
+   * THE WORST AVERAGE PRICE THIS POKE WILL ACCEPT, as output-per-input in Q96.
+   *
+   * `sqrtPriceLimitX96` is not slippage protection. It bounds where the price
+   * ENDS UP, says nothing about the average the fill went out at, and — on the
+   * sell side — is derived from a spot price read DURING the swap. Anyone who
+   * moves spot in the same block moves the contract's own stop with it, and
+   * the sale walks down to a limit the attacker chose. Five separate searchers
+   * ran closed loops across these pools in the last 400k blocks, so this is
+   * not hypothetical here.
+   *
+   * The bound has to come from outside the transaction, which means from this
+   * keeper, from a price it read before the poke was sent.
+   *
+   * A RATE AND NOT AN AMOUNT, because the pool decides the fill size — the
+   * whole design offers more than can be taken and lets the limit do the
+   * sizing. There is no amount to predict. There is always a fair price.
+   *
+   * The reference is the contract's OWN limit computed from an honest spot:
+   *   selling — the tighter of the stop and the floor, which is where the
+   *             worst-case honest fill ends;
+   *   bidding — the floor, which is where the bid stops.
+   * The whole fill happens on the good side of that, so the average can never
+   * legitimately be worse. Then take off the pool fee, which comes out of the
+   * output and so is not in the price, and slipBufferBps for the drift between
+   * this read and the block it lands in.
+   *
+   * THE TWO SIDES ARE NOT EQUALLY PROTECTED, AND PRETENDING OTHERWISE WOULD
+   * BE THE LIE. Selling has `sellStopBps`, so the bound lands 2.5% under
+   * spot and a front-run bigger than that is refused. Bidding has no stop —
+   * the contract will lift the price all the way to the floor by design, and
+   * on a floor sitting 37% over spot that is a very loose bound. Tightening it
+   * here would break the thing the war chest exists for: bidding hard into a
+   * crash is the point. What actually bounds the bid is `maxQuotePerTrade`
+   * and the daily cap, and the money at risk is the war chest rather than the
+   * inventory. Worth knowing; not worth crippling the bid over.
+   */
+  function minRate(selling, spot, floorAt, up, isZero, stopBps, feePpm) {
+    const Q = 1n << 96n;
+    // Where an honest fill can end.
+    const limit = selling
+      ? (worse(worseBy(spot, stopBps, up), floorAt, up) ? floorAt : worseBy(spot, stopBps, up))
+      : floorAt;
+    // c1-per-c0 and c0-per-c1 at that price, both in Q96.
+    const c1PerC0 = (limit * limit) / Q;
+    const c0PerC1 = c1PerC0 === 0n ? 0n : (Q * Q * Q) / (limit * limit);
+    // Selling gives up the token for the quote; bidding is the other way.
+    const out = selling ? (isZero ? c1PerC0 : c0PerC1) : (isZero ? c0PerC1 : c1PerC0);
+    // The fee is taken off the input before the pool prices it, so it lands on
+    // the output as a straight discount.
+    const afterFee = (out * (1_000_000n - BigInt(feePpm))) / 1_000_000n;
+    return (afterFee * (10_000n - BigInt(cfg.slipBufferBps))) / 10_000n;
+  }
+
   function note(why) {
     quiet += 1;
     // Say it the first time, then every twentieth tick, so a quiet hour is one
@@ -771,17 +872,41 @@ async function main() {
       const rc = await pub.waitForTransactionReceipt({ hash, timeout: 120_000 });
       say('  ', rc.status, 'in block', rc.blockNumber, `· gas ${rc.gasUsed}`);
     } catch (e) {
-      const m = e.shortMessage || e.message || String(e);
-      // These are the contract saying no, which is the system working.
-      // Match the NAME, and the raw SELECTOR as a fallback: if the ABI ever
-      // drifts from the deployed contract again, a refusal must still be
-      // recognised as a refusal rather than shouted about as a failure.
-      const DECLINED = /NothingToDo|TooSoon|OverDailyCap|NothingToRelease|NoFloorYet/;
-      const SELECTORS = /0x5c52a868|0x6fed7d85|0xc4891db5|0xfd8d3df4/;
-      if (DECLINED.test(m) || SELECTORS.test(m)) {
-        return say('  declined by the contract:', m.split('\n')[0]);
+      // WHICH FIELD CARRIES THE ERROR NAME. Not shortMessage. Measured against
+      // the live contract:
+      //
+      //   e.shortMessage  'The contract function "poke" reverted.'
+      //   e.message       the same, then a blank line, then 'Error: NothingToDo()'
+      //   e.cause.data.errorName  'NothingToDo'
+      //
+      // The previous version read `e.shortMessage || e.message`, and because
+      // shortMessage is always truthy the full message was never looked at. So
+      // adding the errors to the ABI — which is what makes the name appear at
+      // all — fixed nothing on its own, and every routine refusal still shouted
+      // "send failed". Read the name where viem actually puts it, fall back to
+      // the whole message, and keep the raw selectors for the day the ABI
+      // drifts from the deployed contract again.
+      const name = e?.cause?.data?.errorName || e?.data?.errorName || '';
+      const full = [name, e.message, e.shortMessage].filter(Boolean).join('\n') || String(e);
+      const headline = e.shortMessage || String(e).split('\n')[0];
+      // SLIPPED IS NOT A FAILURE AND IT IS NOT ROUTINE. The simulation ran
+      // against a price that was not the one this keeper priced against, so
+      // either the market moved between blocks or somebody is standing in
+      // front of the poke. Either way the right answer is to skip this tick
+      // and re-price on the next one — which is exactly what returning here
+      // does. It is said loudly because a run of these is worth reading: one
+      // is drift, twenty in a row is a searcher.
+      if (/Slipped|0x3a2e861e/.test(full)) {
+        return warn('  the price moved out from under the poke — skipping this tick.'
+          + ' A run of these means somebody is trading in front of the keeper;'
+          + ' widen SLIP_BUFFER_BPS only if the market is genuinely that fast.');
       }
-      warn('  send failed:', m.split('\n')[0]);
+      const DECLINED = /NothingToDo|TooSoon|OverDailyCap|NothingToRelease|NoFloorYet|NotOperator/;
+      const SELECTORS = /0x5c52a868|0x6fed7d85|0xc4891db5|0xfd8d3df4|0x7c214f04/;
+      if (DECLINED.test(full) || SELECTORS.test(full)) {
+        return say('  declined by the contract:', name || headline);
+      }
+      warn('  send failed:', headline);
     }
   }
 }

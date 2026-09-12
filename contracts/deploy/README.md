@@ -132,7 +132,7 @@ and the pool has to be preflighted first — see `../deploy.sh`.
 ## KevinFloorV4 — one blob per pool
 
 The constructor takes the PoolKey, so the pool is fixed at deploy and cannot
-be changed afterwards. Two blobs, both with `owner` = the treasury:
+be changed afterwards. Three blobs, all with `owner` = the treasury:
 
 | file | pool | poolId (checked against the live pool) |
 |---|---|---|
@@ -153,6 +153,74 @@ uninitialised one that would look healthy and do nothing.
 
     curl -sL https://raw.githubusercontent.com/PettyMiggzy/kevin/claude/kevin-crypto-art-website-ymq79j/contracts/deploy/KevinFloorV4.weth.create.hex -o /tmp/mm.hex
     ~/.foundry/bin/cast send --private-key "$PRIVATE_KEY" --rpc-url https://rpc.mainnet.chain.robinhood.com --create "$(cat /tmp/mm.hex)"
+
+### `KevinFloorV4.kek-weth.create.hex` — KEK / WETH, the "farm KEK to feed KEVIN" pool
+
+**NOT deployed yet.** Built 2026-09-11. This one sells KEK instead of KEVIN —
+`token_` is KEK, the quote is WETH, so the whole thing is smaller and its
+rails are NOT the ones printed below for the other two pools; do not reuse
+those numbers here, they would be roughly nine orders of magnitude too big
+for the money actually in this pool.
+
+sha256 `d890d20b3f92debb71ae1ceecbdd9aa68ac2cf8f9aedcde0ee647b46d69131dc`.
+Check before broadcasting.
+
+**The hooks address is DIFFERENT from the other two pools** — this is not the
+same launchpad factory deploy, and copying `0xFEf8e780…` here would silently
+point at an uninitialised pool. Read directly off this pool's own
+`Initialize` event on the PoolManager and verified by recomputing the poolId
+hash and matching it against the live pool (same check described above):
+
+| arg | value |
+|---|---|
+| `owner_` | `0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf` (treasury) |
+| `manager_` | `0x8366a39CC670B4001A1121B8F6A443A643e40951` (same PoolManager) |
+| `key.currency0` | `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` (WETH — lower address) |
+| `key.currency1` | `0x5a3544a0328afD50A9979e03404F35c555B88c00` (KEK) |
+| `key.fee` | `3000` |
+| `key.tickSpacing` | `60` |
+| `key.hooks` | `0x1c49878d98d9199cc080ff38f74e9eced41ce000` |
+| `token_` | `0x5a3544a0328afD50A9979e03404F35c555B88c00` (KEK) |
+
+poolId `0x1a2170d9ba519e87b90132d6443b16de6a4a2237c7a38ae89c81d4fc255e7ed3` —
+recomputed from the five key fields above and matched byte-for-byte against
+the live pool's own `Initialize` log before this blob was built.
+
+Simulated (not just estimated) against the live chain with `eth_call` using
+this exact creation calldata and no `to` — constructor did not revert and
+returned 14,708 bytes of runtime code. `eth_estimateGas` came back at
+3,556,488 gas, which on this chain's gas price is on the order of cents, not
+dollars.
+
+    curl -sL https://raw.githubusercontent.com/PettyMiggzy/kevin/claude/kevin-crypto-art-website-ymq79j/contracts/deploy/KevinFloorV4.kek-weth.create.hex -o /tmp/kekweth.hex
+    sha256sum /tmp/kekweth.hex   # must match the hash above
+    ~/.foundry/bin/cast send --private-key "$PRIVATE_KEY" --rpc-url https://rpc.mainnet.chain.robinhood.com --create "$(cat /tmp/kekweth.hex)"
+
+Rails and policy for THIS pool specifically — read off its real depth
+($8,387 total: 295,197,678 KEK / 1.6487 WETH), NOT the generic numbers a few
+paragraphs down which are sized for the much bigger KEVIN pools:
+
+    ~/.foundry/bin/cast send $MM 'setOperator(address)' $HOT --private-key "$PRIVATE_KEY" --rpc-url $RPC
+    ~/.foundry/bin/cast send $MM 'setRails(uint256,uint256,uint256,uint256,uint256)' \
+      15000000000000000000000000 80000000000000000 60000000000000000000000000 350000000000000000 300 \
+      --private-key "$PRIVATE_KEY" --rpc-url $RPC
+    ~/.foundry/bin/cast send $MM 'setPolicy(uint256,uint256,uint256,uint256,uint256)' \
+      1500 500 1000 3000 250 --private-key "$PRIVATE_KEY" --rpc-url $RPC
+    ~/.foundry/bin/cast send $MM 'setFloorFromSpot(uint256)' 1500 --private-key "$PRIVATE_KEY" --rpc-url $RPC
+
+That's 15,000,000 KEK max per sell / 60,000,000 KEK per day, and 0.08 WETH
+max per buy / 0.35 WETH per day — roughly 5% of the pool's own depth per
+trade and 20% per day on both sides, same conservative ratio the KEVIN pools
+were sized at, just scaled down to match a pool that is four hundred times
+smaller. Reuse the SAME operator hot key already running the KEVIN/KEK
+keeper (`0x539a943bddb3e8dcba611cc665cae0fcbd2717c3`) unless a fresh one is
+wanted — either is fine, it is one more hot key on a wallet that already
+holds none of the treasury's real value.
+
+Then fund it: send KEK to `$MM` (what it sells), `approve($MM, amount)` on
+KEK and `fundWarChestToken(amount)` (what it bids with — WETH, so this is
+the ERC-20 path, not the payable one). Send a small amount first and drive
+one `poke` before sending anything real, same as always.
 
 ## It cannot trade until you tune it, and that is deliberate
 
