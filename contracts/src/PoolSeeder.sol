@@ -58,11 +58,17 @@ contract PoolSeeder is Ownable2Step, IUnlockCallback {
 
     function swap(PoolKey memory key, IPoolManager.SwapParams memory params, bytes memory hookData)
         external
+        payable
         onlyOwner
         returns (BalanceDelta delta)
     {
         bytes memory payload = abi.encode(SwapCallbackData(msg.sender, key, params, hookData));
         delta = abi.decode(manager.unlock(abi.encode(true, payload)), (BalanceDelta));
+
+        // Native-currency swaps: refund whatever of msg.value the settle didn't spend (there is
+        // no such thing as "approve native ETH", so unlike the ERC20 side this can overshoot).
+        uint256 ethBalance = address(this).balance;
+        if (ethBalance > 0) CurrencyLibrary.ADDRESS_ZERO.transfer(msg.sender, ethBalance);
     }
 
     /// @dev Both entrypoints route through here, tagged with a leading bool so the callback
