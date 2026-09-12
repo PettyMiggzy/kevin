@@ -43,23 +43,59 @@ contract PoolSeeder is Ownable2Step, IUnlockCallback {
         onlyOwner
         returns (BalanceDelta delta)
     {
-        delta = abi.decode(manager.unlock(abi.encode(CallbackData(msg.sender, key, params, hookData))), (BalanceDelta));
+        bytes memory payload = abi.encode(CallbackData(msg.sender, key, params, hookData));
+        delta = abi.decode(manager.unlock(abi.encode(false, payload)), (BalanceDelta));
     }
 
+    /// @notice A test trade through the pool — some trackers appear to index a pool only
+    /// after it has a real swap, not just liquidity. Same onlyOwner reasoning as above.
+    struct SwapCallbackData {
+        address sender;
+        PoolKey key;
+        IPoolManager.SwapParams params;
+        bytes hookData;
+    }
+
+    function swap(PoolKey memory key, IPoolManager.SwapParams memory params, bytes memory hookData)
+        external
+        onlyOwner
+        returns (BalanceDelta delta)
+    {
+        bytes memory payload = abi.encode(SwapCallbackData(msg.sender, key, params, hookData));
+        delta = abi.decode(manager.unlock(abi.encode(true, payload)), (BalanceDelta));
+    }
+
+    /// @dev Both entrypoints route through here, tagged with a leading bool so the callback
+    /// knows which struct `payload` actually holds — decoding CallbackData as SwapCallbackData
+    /// (or back) would silently misread the tuple instead of reverting, so this is not
+    /// optional plumbing, it is what makes misrouting impossible.
     function unlockCallback(bytes calldata rawData) external returns (bytes memory) {
         require(msg.sender == address(manager), "not manager");
-        CallbackData memory data = abi.decode(rawData, (CallbackData));
+        (bool isSwap, bytes memory payload) = abi.decode(rawData, (bool, bytes));
 
-        (BalanceDelta delta,) = manager.modifyLiquidity(data.key, data.params, data.hookData);
+        PoolKey memory key;
+        BalanceDelta delta;
+        if (isSwap) {
+            SwapCallbackData memory data = abi.decode(payload, (SwapCallbackData));
+            key = data.key;
+            delta = manager.swap(data.key, data.params, data.hookData);
+            _settle(data.key, data.sender, delta);
+        } else {
+            CallbackData memory data = abi.decode(payload, (CallbackData));
+            key = data.key;
+            (delta,) = manager.modifyLiquidity(data.key, data.params, data.hookData);
+            _settle(data.key, data.sender, delta);
+        }
+        return abi.encode(delta);
+    }
+
+    function _settle(PoolKey memory key, address sender, BalanceDelta delta) internal {
         int256 delta0 = delta.amount0();
         int256 delta1 = delta.amount1();
-
-        if (delta0 < 0) data.key.currency0.settle(manager, data.sender, uint256(-delta0), false);
-        if (delta1 < 0) data.key.currency1.settle(manager, data.sender, uint256(-delta1), false);
-        if (delta0 > 0) data.key.currency0.take(manager, data.sender, uint256(delta0), false);
-        if (delta1 > 0) data.key.currency1.take(manager, data.sender, uint256(delta1), false);
-
-        return abi.encode(delta);
+        if (delta0 < 0) key.currency0.settle(manager, sender, uint256(-delta0), false);
+        if (delta1 < 0) key.currency1.settle(manager, sender, uint256(-delta1), false);
+        if (delta0 > 0) key.currency0.take(manager, sender, uint256(delta0), false);
+        if (delta1 > 0) key.currency1.take(manager, sender, uint256(delta1), false);
     }
 
     /// @notice Ownership pays the settlement — see PadRouter's note on the same tradeoff.
