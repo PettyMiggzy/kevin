@@ -17,6 +17,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from '
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPublicClient, http, defineChain, formatUnits, getAddress } from 'viem';
+import { renderBurnCard } from './burncard.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
@@ -118,10 +119,37 @@ export function announce(burn, total, supply) {
   ].join('\n');
 }
 
+/** The photo's caption. The image carries the running total and its share of
+ * supply — this is short on purpose, just this burn's own size plus the tx
+ * to check it against, not announce() again. */
+export function photoCaption(burn) {
+  const n = (x) => x.toLocaleString('en-GB', { maximumFractionDigits: 0 });
+  return [
+    'Some KEVIN just went in the fryer and did not come out.',
+    '',
+    `  ${n(Number(burn.amount))} KEVIN, this time`,
+    '',
+    burn.tx,
+  ].join('\n');
+}
+
 async function tg(token, method, body) {
   const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.description || 'telegram said no');
+  return j.result;
+}
+
+/** Same as tg(), but for a method that takes an uploaded file (sendPhoto,
+ * sendDocument, ...) — those want multipart/form-data, not JSON. */
+async function tgPhoto(token, chatId, caption, pngBuffer) {
+  const form = new FormData();
+  form.set('chat_id', chatId);
+  form.set('caption', caption);
+  form.set('photo', new Blob([pngBuffer], { type: 'image/png' }), 'burn.png');
+  const r = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: form });
   const j = await r.json();
   if (!j.ok) throw new Error(j.description || 'telegram said no');
   return j.result;
@@ -242,7 +270,11 @@ async function main() {
         // Announce FIRST, record after. One failed post must not silence that
         // burn forever, and must not stop the ones behind it either.
         try {
-          await tg(key, 'sendMessage', { chat_id: cfg.chat, text: announce(b, total, cfg.supply) });
+          // The card shows the running total, not this one burn — each new
+          // burn posts an updated scoreboard, not a string of tiny separate
+          // numbers (the 1-KEVIN floor alone would make some of those silly).
+          const png = await renderBurnCard({ amount: total.tokens, percent: total.percentOfSupply });
+          await tgPhoto(key, cfg.chat, photoCaption(b), png);
           known.add(b.tx);
           writeAtomic(cfg.ledger, [...known].join('\n') + '\n');
           say(`announced ${b.tx}`);

@@ -56,6 +56,10 @@ keeper/.operator-weth.key
 # Buy watch cursor and seen-transaction set — local state, not source
 keeper/.buywatch.state
 
+# Generated at first use by keeper/burncard.mjs — a fontconfig scoped to just
+# its two font files, plus fontconfig's own cache. Not source, regenerates.
+keeper/.fontconfig/
+
 # Which burns have actually been announced. Local state, and NOT the same file
 # as data/burns.json: the receipts are published, the ledger is per-deployment.
 data/.burnwatch.announced
