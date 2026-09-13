@@ -396,7 +396,7 @@ export QUOTE=0x0000000000000000000000000000000000000000   # native ETH
 export POOL_FEE=3000        # must match the pool exactly
 export TICK_SPACING=60      # must match the pool exactly
 export POOL_HOOKS=0x0000000000000000000000000000000000000000
-export FLOOR_OWNER=0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf   # the owner wallet
+export FLOOR_OWNER=0x2977F5339157E7f6341f09D6F48811B9D1F67C42   # the owner wallet
 export FLOOR_OPERATOR=0x...
 
 forge script script/DeployFloorV4.s.sol --rpc-url robinhood --broadcast

@@ -59,7 +59,7 @@ view whose only job was telling them apart.
 
 ## One key holds it, and the notice period is why that is survivable
 
-The beneficiary is `0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf` — one
+The beneficiary is `0x2977F5339157E7f6341f09D6F48811B9D1F67C42` — one
 wallet, not a multisig, deliberately, because it is the owner's money.
 
 The thing worth understanding about that choice: **the fourteen-day notice
@@ -105,7 +105,7 @@ to.
 export PRIVATE_KEY=...
 export KEVIN_TOKEN=0x...
 export FLOOR_ADDRESS=0x...     # the deployed KevinFloorV4. IMMUTABLE.
-export BENEFICIARY=0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf   # IMMUTABLE
+export BENEFICIARY=0x2977F5339157E7f6341f09D6F48811B9D1F67C42   # IMMUTABLE
 export RATE_PER_DAY=2000000000000000000000000   # 2m/day, 18 decimals
 export EXIT_DELAY=1209600      # 14 days. IMMUTABLE.
 

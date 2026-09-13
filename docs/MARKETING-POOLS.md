@@ -27,9 +27,12 @@ Three deployments exist — use the third, it supersedes the other two:
 
 v2's `swap()` was missing `payable` — any swap sending native ETH as input
 reverted outright (empty "0x" revert, no reason string). v3 fixes that and is
-the only one that should still be called. All three: owner
-`0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf` (treasury), manager
+the only one that should still be called. All three: manager
 `0x8366a39CC670B4001A1121B8F6A443A643e40951` (the chain's v4 PoolManager).
+Owner on all three is now `0x2977F5339157E7f6341f09D6F48811B9D1F67C42` —
+moved there (via `Ownable2Step` `transferOwnership` + `acceptOwnership`) from
+the original treasury (`0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf`) after
+that key was exposed; see the git history around 2026-09-13.
 
 Reuse `0x6D4450017F66878DDF217e265Af913ac1a22D8f7` for every future marketing
 pool — no need to redeploy. To seed a new one: `initialize()` the pool on the
