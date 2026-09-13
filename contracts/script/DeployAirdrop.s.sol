@@ -19,7 +19,7 @@ import {KevinAirdrop} from "../src/KevinAirdrop.sol";
 contract DeployAirdrop is Script {
     function run() external returns (KevinAirdrop drop) {
         uint256 pk = vm.envUint("PRIVATE_KEY");
-        address owner = vm.envOr("OWNER", address(0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf));
+        address owner = vm.envOr("OWNER", address(0x2977F5339157E7f6341f09D6F48811B9D1F67C42));
 
         vm.startBroadcast(pk);
         drop = new KevinAirdrop(owner);

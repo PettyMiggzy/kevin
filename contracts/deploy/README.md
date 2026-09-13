@@ -2,11 +2,18 @@
 
 ## Already deployed, chain 4663
 
+Owner on all four of these is `0x2977F5339157E7f6341f09D6F48811B9D1F67C42` — moved
+there from the original treasury (`0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf`)
+after that key was exposed; see the git history around 2026-09-13 for the
+incident. `Ownable2Step` on every one of these, so it was a clean
+transferOwnership + acceptOwnership, not a redeploy.
+
 | what | address | state |
 |---|---|---|
-| KevinAirdrop | `0x37F93dAFF688120d6C7793833cACd830A988A971` | owner = treasury, `roundCount()` 0 — holds nothing |
-| KevinFloorV4 (KEVIN/WETH) | `0xd7309Cc9383Feb44d09202764A72951B962a25Ab` | configured but deliberately not driven; its operator key was lost, so repoint it before any use |
-| KevinFloorV4 (KEVIN/KEK) | `0x47Dd22f76129d4AeC0c93668b905BC360657A29C` | **LIVE** — driven by the keeper, sold its first 2,000,000 KEVIN, holds a ~677,000 KEK war chest |
+| KevinAirdrop | `0x37F93dAFF688120d6C7793833cACd830A988A971` | `roundCount()` 0 — holds nothing |
+| KevinFloorV4 (KEVIN/WETH) | `0xd7309Cc9383Feb44d09202764A72951B962a25Ab` | operator was lost, now repointed to a fresh hot key; lightly funded (50,000 KEVIN, 0.0005 WETH war chest) as a test, not yet scaled up |
+| KevinFloorV4 (KEVIN/KEK) | `0x47Dd22f76129d4AeC0c93668b905BC360657A29C` | **LIVE**, but its KEK war chest is drained to 0 after 41 buybacks (5.9M KEK spent buying back 15M KEVIN against 4.76M KEVIN ever sold) — can still sell, cannot currently defend the floor until refilled |
+| KevinFloorV4 (KEK/WETH) | `0xbbAA0104FfAb5e19b1Ec23765ad93C7a9f13F5c5` | lightly used — 1 sale ever (1.5M KEK → 0.0093 WETH), holds 0.0168 WETH ready to buy dips, 0 KEK left to sell |
 
 ## Built but NOT deployed: KevinLock
 
@@ -39,6 +46,13 @@ them should differ:
 | `ratePerDay_` | 300,000 $KEVIN |
 | `exitDelay_` | 604800 (7 days) |
 | `exitWindow_` | 172800 (2 days) |
+
+**STALE as of 2026-09-13 — do not broadcast this blob.** That treasury key was
+exposed and abandoned (see the top-level table above); `beneficiary_` is
+IMMUTABLE after deploy, so this exact hex would permanently lock every future
+drip to a dead address. `DeployLock.s.sol`'s default has already been updated
+to the new treasury (`0x2977F5339157E7f6341f09D6F48811B9D1F67C42`) — rebuild
+this blob from that script before ever using it, and get a fresh sha256.
 
 `ratePerDay` can only ever be LOWERED after deploy, via `slowDown()`. `floor`,
 `beneficiary` and `exitDelay` are immutable. sha256 of the artifact:
@@ -78,7 +92,12 @@ So the creation calldata is committed here, and deploying needs only `cast`.
 ## KevinAirdrop
 
 `KevinAirdrop.create.hex` — creation bytecode with the constructor argument
-already appended, `owner = 0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf`.
+already appended, `owner = 0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf`. That's
+what's actually baked into this already-broadcast blob and its pinned hash
+below, so it's left as-is; ownership has since moved to the new treasury
+(`0x2977F5339157E7f6341f09D6F48811B9D1F67C42`) via `transferOwnership` +
+`acceptOwnership`, per the table at the top of this file — this section is a
+historical record of the deploy, not the contract's current owner.
 
     sha256  834c4471702838180dcf02f31f288021a3d1e507e4d19639be5af5b506cf2974
 
@@ -170,6 +189,12 @@ same launchpad factory deploy, and copying `0xFEf8e780…` here would silently
 point at an uninitialised pool. Read directly off this pool's own
 `Initialize` event on the PoolManager and verified by recomputing the poolId
 hash and matching it against the live pool (same check described above):
+
+Already deployed at `0xbbAA0104FfAb5e19b1Ec23765ad93C7a9f13F5c5` (see the
+top-level table) — ownership has since moved to the new treasury via
+`transferOwnership` + `acceptOwnership`. `owner_` below is what this
+already-broadcast blob's constructor call actually used, kept as-is since
+it's a historical record of the deploy, not the contract's current owner.
 
 | arg | value |
 |---|---|

@@ -34,7 +34,7 @@ import {Currency} from "v4-core/src/types/Currency.sol";
  * (0xE4AcdB51b6554246Da8488d1e68E8FAd1b93f383). RUN script/Preflight.s.sol
  * FIRST — it proves the pool is really there before anything is deployed at it.
  *   FLOOR_OWNER     can sweep and re-tune. Defaults to the owner's wallet:
- *                   0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf
+ *                   0x2977F5339157E7f6341f09D6F48811B9D1F67C42
  *                   It is one key, deliberately. See LOCK.md for what that
  *                   does and does not put at risk.
  *   FLOOR_OPERATOR  the hot key that pokes it. Assume it leaks.
@@ -72,7 +72,7 @@ contract DeployFloorV4 is Script {
         address token = vm.envAddress("KEVIN_TOKEN");
         // WETH on Robinhood Chain 4663, read off the launchpad factory's weth().
         address quote = vm.envOr("QUOTE", address(0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73));
-        address owner = vm.envOr("FLOOR_OWNER", address(0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf));
+        address owner = vm.envOr("FLOOR_OWNER", address(0x2977F5339157E7f6341f09D6F48811B9D1F67C42));
 
         // v4 sorts the two currencies by address; native ETH is address(0) and
         // therefore always currency0.

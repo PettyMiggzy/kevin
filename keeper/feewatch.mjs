@@ -36,7 +36,7 @@ const ROOT = join(HERE, '..');
 const cfg = {
   rpc: process.env.ROBINHOOD_RPC_URL || 'https://rpc.mainnet.chain.robinhood.com',
   chainId: Number(process.env.CHAIN_ID || 4663),
-  wallet: getAddress(process.env.TREASURY || '0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf'),
+  wallet: getAddress(process.env.TREASURY || '0x2977F5339157E7f6341f09D6F48811B9D1F67C42'),
   // Baseline: the block at which this watcher was first pointed at the wallet.
   // Nothing before it is scanned, so the panel never implies it knows about
   // history it never looked at.

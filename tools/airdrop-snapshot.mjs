@@ -106,7 +106,7 @@ const EXCLUDE = new Set([
   // The treasury itself. It is the one address most obviously not entitled to
   // a share of its own airdrop, and the one an exclusion list built by looking
   // at the pools is most likely to forget.
-  '0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf',
+  '0x2977F5339157E7f6341f09D6F48811B9D1F67C42',
   ...(arg('exclude', '') || '').split(',').filter(Boolean),
 ].map((a) => getAddress(a)));
 
