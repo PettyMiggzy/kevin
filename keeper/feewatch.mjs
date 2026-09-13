@@ -36,7 +36,18 @@ const ROOT = join(HERE, '..');
 const cfg = {
   rpc: process.env.ROBINHOOD_RPC_URL || 'https://rpc.mainnet.chain.robinhood.com',
   chainId: Number(process.env.CHAIN_ID || 4663),
-  wallet: getAddress(process.env.TREASURY || '0x2977F5339157E7f6341f09D6F48811B9D1F67C42'),
+  // NOT the treasury's current operating wallet — this is specifically the
+  // address the launchpad locker's `beneficiaryOf()` has recorded, which is
+  // immutable per position (see keeper/README.md or the security incident
+  // notes around 2026-09-13). It stays 0xCDD5ff... permanently, even after
+  // the operating treasury moved to 0x2977F5..., because every one of these
+  // positions was locked with the old address baked in and there is no
+  // setter to change it. Pointing this at the new treasury breaks the whole
+  // provenance check below — direct-from-pad transfers never arrive there,
+  // so every real claim gets silently reclassified as unpublished. Claimed
+  // fees still have to be swept from here to the real treasury by hand (or
+  // by a separate script) after this watcher records them.
+  wallet: getAddress(process.env.TREASURY || '0xCDD5ff5d521D3694c2a2F31eDF7cd3C0E9a6fabf'),
   // Baseline: the block at which this watcher was first pointed at the wallet.
   // Nothing before it is scanned, so the panel never implies it knows about
   // history it never looked at.
