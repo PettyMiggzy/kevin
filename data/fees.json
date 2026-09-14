@@ -3,31 +3,265 @@
   "note": "LP fees claimed from the launchpad. Every row is a real transaction — open the hash in the explorer and check it. A row appears only if the transaction that produced it is a fee-claim call on the launchpad locker — not merely a transfer that arrived from a launchpad contract, which is also what a swap or a vesting release looks like.",
   "explorer": "https://robinhoodchain.blockscout.com/tx/",
   "watchedFrom": 57090885,
-  "lastBlock": 57434240,
-  "updatedAt": "2026-09-08T05:20:36.091Z",
+  "lastBlock": 62396175,
+  "updatedAt": "2026-09-14T01:09:12.366Z",
   "totals": {
-    "KEK": {
-      "raw": "525169545832999303102525",
-      "amount": "525169.545832999303102525",
+    "GME": {
+      "raw": "194273338302048585",
+      "amount": "0.194273338302048585",
       "decimals": 18
     },
     "KEVIN": {
-      "raw": "3410144344970634050394133",
-      "amount": "3410144.344970634050394133",
-      "decimals": 18
-    },
-    "GME": {
-      "raw": "79223153141012762",
-      "amount": "0.079223153141012762",
+      "raw": "7337001628910175366544894",
+      "amount": "7337001.628910175366544894",
       "decimals": 18
     },
     "WETH": {
-      "raw": "5134649754998816",
-      "amount": "0.005134649754998816",
+      "raw": "12860743884621234",
+      "amount": "0.012860743884621234",
+      "decimals": 18
+    },
+    "KEK": {
+      "raw": "1190129317067173490950384",
+      "amount": "1190129.317067173490950384",
       "decimals": 18
     }
   },
   "claims": [
+    {
+      "tx": "0xa30474074f7738dd07b9e059a7888fd0d5cfa2000b09f76f743fa73d38719f4b",
+      "block": 62078396,
+      "token": "0x1b0E319c6A659F002271B69dB8A7df2F911c153E",
+      "symbol": "GME",
+      "decimals": 18,
+      "raw": "1156144838692814",
+      "amount": "0.001156144838692814",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-13T15:54:07.000Z"
+    },
+    {
+      "tx": "0xa30474074f7738dd07b9e059a7888fd0d5cfa2000b09f76f743fa73d38719f4b",
+      "block": 62078396,
+      "token": "0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A",
+      "symbol": "KEVIN",
+      "decimals": 18,
+      "raw": "14342510762717647025818",
+      "amount": "14342.510762717647025818",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-13T15:54:07.000Z"
+    },
+    {
+      "tx": "0xf125c0e27ff993b0b09a20d386b6b857e052e86b1b663f5e7d1c9dd33ebbd528",
+      "block": 62076467,
+      "token": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "symbol": "WETH",
+      "decimals": 18,
+      "raw": "128487713581289",
+      "amount": "0.000128487713581289",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-13T15:50:53.000Z"
+    },
+    {
+      "tx": "0xf125c0e27ff993b0b09a20d386b6b857e052e86b1b663f5e7d1c9dd33ebbd528",
+      "block": 62076467,
+      "token": "0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A",
+      "symbol": "KEVIN",
+      "decimals": 18,
+      "raw": "106869365287847917260242",
+      "amount": "106869.365287847917260242",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-13T15:50:53.000Z"
+    },
+    {
+      "tx": "0xebc9523088df24fbe5eaa734a8fb6882e3855e021a87729d54614fc24416cc77",
+      "block": 62070695,
+      "token": "0x5a3544a0328afD50A9979e03404F35c555B88c00",
+      "symbol": "KEK",
+      "decimals": 18,
+      "raw": "9807595783837738802942",
+      "amount": "9807.595783837738802942",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-13T15:41:05.000Z"
+    },
+    {
+      "tx": "0xebc9523088df24fbe5eaa734a8fb6882e3855e021a87729d54614fc24416cc77",
+      "block": 62070695,
+      "token": "0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A",
+      "symbol": "KEVIN",
+      "decimals": 18,
+      "raw": "35863861687964422600349",
+      "amount": "35863.861687964422600349",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-13T15:41:05.000Z"
+    },
+    {
+      "tx": "0xc02ce163356042524bd793ec669e98239f0d431dbd5c3adb0832da4260664d7e",
+      "block": 61160752,
+      "token": "0x5a3544a0328afD50A9979e03404F35c555B88c00",
+      "symbol": "KEK",
+      "decimals": 18,
+      "raw": "368133712971754240563447",
+      "amount": "368133.712971754240563447",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-12T14:00:42.000Z"
+    },
+    {
+      "tx": "0xc02ce163356042524bd793ec669e98239f0d431dbd5c3adb0832da4260664d7e",
+      "block": 61160752,
+      "token": "0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A",
+      "symbol": "KEVIN",
+      "decimals": 18,
+      "raw": "821917750106520331348539",
+      "amount": "821917.750106520331348539",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-12T14:00:42.000Z"
+    },
+    {
+      "tx": "0x2631709f848e13fedf904f16356a6a65fe5d355a78363ad36930fec6a9791542",
+      "block": 61160657,
+      "token": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "symbol": "WETH",
+      "decimals": 18,
+      "raw": "4495705052555883",
+      "amount": "0.004495705052555883",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-12T14:00:33.000Z"
+    },
+    {
+      "tx": "0x2631709f848e13fedf904f16356a6a65fe5d355a78363ad36930fec6a9791542",
+      "block": 61160657,
+      "token": "0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A",
+      "symbol": "KEVIN",
+      "decimals": 18,
+      "raw": "1288486376929753850430622",
+      "amount": "1288486.376929753850430622",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-12T14:00:33.000Z"
+    },
+    {
+      "tx": "0x825d1c62662b90e0c31bb8ad46eed155ce05140ab13638624c715de6e1f034ed",
+      "block": 61160554,
+      "token": "0x1b0E319c6A659F002271B69dB8A7df2F911c153E",
+      "symbol": "GME",
+      "decimals": 18,
+      "raw": "56584742382615184",
+      "amount": "0.056584742382615184",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-12T14:00:22.000Z"
+    },
+    {
+      "tx": "0x825d1c62662b90e0c31bb8ad46eed155ce05140ab13638624c715de6e1f034ed",
+      "block": 61160554,
+      "token": "0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A",
+      "symbol": "KEVIN",
+      "decimals": 18,
+      "raw": "146753081176687406772610",
+      "amount": "146753.08117668740677261",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-12T14:00:22.000Z"
+    },
+    {
+      "tx": "0xc4f32310cf29c09dd47f1ded66285264c7c6aad381c27ab9ec88c573b1a30181",
+      "block": 58465397,
+      "token": "0x5a3544a0328afD50A9979e03404F35c555B88c00",
+      "symbol": "KEK",
+      "decimals": 18,
+      "raw": "287018462478582208481470",
+      "amount": "287018.46247858220848147",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-09T10:11:33.000Z"
+    },
+    {
+      "tx": "0xc4f32310cf29c09dd47f1ded66285264c7c6aad381c27ab9ec88c573b1a30181",
+      "block": 58465397,
+      "token": "0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A",
+      "symbol": "KEVIN",
+      "decimals": 18,
+      "raw": "712105242506646140207607",
+      "amount": "712105.242506646140207607",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-09T10:11:33.000Z"
+    },
+    {
+      "tx": "0x363487810be0faa4afb9ff15cd33c874bf136b81f190724d8734cd61545a4cec",
+      "block": 58465303,
+      "token": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "symbol": "WETH",
+      "decimals": 18,
+      "raw": "3101901363485246",
+      "amount": "0.003101901363485246",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-09T10:11:23.000Z"
+    },
+    {
+      "tx": "0x363487810be0faa4afb9ff15cd33c874bf136b81f190724d8734cd61545a4cec",
+      "block": 58465303,
+      "token": "0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A",
+      "symbol": "KEVIN",
+      "decimals": 18,
+      "raw": "706614852877412395421606",
+      "amount": "706614.852877412395421606",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-09T10:11:23.000Z"
+    },
+    {
+      "tx": "0x077def1bb2aa3b1b989484907285c8cf822602dea9e9f859efedfb2429500020",
+      "block": 58465173,
+      "token": "0x1b0E319c6A659F002271B69dB8A7df2F911c153E",
+      "symbol": "GME",
+      "decimals": 18,
+      "raw": "57309297939727825",
+      "amount": "0.057309297939727825",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-09T10:11:10.000Z"
+    },
+    {
+      "tx": "0x077def1bb2aa3b1b989484907285c8cf822602dea9e9f859efedfb2429500020",
+      "block": 58465173,
+      "token": "0x63D7fa99022794f594F724e7C38Ff0bE3F9e284A",
+      "symbol": "KEVIN",
+      "decimals": 18,
+      "raw": "93904242603991205083368",
+      "amount": "93904.242603991205083368",
+      "from": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "source": "uniswap v4 pool manager",
+      "call": "launchpad locker, claim",
+      "at": "2026-09-09T10:11:10.000Z"
+    },
     {
       "tx": "0xe6374297b150c072839718578ac7fd791febcacab1d3fb6b82020fdce3c1ba83",
       "block": 57096207,
@@ -107,5 +341,5 @@
       "at": "2026-09-07T19:48:30.000Z"
     }
   ],
-  "unpublished": 1
+  "unpublished": 18
 }
