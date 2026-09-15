@@ -26,17 +26,21 @@
 // and as play-money as phase 1 — see poker/server/README.md's "What this
 // phase does NOT defend against".
 import { createServer } from 'node:http';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer } from 'ws';
 import {
-  createTable, handleJoin, handleAction, handleLeave, handleDisconnect, summarizeTable,
+  createTable, handleJoin, handleAction, handleLeave, handleDisconnect, summarizeTable, addBots,
 } from './table.mjs';
 import {
   createTournament, handleRegister, handleAction as tournamentHandleAction, handleStart,
   handleUnregister, handleDisconnect as tournamentHandleDisconnect, tick as tournamentTick,
   summarizeTournament,
 } from './tournament.mjs';
+import { open as openLeaderboard } from './db.mjs';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 const ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789'; // no 0/O/1/l/i — same as the client's own code generator
@@ -76,13 +80,34 @@ function readJsonBody(req, maxBytes = 64 * 1024) {
  * `tick` for why that pacing is UX, not a rule; tests that want to control
  * timing exactly drive `tick()` directly instead (see tournament.test.mjs)
  * and can pass `tickMs: 0` here to disable the interval entirely.
+ *
+ * `dbFile` (default `poker/server/data/leaderboard.db`, overridable with
+ * `KEVIN_POKER_DB` — same `process.env.X || default` shape as `PORT` below
+ * and `KEVIN_ORIGIN` above) is the leaderboard's own SQLite file — see
+ * db.mjs. A test can pass `':memory:'` to avoid touching disk at all.
  */
-export function startServer({ port = 0, origin = process.env.KEVIN_ORIGIN || '*', tickMs = 500 } = {}) {
+export function startServer({
+  port = 0, origin = process.env.KEVIN_ORIGIN || '*', tickMs = 500,
+  dbFile = process.env.KEVIN_POKER_DB || join(HERE, 'data/leaderboard.db'),
+} = {}) {
   const tables = new Map();
   const tournaments = new Map();
+  const leaderboard = openLeaderboard(dbFile);
+
+  // The one place table.mjs's storage-agnostic `onHandSettled` seam (see its
+  // own comment on `createTable`) meets an actual database — table.mjs never
+  // imports node:sqlite, or anything DB-related, itself. Only ever wired
+  // onto PRACTICE tables created below: tournament.mjs builds its own
+  // table.mjs tables directly (never through `getTable`/`POST /tables`), so
+  // its chip movements are never recorded here — tournament.mjs's own
+  // economy is separate and self-contained on purpose (see its file header).
+  const onHandSettled = (table, deltas) => {
+    if (deltas.length) leaderboard.recordHand(table.id, table.game.hand, deltas);
+  };
+
   function getTable(id) {
     let t = tables.get(id);
-    if (!t) { t = createTable(id); tables.set(id, t); }
+    if (!t) { t = createTable(id, { onHandSettled }); tables.set(id, t); }
     return t;
   }
 
@@ -134,6 +159,10 @@ export function startServer({ port = 0, origin = process.env.KEVIN_ORIGIN || '*'
         tournaments: [...tournaments.values()].map(summarizeTournament),
       });
     }
+    if (req.method === 'GET' && url.pathname === '/leaderboard') {
+      const limit = Number.isFinite(Number(url.searchParams.get('limit'))) ? Number(url.searchParams.get('limit')) : 20;
+      return json(200, { players: leaderboard.top(limit) });
+    }
     if (req.method === 'POST' && url.pathname === '/tables') {
       let body;
       try { body = await readJsonBody(req); } catch (e) { return json(400, { error: e.message }); }
@@ -144,7 +173,18 @@ export function startServer({ port = 0, origin = process.env.KEVIN_ORIGIN || '*'
         smallBlind: Number.isFinite(Number(body.smallBlind)) ? Math.max(1, Math.trunc(Number(body.smallBlind))) : undefined,
         bigBlind: Number.isFinite(Number(body.bigBlind)) ? Math.max(2, Math.trunc(Number(body.bigBlind))) : undefined,
         startChips: Number.isFinite(Number(body.startChips)) ? Math.max(2, Math.trunc(Number(body.startChips))) : undefined,
+        onHandSettled,
       });
+      // Pre-seeds `table.waiting` before the creator's own `handleJoin` ever
+      // runs, so a lone visitor's `join` alone already satisfies
+      // `tryStartHand`'s existing `combined.length < 2` gate — no separate
+      // "start with bots" code path, just bots sitting down first. Anything
+      // that is not a small non-negative integer collapses to 0 (no bots)
+      // rather than failing the whole request, the same lenient style
+      // already used for smallBlind/bigBlind/startChips just above; 5 keeps
+      // a table at or under MAX_SEATS even if a human joins after.
+      const bots = Number.isInteger(Number(body.bots)) ? Math.max(0, Math.min(5, Number(body.bots))) : 0;
+      addBots(t, bots);
       tables.set(id, t);
       return json(200, { id, name: t.name });
     }
@@ -256,8 +296,13 @@ export function startServer({ port = 0, origin = process.env.KEVIN_ORIGIN || '*'
     tournaments,
     close: () => new Promise((resolve) => {
       if (tickTimer) clearInterval(tickTimer);
+      // Every table's own pending timers (settleIfDone's `nextTimer`,
+      // scheduleBotTurn's `botTimer` — see table.mjs) would otherwise keep
+      // firing into a server that is shutting down, which matters for a
+      // test that opens many short-lived servers back to back.
+      for (const t of tables.values()) { clearTimeout(t.nextTimer); clearTimeout(t.botTimer); }
       for (const c of wss.clients) c.terminate();
-      wss.close(() => httpServer.close(() => resolve()));
+      wss.close(() => httpServer.close(() => { leaderboard.db.close(); resolve(); }));
     }),
   };
 }

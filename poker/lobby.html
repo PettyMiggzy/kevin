@@ -22,6 +22,9 @@
     </div>
     <form id="newTableForm" class="newForm" hidden>
       <input id="newTableName" placeholder="Table name" maxlength="40" autocomplete="off">
+      <label class="botsField">Bots
+        <input id="newTableBots" type="number" min="0" max="5" step="1" value="0" inputmode="numeric">
+      </label>
       <button type="submit">CREATE</button>
       <button type="button" class="cancel" data-cancel>CANCEL</button>
     </form>
@@ -40,11 +43,20 @@
     </form>
     <div id="tourneyList" class="rowList"><p class="rowEmpty">Loading…</p></div>
   </section>
+
+  <section class="lobbySection">
+    <div class="lobbySectionHead">
+      <h2>Leaderboard</h2>
+    </div>
+    <div id="leaderboardList" class="rowList"><p class="rowEmpty">Loading…</p></div>
+  </section>
 </div>
 <p id="lobbyErr" class="hint err" hidden></p>
 <p class="hint">Play money, no account needed. Tables are <b>practice</b> chips —
   <b>real</b>-stakes tables are coming later and will look different here, not
-  swapped in quietly. <a href="index.html">Practice against bots instead →</a></p>
+  swapped in quietly. Add bots to a new table to start playing without
+  waiting for anyone else. <a href="index.html">Or play the original
+  single-player room →</a></p>
 <script type="module" src="js/lobby.js"></script>
 </body>
 </html>

@@ -11,14 +11,18 @@
 // and can be driven directly by a test with a fake socket — the same reason
 // holdem.js does not import a DOM.
 import { createGame, startHand, act, options } from '../js/holdem.js';
+import { ROSTER } from '../js/characters.js';
+import { botMove } from './bots.mjs';
 import { randomUUID } from 'node:crypto';
 
 export const MAX_SEATS = 6;
 const OPEN = 1; // WebSocket.OPEN, without importing the library for one constant
+const noop = () => {};
 
 /**
  * @param {string} id
- * @param {{smallBlind?:number, bigBlind?:number, startChips?:number, name?:string, mode?:string}} [opts]
+ * @param {{smallBlind?:number, bigBlind?:number, startChips?:number, name?:string, mode?:string,
+ *   onHandSettled?:(table:object, deltas:Array<{name:string,bot:boolean,delta:number}>)=>void}} [opts]
  */
 export function createTable(id, opts = {}) {
   return {
@@ -33,13 +37,27 @@ export function createTable(id, opts = {}) {
     bigBlind: opts.bigBlind ?? 20,
     startChips: opts.startChips ?? 2000,
     game: null,           // the live holdem.js game, or the last finished one
-    waiting: [],           // [{ id, ws, name, chips? }] — not dealt in yet; an
-                            // explicit `chips` (set by tournament.mjs when it
-                            // seats a player with their existing stack) wins
-                            // over the table's own startChips — see handleJoin.
+    waiting: [],           // [{ id, ws, name, chips?, bot?, style? }] — not
+                            // dealt in yet; an explicit `chips` (set by
+                            // tournament.mjs when it seats a player with
+                            // their existing stack) wins over the table's own
+                            // startChips — see handleJoin. `bot`/`style` mark
+                            // a seat pushed on by `addBots` rather than a
+                            // real join.
     sockets: new Set(),    // every connection that should receive broadcasts
     phase: 'idle',         // 'idle' | 'playing'
     nextTimer: null,
+    botTimer: null,        // scheduleBotTurn's pending "it's a bot's turn" timer
+    closed: false,          // set once every human socket is gone — see handleDisconnect
+    handChipsBefore: null, // Map(seat -> chips) snapshotted right before this
+                            // hand's startHand(), consumed by settleIfDone —
+                            // see its own comment and onHandSettled below.
+    // Storage lives outside this file entirely — see this file's own header
+    // comment on why — so the leaderboard is wired in as a callback the
+    // caller supplies (index.mjs, closing over its own SQLite handle) rather
+    // than an import here. Defaults to a no-op so every existing caller
+    // (tests, tournament.mjs's internal tables) is unaffected.
+    onHandSettled: opts.onHandSettled || noop,
   };
 }
 
@@ -122,6 +140,7 @@ export function viewFor(table, ws) {
         allIn: s.allIn,
         out: s.out,
         connected: s.connected !== false,
+        bot: !!s.bot, // not sensitive — just lets the client badge a bot seat, same as `name`
         mine,
         hole: show ? s.hole : s.hole.map(() => null),
         result: g.street === 'showdown' && show ? (s.result ?? null) : null,
@@ -164,6 +183,24 @@ function settleIfDone(table) {
     // nobody was left to deal to (so the lobby does not sit there for 4s).
     const delay = table.game.street === 'showdown' ? 4000 : 1200;
     table.nextTimer = setTimeout(() => tryStartHand(table), delay);
+
+    // `street === 'over'` is startHand's own "not enough players with
+    // chips" early exit — no card was dealt and no chip moved, so there is
+    // nothing to record. A real conclusion (however the hand actually
+    // ended — a fold-out or a genuine showdown) always sets `street` to
+    // 'showdown', see holdem.js's `finish()`. Diffing against the snapshot
+    // tryStartHand took immediately before this hand's own startHand() is
+    // exactly the "before/after" the leaderboard needs, and works no matter
+    // which caller's settleIfDone() call actually closes out the hand
+    // (a normal action, or a disconnect/leave auto-folding it shut).
+    if (table.game.street === 'showdown' && table.handChipsBefore) {
+      const before = table.handChipsBefore;
+      const deltas = table.game.seats
+        .filter((s) => !s.bot)
+        .map((s) => ({ name: s.name, bot: false, delta: s.chips - (before.get(s.seat) ?? s.chips) }));
+      table.onHandSettled(table, deltas);
+    }
+    table.handChipsBefore = null;
   }
 }
 
@@ -188,29 +225,37 @@ export function tryStartHand(table) {
   // to act. Broadcasting here is a no-op in cost (the same state everyone
   // else already has) and closes that gap for anyone whose socket was just
   // added to `table.sockets`.
-  if (table.phase === 'playing') { broadcast(table); return; }
+  if (table.phase === 'playing') { broadcast(table); scheduleBotTurn(table); return; }
   const survivors = (table.game?.seats ?? [])
     .filter((s) => s.connected && s.chips > 0)
-    .map((s) => ({ id: s.id, ws: s.ws, name: s.name, chips: s.chips }));
+    .map((s) => ({ id: s.id, ws: s.ws, name: s.name, chips: s.chips, bot: s.bot, style: s.style }));
   const newcomers = table.waiting.filter((w) => isOpen(w.ws));
-  const combined = [...survivors, ...newcomers.map((w) => ({ id: w.id, ws: w.ws, name: w.name, chips: w.chips ?? table.startChips }))];
+  const combined = [...survivors, ...newcomers.map((w) => (
+    { id: w.id, ws: w.ws, name: w.name, chips: w.chips ?? table.startChips, bot: w.bot, style: w.style }
+  ))];
 
   if (combined.length < 2) {
     table.waiting = newcomers; // drop only the closed sockets; keep waiting for a second player
     broadcast(table);
+    scheduleBotTurn(table);
     return;
   }
 
   const seatsIn = combined.slice(0, MAX_SEATS);
-  // Preserve `chips` for anyone bumped back to waiting by an over-full table
-  // (a tournament seating more than MAX_SEATS at once) — dropping it here
-  // would have silently reset their stack to table.startChips next time
-  // they made it off the waiting list.
-  table.waiting = combined.slice(MAX_SEATS).map(({ id, ws, name, chips }) => ({ id, ws, name, chips }));
+  // Preserve `chips`/`bot`/`style` for anyone bumped back to waiting by an
+  // over-full table (a tournament seating more than MAX_SEATS at once, or in
+  // principle more bots than addBots itself should ever be asked to add) —
+  // dropping any of this here would silently reset a rejoining stack, or
+  // turn a bot back into a human, the next time they made it off the
+  // waiting list.
+  table.waiting = combined.slice(MAX_SEATS).map(({ id, ws, name, chips, bot, style }) => ({ id, ws, name, chips, bot, style }));
 
   if (!sameComposition(table.game, seatsIn)) {
     table.game = createGame({
-      seats: seatsIn.map((s) => ({ id: s.id, name: s.name, chips: s.chips, human: true, ws: s.ws, connected: true })),
+      seats: seatsIn.map((s) => ({
+        id: s.id, name: s.name, chips: s.chips, human: !s.bot, ws: s.ws, connected: true,
+        bot: !!s.bot, style: s.style,
+      })),
       smallBlind: table.smallBlind,
       bigBlind: table.bigBlind,
     });
@@ -226,10 +271,16 @@ export function tryStartHand(table) {
   table.game.smallBlind = table.smallBlind;
   table.game.bigBlind = table.bigBlind;
   table.phase = 'playing';
+  // The "before" side of the leaderboard diff — see settleIfDone, which
+  // reads this back once the hand it belongs to actually concludes (that
+  // can be many handleAction calls later, or synchronously right below via
+  // autoActForDisconnected, so it has to live on `table`, not a local).
+  table.handChipsBefore = new Map(table.game.seats.map((s) => [s.seat, s.chips]));
   startHand(table.game);
   autoActForDisconnected(table);
   settleIfDone(table);
   broadcast(table);
+  scheduleBotTurn(table);
 }
 
 /**
@@ -280,6 +331,13 @@ export function handleAction(table, ws, action, amount) {
   autoActForDisconnected(table);
   settleIfDone(table);
   broadcast(table);
+  // Self-chaining: if the seat this just handed the turn to is ALSO a bot
+  // (an all-remaining-bots street, or several bots in a row), this schedules
+  // the next one exactly the way this call was itself scheduled — no extra
+  // loop anywhere. A real player's action reaches here through the exact
+  // same path (index.mjs's `case 'action'`), so a bot's move is never a
+  // parallel, less-checked code path — see scheduleBotTurn.
+  scheduleBotTurn(table);
 }
 
 /** Voluntarily stand up without closing the tab: sit out of future hands,
@@ -293,6 +351,7 @@ export function handleLeave(table, ws) {
     settleIfDone(table);
   }
   broadcast(table);
+  scheduleBotTurn(table);
 }
 
 /**
@@ -318,5 +377,88 @@ export function handleDisconnect(table, ws) {
     settleIfDone(table);
   }
   broadcast(table);
-  return table.sockets.size === 0;
+  if (table.sockets.size === 0) {
+    // Bots never occupy `table.sockets` (see addBots) — only real browser
+    // tabs do — so this is genuinely "every human is gone", not "everyone is
+    // gone". Without this, an all-bot-remaining table would otherwise keep
+    // scheduleBotTurn's timer chain running forever, on a droplet that
+    // cannot afford an orphaned setTimeout per abandoned table: index.mjs
+    // deletes this table from its own registry the instant this returns
+    // true, but nothing would otherwise stop the timer chain still holding
+    // a reference to it.
+    table.closed = true;
+    clearTimeout(table.botTimer);
+    return true;
+  }
+  scheduleBotTurn(table);
+  return false;
+}
+
+/**
+ * Chains a bot's action onto its own "thinking" timer instead of a loop, so
+ * an all-remaining-bots street — or a whole table of nothing but bots —
+ * plays itself out one `handleAction` call at a time, each one going
+ * through the exact same turn-ownership and options()-legality checks a
+ * real WebSocket message gets (see handleAction's own comment). Re-checked
+ * at fire time: the same seat, the same hand, and the same turn this timer
+ * was set for, because anything can happen in the pause — everyone else
+ * could fold the hand shut, the table could close (see handleDisconnect),
+ * or (composition changed) a new game object could already be in play.
+ * Idempotent to call repeatedly for the same still-pending turn — every
+ * mutating function in this file calls this right after its own broadcast,
+ * so it just resets the pending timer to whoever's turn it currently is.
+ */
+function scheduleBotTurn(table) {
+  clearTimeout(table.botTimer);
+  if (table.closed) return;
+  const g = table.game;
+  if (!g || table.phase !== 'playing' || g.turn < 0) return;
+  const seat = g.seats[g.turn];
+  if (!seat || !seat.bot) return;
+
+  const gameRef = g;
+  const hand = g.hand;
+  const turnSeat = g.turn;
+  // 550-1400ms: the same "thinking pause" feel as the single-player room's
+  // own bots (poker/js/main.js's tick()), kept modest on purpose — a
+  // resource-constrained droplet running several concurrent bot tables
+  // cannot afford that pause to also be a long-lived timer.
+  const delay = 550 + Math.random() * 850;
+  table.botTimer = setTimeout(() => {
+    if (table.closed || table.game !== gameRef || table.phase !== 'playing') return;
+    if (table.game.hand !== hand || table.game.turn !== turnSeat) return;
+    const s = table.game.seats[turnSeat];
+    if (!s || !s.bot) return;
+    const [action, amount] = botMove(table.game, s);
+    handleAction(table, s.ws, action, amount);
+  }, delay);
+}
+
+/**
+ * Push `count` bot seats onto the waiting list, the same list a real `join`
+ * lands on — so a bot goes through `tryStartHand`'s ordinary
+ * `waiting`/`combined`/`seatsIn` machinery (MAX_SEATS cap included) exactly
+ * like a person, with no parallel seating path to keep in sync. Each bot
+ * gets its own fake "always open" socket (`.send`/`.readyState`, this file's
+ * own documented transport contract — see the header comment) rather than a
+ * shared one, because `s.ws === ws` identity checks are used throughout this
+ * file (handleAction's turn-ownership check chief among them) to tell one
+ * seat from another; sharing one fake socket across bots would make two bot
+ * seats indistinguishable to those checks. Deliberately NOT added to
+ * `table.sockets` — nothing is ever listening on the other end, and
+ * handleDisconnect's "every human is gone" check depends on `table.sockets`
+ * counting only real connections (see its own comment).
+ */
+export function addBots(table, count) {
+  const n = Number.isFinite(Number(count)) ? Math.max(0, Math.trunc(Number(count))) : 0;
+  for (let i = 0; i < n; i++) {
+    const c = ROSTER[(table.waiting.length + i) % ROSTER.length];
+    table.waiting.push({
+      id: randomUUID(),
+      ws: { readyState: OPEN, send: noop },
+      name: c.name,
+      bot: true,
+      style: c.style,
+    });
+  }
 }
