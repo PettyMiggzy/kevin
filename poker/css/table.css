@@ -133,6 +133,19 @@ a{color:var(--brand)}
 .newForm button{font-size:12px;padding:8px 14px}
 .newForm .cancel{background:#2A2723;color:var(--cream)}
 
+/* --- the how-to-play page (how-to-play.html) -------------------------------
+   Reuses .lobbySection for the same card-row look as the lobby rather than
+   inventing a second content style, but this page is prose/lists, not rows,
+   so it needs its own list markup on top of that shell. */
+.lobbySection p{font-size:13px;line-height:1.6;margin-bottom:8px}
+.lobbySection p:last-child{margin-bottom:0}
+.howToSteps,.howToRanks{padding-left:1.4em}
+.howToSteps li,.howToRanks li{font-size:13px;line-height:1.6;margin-bottom:6px}
+.howToList{list-style:none}
+.howToList li{font-size:13px;line-height:1.6;margin-bottom:6px;padding-left:1.1em;position:relative}
+.howToList li::before{content:'\2022';position:absolute;left:0;color:var(--brand)}
+.howToRanks li::marker,.howToSteps li::marker{color:var(--brand);font-weight:700}
+
 /* --- the tournament status bar (tournament.html / js/tournament.js) ------- */
 #tourneyBar{width:min(96vw,980px);display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;
   justify-content:center;background:rgba(0,0,0,.32);border:2px solid var(--ink);border-radius:12px;
