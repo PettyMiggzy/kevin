@@ -252,6 +252,19 @@ async function main() {
           address: cfg.weth, abi: ERC20_ABI, functionName: 'approve', args: [cfg.router, amountIn],
         });
         await pub.waitForTransactionReceipt({ hash: approveHash });
+
+        // Re-check gas AFTER spending some on the approve, not just once at
+        // the top of the tick. The floor check above used a balance read
+        // before this tick spent anything; an approve on a chain with a
+        // sudden gas spike could leave less than minGasWei behind for the
+        // swap that was about to follow it. Better to stop here — the
+        // approve already stands, ready for next tick — than send a swap
+        // likely to fail from insufficient gas and burn its cost for
+        // nothing.
+        const gasAfterApprove = await pub.getBalance({ address: account.address });
+        if (gasAfterApprove < cfg.minGasWei) {
+          return warn(`  no buy: wallet gas ${formatEther(gasAfterApprove)} ETH fell below floor ${formatEther(cfg.minGasWei)} after the approve — allowance is set, swap deferred to next tick`);
+        }
       }
 
       say(`  BUYING: ${formatEther(amountIn)} WETH -> CASHCAT, min out ${(minOutFloat).toFixed(2)} CASHCAT`);
