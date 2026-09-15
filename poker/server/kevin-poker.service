@@ -26,7 +26,10 @@ SyslogIdentifier=kevin-poker
 # poker/server/README.md's "Putting it on the internet" section.
 Environment=PORT=8788
 # Only the site should be able to open a socket to this from a browser.
-Environment=KEVIN_ORIGIN=https://iamkevin.lol
+# Both the apex and `www.` — Vercel serves the real site from
+# `www.iamkevin.lol` (redirecting the apex there), so a visitor's actual
+# Origin header is whichever one the page loaded from, not just one of them.
+Environment=KEVIN_ORIGIN=https://iamkevin.lol,https://www.iamkevin.lol
 
 # No filesystem access needed at all — everything lives in memory.
 NoNewPrivileges=yes

@@ -86,9 +86,27 @@ export function startServer({ port = 0, origin = process.env.KEVIN_ORIGIN || '*'
     return t;
   }
 
+  // `origin` is '*', or a comma-separated allowlist — e.g. the apex and
+  // `www.` both, since Vercel serves the real site from `www.iamkevin.lol`
+  // (redirecting the bare domain there) and a browser's actual `Origin`
+  // header is whichever one the page loaded from, not whichever one an
+  // operator typed into KEVIN_ORIGIN first. A single fixed string here
+  // caused a real outage: KEVIN_ORIGIN was `https://iamkevin.lol`, every
+  // real visitor's origin was `https://www.iamkevin.lol`, and the mismatch
+  // made the browser block every request. Echo back the caller's own
+  // Origin when it is on the allowlist rather than always sending one
+  // fixed value, same as any multi-origin CORS setup has to.
+  const allowedOrigins = origin === '*' ? null : origin.split(',').map((o) => o.trim());
+  const corsOrigin = (reqOrigin) => {
+    if (!allowedOrigins) return '*';
+    if (reqOrigin && allowedOrigins.includes(reqOrigin)) return reqOrigin;
+    return allowedOrigins[0];
+  };
+
   const httpServer = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
-    const headers = { 'content-type': 'application/json', 'access-control-allow-origin': origin };
+    const allow = corsOrigin(req.headers.origin);
+    const headers = { 'content-type': 'application/json', 'access-control-allow-origin': allow };
     const json = (code, body) => { res.writeHead(code, headers); res.end(JSON.stringify(body)); };
 
     // POST with a JSON body is not a CORS "simple request", so a browser
@@ -100,7 +118,7 @@ export function startServer({ port = 0, origin = process.env.KEVIN_ORIGIN || '*'
     // `POST /tournaments` to work from the main site's origin at all.
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
-        'access-control-allow-origin': origin,
+        'access-control-allow-origin': allow,
         'access-control-allow-methods': 'GET, POST, OPTIONS',
         'access-control-allow-headers': 'content-type',
       });
