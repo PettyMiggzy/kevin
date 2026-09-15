@@ -1,8 +1,8 @@
 // The lobby: what phase 1 was missing per poker/server/README.md's own "What
 // this phase does NOT defend against" — a way to see what is open and join
 // it, instead of already knowing (or making up) a table id. This file talks
-// HTTP only (GET /lobby, POST /tables, POST /tournaments — see
-// poker/server/index.mjs); it never opens a WebSocket itself. Joining a
+// HTTP only (GET /lobby, GET /leaderboard, POST /tables, POST /tournaments —
+// see poker/server/index.mjs); it never opens a WebSocket itself. Joining a
 // table or registering for a tournament happens on table.html /
 // tournament.html, which this page only links to.
 const $ = (s) => document.querySelector(s);
@@ -72,6 +72,19 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+function leaderRow(p, rank) {
+  const el = document.createElement('div');
+  el.className = 'row';
+  const net = p.net_chips ?? 0;
+  const sign = net > 0 ? '+' : '';
+  el.innerHTML = `
+    <span class="leaderRank">#${rank}</span>
+    <span class="rowName">${escapeHtml(p.name)}</span>
+    <span class="rowMeta">${p.hands} hands · ${p.wins} won · ${sign}${net.toLocaleString()} net</span>
+  `;
+  return el;
+}
+
 async function refresh() {
   let data;
   try {
@@ -91,6 +104,18 @@ async function refresh() {
   tourneyList.innerHTML = '';
   if (!data.tournaments.length) tourneyList.append(Object.assign(document.createElement('p'), { className: 'rowEmpty', textContent: 'No tournaments yet — start one.' }));
   else for (const t of data.tournaments) tourneyList.append(tourneyRow(t));
+
+  // Same refresh() / setInterval loop as the tables and tournaments above,
+  // not a second polling loop — a leaderboard hiccup only clears its own
+  // section (caught locally) rather than blanking the whole lobby the way a
+  // failed `/lobby` fetch above already does.
+  try {
+    const lb = await fetch(`${HTTP_BASE}/leaderboard`).then((r) => r.json());
+    const leaderboardList = $('#leaderboardList');
+    leaderboardList.innerHTML = '';
+    if (!lb.players?.length) leaderboardList.append(Object.assign(document.createElement('p'), { className: 'rowEmpty', textContent: 'No hands played yet.' }));
+    else lb.players.forEach((p, i) => leaderboardList.append(leaderRow(p, i + 1)));
+  } catch { /* leave whatever was last rendered */ }
 }
 
 function wireCreateForm(toggleId, formId, cancelSelector, inputId, onSubmit) {
@@ -107,8 +132,12 @@ function wireCreateForm(toggleId, formId, cancelSelector, inputId, onSubmit) {
 }
 
 wireCreateForm('#newTableToggle', '#newTableForm', '[data-cancel]', '#newTableName', async (name) => {
+  // Clamped client-side too (0-5) purely for a sane slider feel — the
+  // server clamps again itself (see index.mjs's POST /tables) and is the
+  // only clamp that actually matters.
+  const bots = Math.max(0, Math.min(5, Math.trunc(Number($('#newTableBots').value)) || 0));
   const r = await fetch(`${HTTP_BASE}/tables`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }),
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, bots }),
   }).then((res) => res.json());
   if (!r.id) throw new Error(r.error || 'could not create table');
   location.href = `table.html?t=${encodeURIComponent(r.id)}`;

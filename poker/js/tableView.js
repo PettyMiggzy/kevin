@@ -52,7 +52,7 @@ export function createTableView({ room, board, pot, controls, log }) {
       el.className = 'seat';
       el.style.left = SPOTS[i][0] + '%';
       el.style.top = SPOTS[i][1] + '%';
-      el.innerHTML = `<div class="bet" hidden></div><div class="pic"><span class="initial"></span></div>
+      el.innerHTML = `<div class="bet" hidden></div><div class="pic"><span class="initial"></span><span class="botTag" hidden>BOT</span></div>
         <div class="name"></div><div class="chips"></div>
         <div class="hole"></div><div class="tag"></div>`;
       room.append(el);
@@ -174,6 +174,7 @@ export function createTableView({ room, board, pot, controls, log }) {
       el.classList.toggle('turn', g.turn === i && g.street !== 'showdown');
       el.classList.toggle('folded', s.folded || s.out);
       el.querySelector('.initial').textContent = (s.name || '?')[0]?.toUpperCase() ?? '?';
+      el.querySelector('.botTag').hidden = !s.bot;
       el.querySelector('.name').textContent =
         s.name + (s.mine ? ' (you)' : '') + (s.connected ? '' : ' · away');
       el.querySelector('.chips').textContent = s.out ? 'BUSTED' : s.chips.toLocaleString();

@@ -35,6 +35,10 @@ bot/.telegram.key
 server/.admin.key
 server/data/
 
+# Poker leaderboard SQLite file (and its WAL/SHM siblings) — generated, and
+# not the same directory as server/data/ above (that's the other game's).
+poker/server/data/
+
 # Scratch frames from tools/render-sticker.mjs
 .sticker-frames/
 

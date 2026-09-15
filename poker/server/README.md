@@ -5,15 +5,22 @@ the deck, so real people can play a hand of Texas Hold'em against each other
 instead of against `js/characters.js`'s bots.
 
 One Node process, one dependency (`ws`, already in the repo's root
-`package.json`), no database — every table lives in memory and is gone on
-restart. That is fine for play money and is the first thing phase 2 (buy-in
-and payout) will need to change; see "What phase 2 needs" below.
+`package.json`) for the tables themselves — no database, every table lives
+in memory and is gone on restart. That is fine for play money and is the
+first thing phase 2 (buy-in and payout) will need to change; see "What
+phase 2 needs" below. The one exception is a small SQLite leaderboard (see
+"Bots and the leaderboard" below) that deliberately DOES survive a
+restart — it is a scoreboard of who has won and lost past hands, not a
+wallet, and does not change anything about a table itself: a disconnected
+player's chips still are not carried into the next hand they're dealt.
 
 ## What is here
 
 | File | Does |
 |---|---|
 | `table.mjs` | One table: seats, joins, disconnects, and — the whole point — a per-viewer redacted view of the game so nobody's browser ever holds a card that is not theirs |
+| `bots.mjs` | The bot AI a practice table's computer-controlled seats use to decide their actions — see "Bots and the leaderboard" below |
+| `db.mjs` | The leaderboard's own SQLite storage (WAL mode, one small file) — see "Bots and the leaderboard" below |
 | `tournament.mjs` | One multi-table tournament: registration, seating players across several `table.mjs` tables, rebalancing, blind-level escalation, bust-outs and final standings — see "Tournaments" below |
 | `index.mjs` | The HTTP+WebSocket server: the lobby endpoints, `/ws/<table id>`, `/tournament/<id>`, `/health` |
 | `kevin-poker.service` | The systemd unit |
@@ -23,6 +30,7 @@ and payout) will need to change; see "What phase 2 needs" below.
 | `test/multitable.test.mjs` | Many tables at once — fake sockets fuzzing 20 concurrent `table.mjs` tables with interleaved actions, then a real server run with several real tables and real clients in lockstep — asserting no broadcast ever crosses a table boundary |
 | `test/tournament.test.mjs` | Fuzzes a whole tournament (fake sockets) to one winner, checking the redaction rule across every table a player is ever moved to, and chip conservation against the tournament's own ledger on every tick |
 | `test/tournament.integration.test.mjs` | The real server, real HTTP for `/tournaments`/`/lobby`, real `ws` clients — registers a field, starts it, and plays it down through real bust-outs, a real table merge, and a real blind increase to one real winner |
+| `test/bots.test.mjs` | Fuzzes bot legality directly against `options()`, then drives a real server through a real lone-human-plus-bots hand, a mid-hand-plus-disconnect timer-cleanup check, and a leaderboard chip-conservation check against the SQLite file itself |
 
 `table.mjs` runs `poker/js/holdem.js` completely unmodified — that file was
 written with no UI in it specifically so a server could run it one day (read
@@ -50,6 +58,7 @@ node poker/server/test/integration.test.mjs              # real sockets, a real 
 node poker/server/test/multitable.test.mjs                # fake + real sockets, many tables, ~10s
 node poker/server/test/tournament.test.mjs                # fast, no network, ~2s
 node poker/server/test/tournament.integration.test.mjs   # real server, a real 7-player tournament, ~10-30s
+node poker/server/test/bots.test.mjs                     # fake sockets + a real server, ~10-20s
 ```
 
 ## The security model, stated plainly
@@ -117,9 +126,9 @@ independently redacted for its recipient:
   "turnExpiresAt": 1700000060000,  // ms epoch the acting seat gets auto-folded at, or null with no hand live
   "seats": [
     { "seat": 0, "name": "Alice", "chips": 1980, "bet": 20, "folded": false,
-      "connected": true, "mine": true, "hole": ["5c", "5s"], "result": null },
-    { "seat": 1, "name": "Bob", "chips": 1990, "bet": 10, "folded": false,
-      "connected": true, "mine": false, "hole": [null, null], "result": null }
+      "connected": true, "bot": false, "mine": true, "hole": ["5c", "5s"], "result": null },
+    { "seat": 1, "name": "Sleepy Kev", "chips": 1990, "bet": 10, "folded": false,
+      "connected": true, "bot": true, "mine": false, "hole": [null, null], "result": null }
   ],
   "log": ["Bob posts 10, Alice posts 20", "Bob calls 10", "Alice checks"]
 }
@@ -132,12 +141,13 @@ only to whoever sent it.
 
 Plain JSON over plain HTTP, on the same port as the WebSocket server —
 `poker/js/lobby.js` is the only client, but it is nothing more than these
-three endpoints:
+four endpoints:
 
 | Method + path | Body | Returns |
 |---|---|---|
 | `GET /lobby` | | `{ tables: [...], tournaments: [...] }` — every table's `table.mjs`-side `summarizeTable()` (id, name, `mode`, phase, seat counts, blinds, player names — never a hole card, there is nothing in this summary `viewFor` would need to redact) and every tournament's `tournament.mjs`-side `summarizeTournament()` (id, name, status, counts, blind level, standings once done) |
-| `POST /tables` | `{ name?, smallBlind?, bigBlind?, startChips? }` | `{ id, name }` — creates a practice table with a real id up front (the lobby lists it immediately) instead of waiting for the first `/ws/<id>` connection to invent one |
+| `GET /leaderboard` | | `{ players: [{ name, hands, wins, net_chips }, ...] }`, top players sorted by `net_chips` — see "Bots and the leaderboard" below |
+| `POST /tables` | `{ name?, smallBlind?, bigBlind?, startChips?, bots? }` | `{ id, name }` — creates a practice table with a real id up front (the lobby lists it immediately) instead of waiting for the first `/ws/<id>` connection to invent one. `bots` (0-5, default 0) seats that many computer-controlled players before anyone else joins — see "Bots and the leaderboard" below |
 | `POST /tournaments` | `{ name?, startChips?, seatsPerTable?, minPlayers?, maxPlayers?, levels? }` | `{ id, name }` — creates a tournament in `'registering'` status; `levels` overrides the default blind schedule (see "Tournaments" below) |
 
 A practice table's `/ws/<id>` still auto-creates on first connection exactly
@@ -145,6 +155,59 @@ like phase 1 did — a typed or shared URL with a made-up code still works,
 the lobby is a nicer way to arrive at one, not the only way. A tournament
 has no such auto-create: `/tournament/<id>` for an id nobody `POST`ed closes
 the socket (code `4004`) instead of inventing an unconfigured tournament.
+
+## Bots and the leaderboard
+
+A lone visitor should not have to sit at an empty table waiting for a
+second human to show up, so `POST /tables`'s `bots` field seats that many
+computer players before anyone else joins — `table.mjs`'s existing
+`combined.length < 2` gate in `tryStartHand` is then already satisfied by
+the human's own `join`, with no separate "solo mode" code path.
+
+The AI itself is not new: it is `poker/js/main.js`'s bot logic (that file's
+own `strength()`/`botMove()`, keyed off `poker/js/characters.js`'s
+`STYLES`) ported into `poker/server/bots.mjs` with `game` made an explicit
+argument instead of a module-level global, so the standalone single-player
+room (`poker/index.html`, left completely untouched) and a multiplayer
+table's bots play by the same math. A bot seat is otherwise an ordinary
+`table.mjs` seat — a `bot: true, style: '...'` pair riding along on the
+seat object holdem.js's `createGame` already spreads verbatim (see its own
+comment) — with one deliberate wrinkle: its `ws` is a small always-open fake
+socket (`{ readyState: 1, send() {} }`) unique per bot instance, which
+satisfies this file's own transport contract exactly, so every existing
+check that cares who owns a seat (`s.ws === ws`, `isOpen()`, `options()`,
+`handleAction`'s turn-ownership check) works on a bot with zero special
+cases. A bot's move is computed by `bots.mjs` and then submitted through
+`handleAction` — the exact same function, and the exact same
+turn-ownership and legality checks, a real WebSocket message goes through —
+on a short `setTimeout` (table.mjs's `scheduleBotTurn`, ~0.6-1.4s, the same
+"thinking pause" feel `main.js`'s own bots already have) that re-validates
+the game has not moved on before acting, and that chains onto itself via
+`handleAction`'s own call to `scheduleBotTurn` so a run of consecutive bot
+turns needs no extra loop. The moment a table's last real socket
+disconnects, `handleDisconnect` marks it `closed` and clears that timer —
+otherwise an abandoned all-bot table would play itself out forever on a
+droplet that cannot spare the cycles.
+
+Every practice table also gets an optional callback, `onHandSettled`,
+called once per concluded hand with each non-bot seat's chip delta —
+`table.mjs` computes the diff itself but never touches storage; wiring it
+to an actual database is `index.mjs`'s job (closing over its own SQLite
+handle from `db.mjs`), because `table.mjs`'s whole point is running
+headless against a fake socket with no I/O at all (see its own top
+comment) — importing `node:sqlite` there would break exactly the property
+that makes it testable the way `test/table.test.mjs` tests it. `db.mjs`
+tracks each name's hands played, hands won, and net chips in a `leaderboard`
+table, plus an append-only `hand_results` log for the same reason the
+sibling scores service's `server/db.mjs` keeps one: a leaderboard that pays
+out needs an answer better than "the number says so". This system has no
+accounts — a chosen name is the only identity a seat has anywhere in it —
+so `leaderboard` is keyed by name and two different people typing the same
+one share a row, the same pre-existing "no account needed" property this
+system has always had, not a new gap. `tournament.mjs`'s own chip movements
+are never recorded here: its economy is separate and self-contained on
+purpose (see its own file comment), and it never adds bots either — bots
+are practice-table-only, and `tournament.mjs` is untouched.
 
 ## Disconnects, deliberately simple
 
@@ -169,10 +232,13 @@ the socket (code `4004`) instead of inventing an unconfigured tournament.
   where who is seated actually changed — see `tryStartHand`'s comment for
   why that is a deliberate phase 1 simplification rather than tracking a
   button seat through arbitrary joins and leaves.
-- **Nothing is persisted.** A server restart loses every table. Chips a
-  disconnected player still had are simply not carried into the next hand
-  they are dealt into — see `table.mjs` — because there is no wallet for
-  them to be worth returning to yet.
+- **Nothing about a table itself is persisted.** A server restart loses
+  every table. Chips a disconnected player still had are simply not carried
+  into the next hand they are dealt into — see `table.mjs` — because there
+  is no wallet for them to be worth returning to yet. (The leaderboard is
+  the one thing in this system that does survive a restart — see "Bots and
+  the leaderboard" above — but it only remembers who won and lost past
+  hands, not a stack a disconnected player could be handed back.)
 
 ## Tournaments
 
@@ -315,7 +381,11 @@ roughly the order they block each other:
    currently just a number that evaporates on restart or disconnect;
    real stakes need every chip movement to land somewhere durable (this
    repo's existing pattern is SQLite — see `server/db.mjs`) before it can be
-   converted back to anything.
+   converted back to anything. `poker/server/db.mjs`'s leaderboard (see
+   "Bots and the leaderboard" above) is SQLite too, but it is a scoreboard
+   fed by a one-way callback after the fact, not an authoritative ledger
+   anything is converted back out of — this is still a different, harder
+   problem.
 3. **A buy-in step that runs before `handleJoin` seats anyone** — verifying
    whatever `contracts/` ends up specifying, converting it into a starting
    stack, and only then handing the seat to `tryStartHand`.
