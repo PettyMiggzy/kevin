@@ -18,19 +18,49 @@ const OPEN = 1; // WebSocket.OPEN, without importing the library for one constan
 
 /**
  * @param {string} id
- * @param {{smallBlind?:number, bigBlind?:number, startChips?:number}} [opts]
+ * @param {{smallBlind?:number, bigBlind?:number, startChips?:number, name?:string, mode?:string}} [opts]
  */
 export function createTable(id, opts = {}) {
   return {
     id,
+    // A cosmetic label for the lobby ('mode' is the seam a future real-money
+    // table plugs into — see summarizeTable and poker/server/README.md's
+    // "What phase 2 needs". Nothing in this file branches on it; it is
+    // metadata for the lobby and the client, not a rule.
+    name: opts.name || id,
+    mode: opts.mode === 'tournament' ? 'tournament' : 'practice',
     smallBlind: opts.smallBlind ?? 10,
     bigBlind: opts.bigBlind ?? 20,
     startChips: opts.startChips ?? 2000,
     game: null,           // the live holdem.js game, or the last finished one
-    waiting: [],           // [{ id, ws, name }] — not dealt in yet
+    waiting: [],           // [{ id, ws, name, chips? }] — not dealt in yet; an
+                            // explicit `chips` (set by tournament.mjs when it
+                            // seats a player with their existing stack) wins
+                            // over the table's own startChips — see handleJoin.
     sockets: new Set(),    // every connection that should receive broadcasts
     phase: 'idle',         // 'idle' | 'playing'
     nextTimer: null,
+  };
+}
+
+/**
+ * Public, non-secret summary for a lobby listing: names, counts, phase.
+ * Never touches `hole` or `deck` — there is nothing here viewFor would need
+ * to redact, which is exactly why this is safe to expose to anyone, seated
+ * or not.
+ */
+export function summarizeTable(table) {
+  const seated = (table.game?.seats ?? []).filter((s) => s.connected && s.chips > 0);
+  return {
+    id: table.id,
+    name: table.name,
+    mode: table.mode,
+    phase: table.phase,
+    maxSeats: MAX_SEATS,
+    smallBlind: table.smallBlind,
+    bigBlind: table.bigBlind,
+    players: [...seated, ...table.waiting].map((s) => s.name),
+    seatedCount: seated.length + table.waiting.length,
   };
 }
 
@@ -149,12 +179,21 @@ function settleIfDone(table) {
  * tracking a button seat through arbitrary joins and leaves.
  */
 export function tryStartHand(table) {
-  if (table.phase === 'playing') return;
+  // A hand already under way is not restarted, but every caller of this
+  // function — handleJoin chief among them — relies on it to always send a
+  // fresh broadcast, e.g. so a spectator added while a hand is already in
+  // progress (a third player joining a two-handed table, or a tournament
+  // seating someone mid-flight elsewhere) sees SOMETHING immediately
+  // instead of a blank screen until whoever's turn it already is happens
+  // to act. Broadcasting here is a no-op in cost (the same state everyone
+  // else already has) and closes that gap for anyone whose socket was just
+  // added to `table.sockets`.
+  if (table.phase === 'playing') { broadcast(table); return; }
   const survivors = (table.game?.seats ?? [])
     .filter((s) => s.connected && s.chips > 0)
     .map((s) => ({ id: s.id, ws: s.ws, name: s.name, chips: s.chips }));
   const newcomers = table.waiting.filter((w) => isOpen(w.ws));
-  const combined = [...survivors, ...newcomers.map((w) => ({ id: w.id, ws: w.ws, name: w.name, chips: table.startChips }))];
+  const combined = [...survivors, ...newcomers.map((w) => ({ id: w.id, ws: w.ws, name: w.name, chips: w.chips ?? table.startChips }))];
 
   if (combined.length < 2) {
     table.waiting = newcomers; // drop only the closed sockets; keep waiting for a second player
@@ -163,7 +202,11 @@ export function tryStartHand(table) {
   }
 
   const seatsIn = combined.slice(0, MAX_SEATS);
-  table.waiting = combined.slice(MAX_SEATS).map(({ id, ws, name }) => ({ id, ws, name }));
+  // Preserve `chips` for anyone bumped back to waiting by an over-full table
+  // (a tournament seating more than MAX_SEATS at once) — dropping it here
+  // would have silently reset their stack to table.startChips next time
+  // they made it off the waiting list.
+  table.waiting = combined.slice(MAX_SEATS).map(({ id, ws, name, chips }) => ({ id, ws, name, chips }));
 
   if (!sameComposition(table.game, seatsIn)) {
     table.game = createGame({
@@ -172,6 +215,16 @@ export function tryStartHand(table) {
       bigBlind: table.bigBlind,
     });
   }
+  // A stable seating reuses the same game object (see sameComposition's
+  // comment above) rather than calling createGame again — but a tournament
+  // table's blinds change out from under it on a level clock while the
+  // seating can stay perfectly stable for many hands in a row. Re-reading
+  // them from `table` here, every hand, is what makes a blind increase
+  // actually reach a hand in progress instead of only ever taking effect the
+  // next time someone joins or busts. A no-op for practice tables, whose
+  // blinds never change after creation.
+  table.game.smallBlind = table.smallBlind;
+  table.game.bigBlind = table.bigBlind;
   table.phase = 'playing';
   startHand(table.game);
   autoActForDisconnected(table);
@@ -179,10 +232,19 @@ export function tryStartHand(table) {
   broadcast(table);
 }
 
-/** A browser asks to sit down. Chips reset if this socket was never seated
- * before, or was seated and busted — reconnecting (a fresh WebSocket, which
- * is what a page reload gets you) is the only "rebuy" phase 1 has. */
-export function handleJoin(table, ws, name) {
+/**
+ * A browser asks to sit down. Chips reset to the table's own starting stack
+ * if this socket was never seated before, or was seated and busted —
+ * reconnecting (a fresh WebSocket, which is what a page reload gets you) is
+ * the only "rebuy" phase 1 has.
+ *
+ * `chips`, when given, overrides that default — this is how tournament.mjs
+ * seats a player with the stack they actually have (not the table's
+ * `startChips`, which means nothing for a tournament table) whenever it
+ * assigns or rebalances them onto one of its tables. A practice-table client
+ * never sends a fourth argument, so this is a no-op for the phase-1 protocol.
+ */
+export function handleJoin(table, ws, name, chips) {
   if (table.waiting.some((w) => w.ws === ws)) return;
   if (table.game?.seats.some((s) => s.ws === ws && s.chips > 0)) return;
   const seatedCount = table.game?.seats.filter((s) => s.connected && s.chips > 0).length ?? 0;
@@ -190,7 +252,7 @@ export function handleJoin(table, ws, name) {
     send(ws, { type: 'error', message: 'table is full' });
     return;
   }
-  table.waiting.push({ id: randomUUID(), ws, name: cleanName(name) });
+  table.waiting.push({ id: randomUUID(), ws, name: cleanName(name), chips });
   table.sockets.add(ws);
   tryStartHand(table); // broadcasts either way — a new hand, or just the updated waiting count
 }
