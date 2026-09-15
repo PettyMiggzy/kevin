@@ -4,7 +4,9 @@
 #
 # Everything this process holds — tables, seats, chips, the deck — is
 # in-memory only (see poker/server/README.md). Restarting it clears every
-# table, which is expected and fine for play money.
+# table, which is expected and fine for play money. The one exception is the
+# small leaderboard SQLite file (see StateDirectory= below), which is meant
+# to survive a restart.
 [Unit]
 Description=Kevin poker
 After=network-online.target
@@ -30,12 +32,23 @@ Environment=PORT=8788
 # `www.iamkevin.lol` (redirecting the apex there), so a visitor's actual
 # Origin header is whichever one the page loaded from, not just one of them.
 Environment=KEVIN_ORIGIN=https://iamkevin.lol,https://www.iamkevin.lol
+# The leaderboard's own SQLite file (poker/server/db.mjs) — the only thing
+# this service ever writes to disk; everything else is memory-only (see
+# ProtectSystem=strict below). Points at the directory StateDirectory=
+# creates for us, rather than db.mjs's own default of a path inside the git
+# checkout, because ProtectSystem=strict makes the checkout read-only and
+# db.mjs's directory-creating mkdir has nowhere it's allowed to write.
+Environment=KEVIN_POKER_DB=/var/lib/kevin-poker/leaderboard.db
 
-# No filesystem access needed at all — everything lives in memory.
+# No filesystem access needed beyond the one state directory below —
+# everything else lives in memory. StateDirectory= is what carves that one
+# exception out of ProtectSystem=strict: it creates (and keeps writable)
+# /var/lib/kevin-poker specifically, without loosening anything else.
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
+StateDirectory=kevin-poker
 
 [Install]
 WantedBy=multi-user.target

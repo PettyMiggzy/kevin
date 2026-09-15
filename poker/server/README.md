@@ -363,6 +363,17 @@ cp poker/server/kevin-poker.service /etc/systemd/system/
 systemctl daemon-reload && systemctl enable --now kevin-poker
 ```
 
+The unit runs the whole tree under `ProtectSystem=strict` (the checkout is
+read-only to it) plus `StateDirectory=kevin-poker`, which is what makes
+`/var/lib/kevin-poker` the one writable exception — see the unit file's own
+comments. That directory exists only for the leaderboard's SQLite file
+(`KEVIN_POKER_DB`, pointed there by the unit); everything else genuinely
+never touches disk. Updating an already-installed unit needs the same `cp` +
+`daemon-reload` above, followed by `systemctl restart kevin-poker` — skipping
+the `cp` after a `git pull` means the running unit keeps whatever
+`ProtectSystem`/`StateDirectory`/`Environment` lines it was last installed
+with, silently.
+
 Not yet wired into `setup.sh` — that script installs and restarts the other
 services on every `git pull`, and adding a fourth one is a deliberately
 separate change rather than something to fold in quietly here.
