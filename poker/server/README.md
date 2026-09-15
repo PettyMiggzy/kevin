@@ -18,6 +18,7 @@ and payout) will need to change; see "What phase 2 needs" below.
 | `index.mjs` | The HTTP+WebSocket server: the lobby endpoints, `/ws/<table id>`, `/tournament/<id>`, `/health` |
 | `kevin-poker.service` | The systemd unit |
 | `test/table.test.mjs` | Fuzzes `table.mjs` directly with fake sockets — random joins, actions and disconnects, asserting the redaction rule holds and chips are never leaked or duplicated |
+| `test/turnclock.test.mjs` | The 60s (overridden to milliseconds for the test) turn clock: an untouched turn gets forced, acting before the deadline cancels it, and an idle table reports no clock at all |
 | `test/integration.test.mjs` | The same story over a real `ws` connection against the real server, including a real mid-hand disconnect, so a bug in the wire format or in `index.mjs`'s wiring has somewhere to show up |
 | `test/multitable.test.mjs` | Many tables at once — fake sockets fuzzing 20 concurrent `table.mjs` tables with interleaved actions, then a real server run with several real tables and real clients in lockstep — asserting no broadcast ever crosses a table boundary |
 | `test/tournament.test.mjs` | Fuzzes a whole tournament (fake sockets) to one winner, checking the redaction rule across every table a player is ever moved to, and chip conservation against the tournament's own ledger on every tick |
@@ -44,6 +45,7 @@ without that override.
 
 ```bash
 node poker/server/test/table.test.mjs                   # fast, no network, ~1s
+node poker/server/test/turnclock.test.mjs                # fast, no network, ~1s
 node poker/server/test/integration.test.mjs              # real sockets, a real server, ~5s
 node poker/server/test/multitable.test.mjs                # fake + real sockets, many tables, ~10s
 node poker/server/test/tournament.test.mjs                # fast, no network, ~2s
@@ -112,6 +114,7 @@ independently redacted for its recipient:
   "board": ["Qd", "As", "5d"],
   "pots": [{ "amount": 40, "eligible": [0, 1] }],
   "turn": 0,
+  "turnExpiresAt": 1700000060000,  // ms epoch the acting seat gets auto-folded at, or null with no hand live
   "seats": [
     { "seat": 0, "name": "Alice", "chips": 1980, "bet": 20, "folded": false,
       "connected": true, "mine": true, "hole": ["5c", "5s"], "result": null },
@@ -153,6 +156,14 @@ the socket (code `4004`) instead of inventing an unconfigured tournament.
   turn (checking instead, if that costs nothing) — see `table.mjs`'s
   `autoActForDisconnected`. The rest of the table is never blocked on a
   closed tab.
+- **A connected player who just doesn't act gets the same treatment after 60
+  seconds** — `table.mjs`'s `scheduleTurnTimer` arms a clock (`turnExpiresAt`
+  above) every time the turn changes, and forces the same check-if-free/
+  else-fold as a disconnect if it elapses. Being AFK at the table and being
+  disconnected from it look identical to everyone else waiting on you, so
+  they get the same fix. `createTable`'s `turnClockMs` exists only so tests
+  can use a millisecond-scale clock instead of actually waiting a minute;
+  nothing in the client or lobby ever overrides the 60s default.
 - **The button keeps rotating normally across a stable seating** and only
   resets (to a fresh `createGame`, same as a brand new table) on a hand
   where who is seated actually changed — see `tryStartHand`'s comment for

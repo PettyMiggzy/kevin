@@ -107,7 +107,7 @@ function render() {
     ghost.style.visibility = 'hidden';
     board.append(ghost);
   }
-  $('#pot').textContent = `POT ${potTotal(game).toLocaleString()} KEVIN`;
+  $('#pot').textContent = `POT \u{1FA99} ${potTotal(game).toLocaleString()} KEVIN`;
 
   game.seats.forEach((s, i) => {
     const el = seatEls[i];

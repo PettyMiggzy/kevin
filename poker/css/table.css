@@ -75,6 +75,10 @@ input[type=range]{width:190px;accent-color:var(--brand)}
 #raiseWrap{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.35);border:2px solid var(--ink);
   border-radius:10px;padding:6px 10px}
 #raiseVal{font-weight:700;color:var(--brand);min-width:56px;text-align:right}
+#turnClock{font-family:var(--display);font-size:13px;letter-spacing:.5px;color:var(--brand);
+  background:rgba(0,0,0,.4);border:2px solid var(--ink);border-radius:999px;padding:5px 12px;
+  width:100%;text-align:center}
+#turnClock.low{color:#FFF;background:var(--red)}
 
 #log{width:min(96vw,980px);height:104px;overflow-y:auto;background:rgba(0,0,0,.35);
   border:2px solid var(--ink);border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.55}

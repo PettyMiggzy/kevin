@@ -18,7 +18,7 @@ const OPEN = 1; // WebSocket.OPEN, without importing the library for one constan
 
 /**
  * @param {string} id
- * @param {{smallBlind?:number, bigBlind?:number, startChips?:number, name?:string, mode?:string}} [opts]
+ * @param {{smallBlind?:number, bigBlind?:number, startChips?:number, name?:string, mode?:string, turnClockMs?:number}} [opts]
  */
 export function createTable(id, opts = {}) {
   return {
@@ -32,6 +32,9 @@ export function createTable(id, opts = {}) {
     smallBlind: opts.smallBlind ?? 10,
     bigBlind: opts.bigBlind ?? 20,
     startChips: opts.startChips ?? 2000,
+    // Overridable only so a test can use a millisecond-scale clock instead
+    // of actually waiting 60s — nothing in the client or lobby sets this.
+    turnClockMs: opts.turnClockMs ?? 60_000,
     game: null,           // the live holdem.js game, or the last finished one
     waiting: [],           // [{ id, ws, name, chips? }] — not dealt in yet; an
                             // explicit `chips` (set by tournament.mjs when it
@@ -40,6 +43,8 @@ export function createTable(id, opts = {}) {
     sockets: new Set(),    // every connection that should receive broadcasts
     phase: 'idle',         // 'idle' | 'playing'
     nextTimer: null,
+    turnTimer: null,       // forces the acting seat's turn once turnClockMs elapses — see scheduleTurnTimer
+    turnExpiresAt: null,   // ms epoch, mirrored into viewFor so the client can draw a countdown
   };
 }
 
@@ -73,7 +78,57 @@ function send(ws, obj) {
 }
 
 function broadcast(table) {
+  // "State just changed" and "whoever must act next gets a fresh clock" are
+  // the same moment, so re-arming here means no call site has to remember to
+  // do it separately — every broadcast already means one of: a new hand
+  // started, someone acted, or someone joined/left, all of which either move
+  // the turn on or end the hand outright. Must run BEFORE the send loop below
+  // — viewFor reads table.turnExpiresAt, so scheduling after sending would
+  // publish every broadcast one clock behind.
+  scheduleTurnTimer(table);
   for (const ws of table.sockets) send(ws, { type: 'state', ...viewFor(table, ws) });
+}
+
+function clearTurnTimer(table) {
+  clearTimeout(table.turnTimer);
+  table.turnTimer = null;
+  table.turnExpiresAt = null;
+}
+
+/**
+ * A player who does not act within turnClockMs is forced to act for
+ * themselves, exactly like autoActForDisconnected treats a dropped socket
+ * (check if that costs nothing, fold otherwise) — being AFK at the table is
+ * not different from being disconnected as far as the other players waiting
+ * on you are concerned.
+ */
+function scheduleTurnTimer(table) {
+  clearTurnTimer(table);
+  const g = table.game;
+  if (!g || table.phase !== 'playing' || g.turn < 0) return;
+  const ws = g.seats[g.turn].ws;
+  table.turnExpiresAt = Date.now() + table.turnClockMs;
+  table.turnTimer = setTimeout(() => {
+    const g2 = table.game;
+    // The turn may have already moved on by the time this fires (the player
+    // acted just under the wire, or the hand ended some other way) — only
+    // force an action if it is still, right now, the exact seat this timer
+    // was armed for.
+    if (!g2 || table.phase !== 'playing' || g2.turn < 0 || g2.seats[g2.turn].ws !== ws) return;
+    const seat = g2.seats[g2.turn];
+    const legal = options(g2, seat);
+    act(g2, g2.turn, legal.includes('check') ? 'check' : 'fold');
+    settleAndBroadcast(table);
+  }, table.turnClockMs);
+}
+
+/** The tail every action-applying path shares: let disconnected seats play
+ * themselves out, check whether the hand is now over, and publish — which
+ * also re-arms the next actor's clock (see broadcast's own comment). */
+function settleAndBroadcast(table) {
+  autoActForDisconnected(table);
+  settleIfDone(table);
+  broadcast(table);
 }
 
 /**
@@ -107,6 +162,7 @@ export function viewFor(table, ws) {
     board: g?.board ?? [],
     pots: g?.pots ?? [],
     turn: g?.turn ?? -1,
+    turnExpiresAt: table.turnExpiresAt ?? null,
     minRaise: g?.minRaise ?? table.bigBlind,
     log: g?.log ?? [],
     seats: (g?.seats ?? []).map((s, i) => {
@@ -227,9 +283,7 @@ export function tryStartHand(table) {
   table.game.bigBlind = table.bigBlind;
   table.phase = 'playing';
   startHand(table.game);
-  autoActForDisconnected(table);
-  settleIfDone(table);
-  broadcast(table);
+  settleAndBroadcast(table);
 }
 
 /**
@@ -277,9 +331,7 @@ export function handleAction(table, ws, action, amount) {
 
   const amt = Number.isFinite(Number(amount)) ? Math.trunc(Number(amount)) : 0;
   act(g, seatIndex, action, amt);
-  autoActForDisconnected(table);
-  settleIfDone(table);
-  broadcast(table);
+  settleAndBroadcast(table);
 }
 
 /** Voluntarily stand up without closing the tab: sit out of future hands,
@@ -287,11 +339,7 @@ export function handleAction(table, ws, action, amount) {
 export function handleLeave(table, ws) {
   table.waiting = table.waiting.filter((w) => w.ws !== ws);
   const seat = table.game?.seats.find((s) => s.ws === ws);
-  if (seat) {
-    seat.connected = false;
-    autoActForDisconnected(table);
-    settleIfDone(table);
-  }
+  if (seat) { seat.connected = false; settleAndBroadcast(table); return; }
   broadcast(table);
 }
 
@@ -318,5 +366,11 @@ export function handleDisconnect(table, ws) {
     settleIfDone(table);
   }
   broadcast(table);
-  return table.sockets.size === 0;
+  const empty = table.sockets.size === 0;
+  // Nobody left to see the clock run out — broadcast() just re-armed it
+  // (scheduleTurnTimer does not know the table is about to be dropped from
+  // index.mjs's registry), so cancel it rather than let a timer outlive the
+  // table it was scheduled for.
+  if (empty) clearTurnTimer(table);
+  return empty;
 }

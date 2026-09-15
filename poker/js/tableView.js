@@ -36,6 +36,13 @@ export function cardEl(code, { small = false } = {}) {
 export function createTableView({ room, board, pot, controls, log }) {
   let seatEls = [];
   let logged = 0;
+  // The server only pushes a fresh state on a real change (someone acted, a
+  // hand started, someone joined) — never once a second just to update a
+  // countdown. Re-running drawControls on a local tick against the LAST
+  // state we got is what makes the clock visibly count down between those
+  // broadcasts instead of sitting frozen at whatever number arrived with it.
+  let lastState = null, lastSend = null;
+  setInterval(() => { if (lastState?.turnExpiresAt) drawControls(lastState, lastSend); }, 1000);
 
   function buildSeats(n) {
     if (seatEls.length === n) return;
@@ -79,7 +86,21 @@ export function createTableView({ room, board, pot, controls, log }) {
     if (you === null) { controls.textContent = `Watching — you'll be dealt into the next hand (${g.waitingCount ?? 0} others waiting).`; return; }
     if (g.street === 'over') { controls.textContent = 'Waiting for one more player…'; return; }
     if (g.street === 'showdown') { controls.textContent = 'Hand over — next hand starting…'; return; }
-    if (g.turn !== you) { controls.textContent = `Waiting on ${g.seats[g.turn]?.name ?? '…'}`; return; }
+
+    const secsLeft = g.turnExpiresAt ? Math.max(0, Math.ceil((g.turnExpiresAt - Date.now()) / 1000)) : null;
+
+    if (g.turn !== you) {
+      controls.textContent = `Waiting on ${g.seats[g.turn]?.name ?? '…'}${secsLeft !== null ? ` (${secsLeft}s)` : ''}`;
+      return;
+    }
+
+    if (secsLeft !== null) {
+      const clock = document.createElement('div');
+      clock.id = 'turnClock';
+      clock.classList.toggle('low', secsLeft <= 10);
+      clock.textContent = `${secsLeft}s to act`;
+      controls.append(clock);
+    }
 
     const seat = g.seats[you];
     // A pure client-side echo of options()/toCall() from holdem.js against
@@ -129,6 +150,8 @@ export function createTableView({ room, board, pot, controls, log }) {
   function render(state, send) {
     if (!state) return;
     const g = state;
+    lastState = state;
+    lastSend = send;
     buildSeats(g.seats.length);
 
     if (board) {
@@ -143,7 +166,7 @@ export function createTableView({ room, board, pot, controls, log }) {
     }
     if (pot) {
       const total = g.pots.reduce((a, p) => a + p.amount, 0) + g.seats.reduce((a, s) => a + s.bet, 0);
-      pot.textContent = `POT ${total.toLocaleString()} KEVIN`;
+      pot.textContent = `POT \u{1FA99} ${total.toLocaleString()} KEVIN`;
     }
 
     g.seats.forEach((s, i) => {
