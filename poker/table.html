@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kevin's Card Room — Play Online</title>
+<link rel="icon" href="../assets/png/favicon-32.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Kevin's Card Room — Play Online">
+<meta property="og:description" content="Real players, real hands. Share the link, sit down, and play Texas Hold'em together.">
+<meta name="description" content="Real players, real hands. Share the link, sit down, and play Texas Hold'em together.">
+<meta name="theme-color" content="#FFE500">
+<link rel="stylesheet" href="css/table.css">
+</head>
+<body>
+<h1>KEVIN'S <span>CARD ROOM</span></h1>
+<div id="lobby">
+  <p>Table <code id="tableCode"></code></p>
+  <p class="lobbyHint">Send <a id="tableLink" href="#"></a> to whoever else is playing —
+    anyone with this link sits down at the same table.</p>
+  <input id="nameInput" placeholder="Your name" maxlength="20" autocomplete="off">
+  <button id="joinBtn">SIT DOWN</button>
+  <p id="lobbyStatus"></p>
+</div>
+<div id="room" hidden>
+  <div id="felt"></div>
+  <div id="board"></div>
+  <div id="pot">POT 0</div>
+</div>
+<div id="controls" hidden></div>
+<div id="log" hidden></div>
+<p class="hint">Play money, real opponents, server-dealt — nobody, including this
+  browser, sees a card that is not theirs until showdown.
+  <a href="index.html">Practice against bots instead →</a></p>
+<script type="module" src="js/multiplayer.js"></script>
+</body>
+</html>

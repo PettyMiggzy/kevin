@@ -10,7 +10,14 @@ no account. Play money for now.
 | `js/cards.js` | Deck, shuffle, hand evaluation |
 | `js/holdem.js` | The rules — no UI in it, so it can be tested or run on a server |
 | `js/characters.js` | Who can sit down. **This is the seam the NFTs plug into.** |
-| `js/main.js` | The table, and the bots that sit at it |
+| `js/main.js` | The single-player table: you at seat 0, bots everywhere else, run entirely in the browser |
+| `js/multiplayer.js` | The multiplayer table: same felt, but every action goes to `server/` and every card comes back from it |
+| `server/` | The WebSocket server that runs `holdem.js` for real — see `server/README.md` |
+
+`index.html` is the single-player room; `table.html` is the multiplayer one
+(`table.html?t=<code>` — share the link, whoever opens it sits at the same
+table). Both are static pages that import from `js/`; neither one gates the
+other.
 
 ## Adding characters — the NFT path
 
@@ -58,14 +65,27 @@ The shuffle draws from `crypto.getRandomValues` with modulo rejection. Not
 because anything here is adversarial yet, but a shuffle people bet against
 should not be reproducible from a timestamp, and unbiasing it costs nothing.
 
+## Multiplayer
+
+`server/` is that server: real players, joined over a WebSocket, playing a
+real `holdem.js` game against each other instead of against
+`characters.js`'s bots. It holds the deck; the browser holds only its own
+hole cards and, once a hand reaches a genuine multi-way showdown, whatever
+everyone still in has to show. See `server/README.md` for the protocol, the
+disconnect rules, and — worth reading before anything real depends on it —
+exactly what this phase does and does not defend against.
+
 ## Not done yet
 
-- **Multiplayer.** Everything is local; the bots are local. `holdem.js` is
-  deliberately UI-free so the same file can run on a server when there are real
-  opponents, but that server does not exist.
-- **Real stakes.** Chips are a number in a page. Nothing is on chain and
-  nothing should be until there is a server that holds the deck, because a
-  client that knows every card is a client that can read them.
+- **Real stakes.** Chips are a number in a page (or, for multiplayer, a
+  number in a server process's memory — see `server/README.md`'s "What
+  phase 2 needs"). Nothing is on chain and nothing should be until there is
+  a server that holds the deck, because a client that knows every card is a
+  client that can read them. There now is one; buy-in and payout on top of
+  it are the next phase, not this one.
+- **A real lobby.** Multiplayer tables are found by sharing a link with a
+  table id in it — there is no list of open tables, no matchmaking, no
+  reconnect that proves you are the same player coming back.
 
 ## The seats
 

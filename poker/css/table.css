@@ -82,6 +82,28 @@ input[type=range]{width:190px;accent-color:var(--brand)}
 .hint{font-size:12px;opacity:.65;text-align:center;max-width:640px}
 a{color:var(--brand)}
 
+/* --- the multiplayer lobby overlay (table.html / js/multiplayer.js) -------- */
+/* #lobby and #controls set display:flex on an ID selector, which otherwise
+   outranks the UA stylesheet's [hidden]{display:none} (id beats attribute) —
+   el.hidden=true would silently do nothing without these. */
+#lobby[hidden],#controls[hidden]{display:none}
+#lobby{display:flex;flex-direction:column;align-items:center;gap:10px;
+  background:rgba(0,0,0,.35);border:2px solid var(--ink);border-radius:14px;
+  padding:22px 26px;max-width:380px;text-align:center}
+#lobby code{background:rgba(0,0,0,.4);padding:2px 9px;border-radius:6px;
+  color:var(--brand);font-weight:700;letter-spacing:1px}
+#lobby .lobbyHint{font-size:12px;opacity:.75;word-break:break-all}
+#lobby input{font-family:var(--body);font-size:15px;padding:9px 12px;
+  border:2px solid var(--ink);border-radius:8px;background:var(--cream);color:var(--ink);width:100%}
+#lobbyStatus{font-size:12px;min-height:14px}
+#lobbyStatus.err{color:var(--red)}
+
+/* A real player has no portrait, just initials on the brand yellow — the
+   seam that plugs in a rigged character clip belongs to js/characters.js's
+   ROSTER (bots and, eventually, NFTs), not to a person's own browser tab. */
+.seat .pic .initial{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  font-family:var(--display);font-size:calc(var(--u)*3.6);color:var(--brand)}
+
 /* --- narrow screens --------------------------------------------------------
    Six seats round an oval need height more than width once the width is gone,
    and a square table brings the bottom seat 75px from the pot instead of 122 —
