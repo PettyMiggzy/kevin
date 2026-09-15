@@ -73,6 +73,17 @@ console.log('A. many independent table.mjs tables, fuzzed with interleaved actio
       const contenders = g ? g.seats.filter((s) => !s.folded && !s.out) : [];
       const revealAll = !!g && g.street === 'showdown' && contenders.length > 1;
       for (const ws of sockets[ti]) {
+        // A disconnected socket's last message is frozen at whatever was
+        // legitimately true when it was still connected — including real
+        // hole cards from a genuine showdown it was actually part of. The
+        // server correctly stops broadcasting to it the instant it leaves
+        // `table.sockets` (handleDisconnect), so re-checking that frozen
+        // message against a LIVE game state that has since moved on to a
+        // later hand compares two different moments in time and is not
+        // evidence of anything: nothing new was ever sent to this socket
+        // after it disconnected. Only a socket the server would still
+        // broadcast to right now is a meaningful thing to check.
+        if (!tables[ti].sockets.has(ws)) continue;
         const last = ws.sent.at(-1);
         if (!last || last.type !== 'state') continue;
         if (last.tableId !== tables[ti].id) { crossTableId = `${ws.name} (seated at ${tables[ti].id}) received a broadcast tagged ${last.tableId}`; break; }
