@@ -130,3 +130,45 @@ contract as sender, while `tx.from` is the operator.
 
 Rotating the operator key changes the second address, and any chart tag on it
 goes stale. The contract address never changes.
+
+## Cash Cat accumulator
+
+A different animal from everything above: `keeper/cashcat-accumulate.mjs`
+does not drive a KevinFloorV4 contract we own — it buys a THIRD-PARTY token
+(Cash Cat, `CASHCAT`) with WETH on its own plain Uniswap v3 pool
+(`0xA70fc67C9F69da90B63a0e4C05D229954574E313`, fee 1%) and holds it. There is
+no sell side anywhere in that file, on purpose: this is a one-way accumulator,
+not a market maker, and it does not defend anything.
+
+That also means **none of the on-chain rails the floors get apply here**.
+There is no contract of ours in the loop to cap a bad trade — the per-trade
+cap, daily cap, cooldown and slippage bound are all enforced in the script
+itself, in JavaScript, not on chain. Keep the wallet funded with only what
+you are willing to lose to a bug or a leaked key. It uses its OWN wallet and
+key file (`keeper/.cashcat.key`), never the KEVIN treasury/operator key —
+see `keeper/kevin-cashcat.service`'s own comment for why.
+
+It buys the dip: tracks the recent high over a window (`REF_WINDOW_MS`,
+default 6h) and only buys once spot has fallen `DIP_BPS` (default 5%) below
+it, same idea as the floor keeper refusing to sell into a falling market, just
+inverted for a buy-only bot.
+
+```sh
+cp keeper/cashcat.env.example /etc/kevin/cashcat.env
+# put a private key for a DEDICATED, separately-funded wallet in:
+#   keeper/.cashcat.key   (chmod 600, gitignored)
+cp keeper/kevin-cashcat.service /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now kevin-cashcat
+journalctl -fu kevin-cashcat
+```
+
+Starts in dry run; `LIVE=1` in `/etc/kevin/cashcat.env` turns it on. Before
+that, the wallet needs WETH to spend and a little native ETH for gas.
+
+The router (`SwapRouter02`, `0xCAf681a66D020601342297493863E78C959e5CB2`) was
+verified against this exact pool before use — its `factory()` matches
+Uniswap's own published `UniswapV3Factory` for Robinhood Chain — because this
+chain reportedly hosts more than one v3-shaped DEX fork, and a mismatched
+router could still accept a call and swap against a completely different,
+unintended pool. The script re-checks this itself at every startup and
+refuses to run if it ever stops matching.

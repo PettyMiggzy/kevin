@@ -1,0 +1,39 @@
+# The Cash Cat accumulator, as a service.
+#
+#   cp keeper/kevin-cashcat.service /etc/systemd/system/
+#   mkdir -p /etc/kevin
+#   cp keeper/cashcat.env.example /etc/kevin/cashcat.env
+#   systemctl daemon-reload
+#   systemctl enable --now kevin-cashcat
+#
+# Watch it:  journalctl -fu kevin-cashcat
+#
+# The wallet key is NOT in here and NOT in the env file. It lives in
+# /opt/kevin/keeper/.cashcat.key, chmod 600, gitignored — this repo is public,
+# and this is DELIBERATELY A DIFFERENT KEY FILE from keeper/.operator.key:
+# this wallet is its own small, separate budget, never the KEVIN treasury.
+# See keeper/README.md's "Cash Cat accumulator" section for why.
+#
+# STARTS IN DRY RUN. It prints what it would buy and sends nothing. To make
+# it send, set LIVE=1 in /etc/kevin/cashcat.env and restart.
+[Unit]
+Description=Cash Cat accumulator
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/kevin
+ExecStart=/usr/bin/env node keeper/cashcat-accumulate.mjs
+EnvironmentFile=/etc/kevin/cashcat.env
+Environment=CHAIN_ID=4663
+Restart=always
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kevin-cashcat
+
+[Install]
+WantedBy=multi-user.target
