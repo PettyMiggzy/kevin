@@ -172,3 +172,11 @@ chain reportedly hosts more than one v3-shaped DEX fork, and a mismatched
 router could still accept a call and swap against a completely different,
 unintended pool. The script re-checks this itself at every startup and
 refuses to run if it ever stops matching.
+
+`ALCHEMY_RPC_URL` in `cashcat.env` is an optional failover — viem's
+`fallback()` transport tries the free public RPC first for every call and
+only moves to Alchemy once that one actually errors, never load-balanced
+between the two. Unset by default; nothing else in this repo needs it since
+the free RPC alone is what every other keeper runs on, but Alchemy is
+Robinhood Chain's own recommended provider and this one script already has
+the plumbing for it.

@@ -31,7 +31,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  createPublicClient, createWalletClient, http, defineChain, formatEther, parseAbi,
+  createPublicClient, createWalletClient, http, fallback, defineChain, formatEther, parseAbi,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
@@ -50,6 +50,13 @@ function loadKey(name) {
 
 const cfg = {
   rpc: process.env.ROBINHOOD_RPC_URL || 'https://rpc.mainnet.chain.robinhood.com',
+  // Optional second endpoint (e.g. an Alchemy URL with your own API key).
+  // viem's fallback() transport tries `rpc` first for every call and only
+  // moves to this one after `rpc` actually errors — it is a failover, not a
+  // load-balanced pair, so normal operation never touches it. Unset by
+  // default: the free public RPC alone is what every other keeper in this
+  // repo already runs on.
+  fallbackRpc: process.env.ALCHEMY_RPC_URL || null,
   chainId: Number(process.env.CHAIN_ID || 4663),
   pool: process.env.POOL_ADDRESS || '0xA70fc67C9F69da90B63a0e4C05D229954574E313',
   token: process.env.TOKEN_ADDRESS || '0x020bfC650A365f8BB26819deAAbF3E21291018b4',
@@ -137,9 +144,13 @@ function saveState(s) {
 }
 
 async function main() {
-  const pub = createPublicClient({
-    chain, batch: { multicall: true }, transport: http(cfg.rpc, { batch: true }),
-  });
+  // fallback() tries transports in order and only moves past one that just
+  // threw — see cfg.fallbackRpc's own comment. Plain http() when there is
+  // nothing to fall back to, same as every other keeper here.
+  const transport = cfg.fallbackRpc
+    ? fallback([http(cfg.rpc, { batch: true }), http(cfg.fallbackRpc, { batch: true })])
+    : http(cfg.rpc, { batch: true });
+  const pub = createPublicClient({ chain, batch: { multicall: true }, transport });
   const key = loadKey('.cashcat.key');
   let wallet = null;
   let account = null;
@@ -150,7 +161,10 @@ async function main() {
       process.exit(1);
     }
     account = privateKeyToAccount(key.startsWith('0x') ? key : `0x${key}`);
-    wallet = createWalletClient({ account, chain, transport: http(cfg.rpc) });
+    wallet = createWalletClient({
+      account, chain,
+      transport: cfg.fallbackRpc ? fallback([http(cfg.rpc), http(cfg.fallbackRpc)]) : http(cfg.rpc),
+    });
   }
 
   say('cash cat accumulator starting');
@@ -158,6 +172,7 @@ async function main() {
   say('  token    ', cfg.token);
   say('  wallet   ', account ? account.address : '(none — dry run)');
   say('  mode     ', cfg.live ? 'LIVE, it will send transactions' : 'DRY RUN, it will send nothing');
+  say('  rpc      ', cfg.fallbackRpc ? `${cfg.rpc} (falls back to a second endpoint on error)` : cfg.rpc);
   say('  tick     ', `${cfg.everyMs / 1000}s`);
   say('  trigger  ', `buy when spot is ${cfg.dipBps / 100}% below the ${cfg.refWindowMs / 3600000}h high`);
   say('  caps     ', `${formatEther(cfg.maxWethPerTrade)} WETH/trade, ${formatEther(cfg.dailyWethCap)} WETH/day, ${cfg.cooldownS}s cooldown`);
