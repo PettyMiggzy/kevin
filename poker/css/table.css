@@ -80,6 +80,7 @@ input[type=range]{width:190px;accent-color:var(--brand)}
   border:2px solid var(--ink);border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.55}
 #log div:last-child{color:var(--brand)}
 .hint{font-size:12px;opacity:.65;text-align:center;max-width:640px}
+.hint.err{opacity:1;color:var(--red)}
 a{color:var(--brand)}
 
 /* --- the multiplayer lobby overlay (table.html / js/multiplayer.js) -------- */
@@ -103,6 +104,52 @@ a{color:var(--brand)}
    ROSTER (bots and, eventually, NFTs), not to a person's own browser tab. */
 .seat .pic .initial{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
   font-family:var(--display);font-size:calc(var(--u)*3.6);color:var(--brand)}
+
+/* --- the lobby list (lobby.html / js/lobby.js) -----------------------------
+   Two sections (practice tables, tournaments), each a header with a "new"
+   button and a list of rows. Reuses the same felt/brand/ink palette as the
+   rest of the room rather than introducing a second visual language for
+   what is still, structurally, the front door to the same table. */
+#lobbyPage{width:min(96vw,720px);display:flex;flex-direction:column;gap:22px}
+.lobbySection{background:rgba(0,0,0,.28);border:2px solid var(--ink);border-radius:14px;padding:16px 18px}
+.lobbySectionHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.lobbySectionHead h2{font-family:var(--display);font-size:17px;letter-spacing:.5px;color:var(--brand)}
+.lobbySectionHead button{font-size:12px;padding:7px 12px;box-shadow:0 3px 0 var(--ink)}
+.rowList{display:flex;flex-direction:column;gap:8px}
+.rowEmpty{font-size:13px;opacity:.6;padding:6px 2px}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:rgba(0,0,0,.3);
+  border:2px solid var(--ink);border-radius:10px;padding:9px 12px}
+.row .rowName{font-weight:700;flex:1 1 140px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .rowMeta{font-size:11px;opacity:.75;white-space:nowrap}
+.pill{font-size:10px;font-weight:700;letter-spacing:.5px;padding:3px 8px;border-radius:999px;border:2px solid var(--ink);white-space:nowrap}
+.pill.practice{background:var(--felt);color:var(--cream)}
+.pill.tournament{background:var(--red);color:#FFF}
+.row button{font-size:12px;padding:7px 14px;box-shadow:0 3px 0 var(--ink)}
+.newForm{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:rgba(0,0,0,.3);
+  border:2px solid var(--ink);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.newForm[hidden]{display:none}
+.newForm input{font-family:var(--body);font-size:13px;padding:8px 10px;border:2px solid var(--ink);
+  border-radius:8px;background:var(--cream);color:var(--ink);flex:1 1 140px;min-width:0}
+.newForm button{font-size:12px;padding:8px 14px}
+.newForm .cancel{background:#2A2723;color:var(--cream)}
+
+/* --- the tournament status bar (tournament.html / js/tournament.js) ------- */
+#tourneyBar{width:min(96vw,980px);display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;
+  justify-content:center;background:rgba(0,0,0,.32);border:2px solid var(--ink);border-radius:12px;
+  padding:9px 16px;font-size:12px}
+#tourneyBar .stat b{color:var(--brand)}
+#tourneyBar .stat.eliminated b{color:var(--red)}
+#standings{width:min(96vw,520px);background:rgba(0,0,0,.32);border:2px solid var(--ink);
+  border-radius:12px;padding:16px 20px;display:flex;flex-direction:column;gap:8px}
+#standings[hidden]{display:none}
+#standings h2{font-family:var(--display);color:var(--brand);font-size:18px;text-align:center;margin-bottom:4px}
+#standings ol{list-style:none;display:flex;flex-direction:column;gap:5px}
+#standings li{display:flex;justify-content:space-between;gap:10px;font-size:13px;
+  background:rgba(0,0,0,.3);border-radius:8px;padding:6px 10px}
+#standings li:first-child{background:var(--brand);color:var(--ink);font-weight:700}
+#registered{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:380px}
+#registered span{background:rgba(0,0,0,.35);border:2px solid var(--ink);border-radius:999px;
+  padding:3px 10px;font-size:12px}
 
 /* --- narrow screens --------------------------------------------------------
    Six seats round an oval need height more than width once the width is gone,

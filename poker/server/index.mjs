@@ -91,6 +91,22 @@ export function startServer({ port = 0, origin = process.env.KEVIN_ORIGIN || '*'
     const headers = { 'content-type': 'application/json', 'access-control-allow-origin': origin };
     const json = (code, body) => { res.writeHead(code, headers); res.end(JSON.stringify(body)); };
 
+    // POST with a JSON body is not a CORS "simple request", so a browser
+    // sends an OPTIONS preflight first and refuses the real request unless
+    // this answers it with the allow-methods/allow-headers pair below — the
+    // exact shape `poker.iamkevin.lol` running on its own subdomain (see
+    // this file's own header comment, and server/README.md's "Putting it
+    // on the internet") needs for `poker/js/lobby.js`'s `POST /tables` and
+    // `POST /tournaments` to work from the main site's origin at all.
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'access-control-allow-origin': origin,
+        'access-control-allow-methods': 'GET, POST, OPTIONS',
+        'access-control-allow-headers': 'content-type',
+      });
+      return res.end();
+    }
+
     if (req.method === 'GET' && url.pathname === '/health') {
       return json(200, { ok: true, tables: tables.size, tournaments: tournaments.size });
     }

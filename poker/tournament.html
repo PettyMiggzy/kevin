@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kevin's Card Room — Tournament</title>
+<link rel="icon" href="../assets/png/favicon-32.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Kevin's Card Room — Tournament">
+<meta property="og:description" content="Register, get seated, and play down to one winner — blinds go up as the field shrinks.">
+<meta name="description" content="Register, get seated, and play down to one winner — blinds go up as the field shrinks.">
+<meta name="theme-color" content="#FFE500">
+<link rel="stylesheet" href="css/table.css">
+</head>
+<body>
+<h1>KEVIN'S <span>CARD ROOM</span></h1>
+
+<div id="lobby">
+  <p id="tourneyName">Tournament</p>
+  <p class="lobbyHint">A multi-table tournament — play money chips, blinds go up over time,
+    last player standing wins. <a id="tourneyLink" href="#"></a></p>
+  <div id="registered"></div>
+  <input id="nameInput" placeholder="Your name" maxlength="20" autocomplete="off">
+  <button id="registerBtn">REGISTER</button>
+  <button id="startBtn" hidden>START TOURNAMENT</button>
+  <p id="lobbyStatus"></p>
+</div>
+
+<div id="tourneyBar" hidden></div>
+<div id="room" hidden>
+  <div id="felt"></div>
+  <div id="board"></div>
+  <div id="pot">POT 0</div>
+</div>
+<div id="controls" hidden></div>
+<div id="log" hidden></div>
+
+<div id="standings" hidden>
+  <h2>Final standings</h2>
+  <ol id="standingsList"></ol>
+</div>
+
+<p class="hint">Play money, real opponents, server-dealt. Your seat may move to a
+  different table as the field shrinks — nobody but you ever sees your hole cards
+  before it does.
+  <a href="lobby.html">Back to the lobby →</a></p>
+<script type="module" src="js/tournament.js"></script>
+</body>
+</html>

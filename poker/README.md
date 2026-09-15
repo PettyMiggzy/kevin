@@ -11,13 +11,21 @@ no account. Play money for now.
 | `js/holdem.js` | The rules — no UI in it, so it can be tested or run on a server |
 | `js/characters.js` | Who can sit down. **This is the seam the NFTs plug into.** |
 | `js/main.js` | The single-player table: you at seat 0, bots everywhere else, run entirely in the browser |
-| `js/multiplayer.js` | The multiplayer table: same felt, but every action goes to `server/` and every card comes back from it |
-| `server/` | The WebSocket server that runs `holdem.js` for real — see `server/README.md` |
+| `js/tableView.js` | The felt itself — seats, board, pot, controls — shared by both multiplayer screens below so there is one rendering codebase, not two |
+| `js/multiplayer.js` | The practice table: same felt, but every action goes to `server/` and every card comes back from it |
+| `js/lobby.js` | The lobby: lists open tables and tournaments (`GET /lobby`) and creates new ones — the front door, not a third game mode |
+| `js/tournament.js` | The tournament table: registration, then the same felt, plus a blind-level/standings bar `js/multiplayer.js` doesn't need |
+| `server/` | The WebSocket server that runs `holdem.js` for real, for both single tables and tournaments — see `server/README.md` |
 
-`index.html` is the single-player room; `table.html` is the multiplayer one
-(`table.html?t=<code>` — share the link, whoever opens it sits at the same
-table). Both are static pages that import from `js/`; neither one gates the
-other.
+`index.html` is the single-player room. `lobby.html` is the front door for
+everything else: it lists open **practice** tables (play money, same as
+phase 1) and **tournaments** (multi-table, blinds that go up, one winner —
+see `server/README.md`'s tournament section), and creates new ones. `mode`
+on a table is the seam a future real-money table plugs into later — nothing
+reads it as anything but a label yet. `table.html?t=<code>` (share the link,
+whoever opens it sits at that table) still works exactly as it did in phase
+1; the lobby is a nicer way to arrive at a table, not the only way. All of
+these are static pages that import from `js/`; none of them gates another.
 
 ## Adding characters — the NFT path
 
@@ -75,6 +83,15 @@ everyone still in has to show. See `server/README.md` for the protocol, the
 disconnect rules, and — worth reading before anything real depends on it —
 exactly what this phase does and does not defend against.
 
+A **tournament** (`tournament.html`) is many of these tables at once, run
+by `server/tournament.mjs`: everyone buys in for the same starting stack,
+gets seated across however many tables that takes, and tables rebalance as
+players bust — standard multi-table-tournament mechanics, not a single
+table with a bigger cap. Blinds rise on a schedule instead of staying
+fixed, and the whole thing ends with one winner and a finishing position
+for everyone else. Still entirely play money; see `server/README.md`'s own
+section on it.
+
 ## Not done yet
 
 - **Real stakes.** Chips are a number in a page (or, for multiplayer, a
@@ -82,10 +99,14 @@ exactly what this phase does and does not defend against.
   phase 2 needs"). Nothing is on chain and nothing should be until there is
   a server that holds the deck, because a client that knows every card is a
   client that can read them. There now is one; buy-in and payout on top of
-  it are the next phase, not this one.
-- **A real lobby.** Multiplayer tables are found by sharing a link with a
-  table id in it — there is no list of open tables, no matchmaking, no
-  reconnect that proves you are the same player coming back.
+  it are the next phase, not this one. A table's `mode` (`'practice'` today)
+  is where a future `'real'` mode plugs in — see `server/README.md`.
+- **A reconnect that proves you are the same player coming back.** The
+  lobby (`lobby.html`) now solves "how do I find a game" — there is a real
+  list of open tables and tournaments. What it still does not solve is "how
+  does the server know a new WebSocket is the same person who just dropped
+  one" — that is still a session-token problem, deferred to the same phase
+  2 that adds real stakes (see `server/README.md`'s "What phase 2 needs").
 
 ## The seats
 

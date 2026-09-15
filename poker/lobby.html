@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kevin's Card Room — Lobby</title>
+<link rel="icon" href="../assets/png/favicon-32.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Kevin's Card Room — Lobby">
+<meta property="og:description" content="Open tables and tournaments — join one, or start your own.">
+<meta name="description" content="Open tables and tournaments — join one, or start your own.">
+<meta name="theme-color" content="#FFE500">
+<link rel="stylesheet" href="css/table.css">
+</head>
+<body>
+<h1>KEVIN'S <span>CARD ROOM</span></h1>
+<div id="lobbyPage">
+  <section class="lobbySection">
+    <div class="lobbySectionHead">
+      <h2>Practice tables</h2>
+      <button id="newTableToggle">+ NEW TABLE</button>
+    </div>
+    <form id="newTableForm" class="newForm" hidden>
+      <input id="newTableName" placeholder="Table name" maxlength="40" autocomplete="off">
+      <button type="submit">CREATE</button>
+      <button type="button" class="cancel" data-cancel>CANCEL</button>
+    </form>
+    <div id="tableList" class="rowList"><p class="rowEmpty">Loading…</p></div>
+  </section>
+
+  <section class="lobbySection">
+    <div class="lobbySectionHead">
+      <h2>Tournaments</h2>
+      <button id="newTourneyToggle">+ NEW TOURNAMENT</button>
+    </div>
+    <form id="newTourneyForm" class="newForm" hidden>
+      <input id="newTourneyName" placeholder="Tournament name" maxlength="40" autocomplete="off">
+      <button type="submit">CREATE</button>
+      <button type="button" class="cancel" data-cancel>CANCEL</button>
+    </form>
+    <div id="tourneyList" class="rowList"><p class="rowEmpty">Loading…</p></div>
+  </section>
+</div>
+<p id="lobbyErr" class="hint err" hidden></p>
+<p class="hint">Play money, no account needed. Tables are <b>practice</b> chips —
+  <b>real</b>-stakes tables are coming later and will look different here, not
+  swapped in quietly. <a href="index.html">Practice against bots instead →</a></p>
+<script type="module" src="js/lobby.js"></script>
+</body>
+</html>
