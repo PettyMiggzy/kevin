@@ -5,6 +5,7 @@
 //
 //   node tools/mint-model-burn.mjs                                  # the shipped default
 //   node tools/mint-model-burn.mjs --base 5 --step 12.5 --weth-per-kevin 1.301e-9
+//   node tools/mint-model-burn.mjs --json                           # machine-readable, for load-nft-tiers.mjs
 //
 // WHY BASIS POINTS OF CIRCULATING SUPPLY, NOT A FLAT KEVIN NUMBER: a flat
 // number picked today ("5M KEVIN") means something completely different once
@@ -67,10 +68,23 @@ function render(label, baseBps, stepBpsMult, wethPerKevin) {
 }
 
 const wethPerKevin = flag('weth-per-kevin', 1.301e-9);
+const baseBps = flag('base', 0.4);
+const stepBpsMult = flag('step', 2.6);
+
+// Machine-readable output for tools/load-nft-tiers.mjs, so the on-chain
+// prices it sets come from this one formula rather than a second copy of it
+// drifting out of sync. Skips the prose entirely — a script parsing stdout
+// doesn't want to grep around it.
+if (args.includes('--json')) {
+  const { rows, totalKevin } = table(counts, baseBps, stepBpsMult, wethPerKevin);
+  console.log(JSON.stringify({ circulating: CIRCULATING, baseBps, stepBpsMult, totalKevin, rows }));
+  process.exit(0);
+}
+
 console.log(`circulating supply right now: ${CIRCULATING.toLocaleString()} KEVIN (${BURNED_SO_FAR.toLocaleString()} already burned)`);
 console.log(`price used: 1 KEVIN = ${wethPerKevin.toExponential(4)} WETH`);
 
-render('Shipped default', flag('base', 0.4), flag('step', 2.6), wethPerKevin);
+render('Shipped default', baseBps, stepBpsMult, wethPerKevin);
 if (!args.includes('--base') && !args.includes('--step')) {
   console.log(`
 Geometric, not linear — Legendary is disproportionately harder than Common,
