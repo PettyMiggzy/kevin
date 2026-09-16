@@ -34,25 +34,60 @@ token scores the sum of 1/frequency across its six traits, and the ranking is
 cut 25 / 75 / 200 / 300 / 400. So a Legendary is legendary because the whole
 card is unlikely, which is much harder to game than "has the gold fur".
 
-## Mint ladder
+## Mint: burn, not buy
 
-Run `node tools/mint-model.mjs` to re-price. Both shapes discussed:
+Minting does not pay into treasury. It burns $KEVIN — straight to the dead
+address `burnwatch.mjs` already tracks — and hands back one of that tier's
+token ids. Every mint is therefore a permanent, on-chain-checkable cut to
+circulating supply, stacked on top of whatever else gets burned. This
+replaces the earlier USD-priced design entirely; there is no dollar price
+anywhere in this contract.
 
-| Tier | Supply | Option A | Option B |
-|---|---|---|---|
-| Common | 400 | $9.99 | $5 |
-| Uncommon | 300 | $14.99 | $8 |
-| Rare | 200 | $19.99 | $11 |
-| Epic | 75 | $24.99 | $14 |
-| Legendary | 25 | $29.99 | $17 |
-| **Sellout** | **1,000** | **$15,115** | **$8,075** |
+The contract is `contracts/src/KevinNFT.sol`. The shape:
 
-Prices are quoted in USD and settled in KEVIN at spot. Quote the tier in KEVIN
-instead and tier five becomes cheaper than tier one the moment the chart moves.
+- **Tier population is fixed before mint ever opens.** `loadTier()` assigns
+  the exact token ids from `assets/pfp/tiers.json` to each tier; `lockTiers()`
+  is a one-shot that hard-checks every tier landed at its exact committed
+  count (400/300/200/75/25) and then permanently disables both functions.
+  Nobody, including the owner, can change which id is in which tier, or
+  re-price a tier, after that call.
+- **Price is a % of circulating supply, not a flat KEVIN number.** A flat
+  number picked today means something completely different once the chart
+  moves or more supply burns elsewhere. `tools/mint-model-burn.mjs` prices
+  each tier as basis points of *current* circulating supply (read live from
+  `data/burns.json`), geometric across tiers so Legendary is disproportionately
+  harder than Common — matching how much rarer the slot itself already is (25
+  vs 400 available). Run it for the live numbers:
 
-A raises about double. B is the easier first mint: a $5 floor is an impulse buy,
-and a sold-out cheap mint markets better than a half-sold expensive one — the
-unsold half is the part people notice.
+  ```bash
+  node tools/mint-model-burn.mjs
+  ```
+
+  The shipped ladder burns 20% of circulating supply on a full sellout — a
+  real, checkable ceiling. Common is a genuine impulse burn at today's price;
+  Legendary alone is roughly 0.18% of the entire current market cap. Neither
+  tier is meant to sell out immediately; if nothing moves past
+  Common/Uncommon after a real mint window, re-run the model with a smaller
+  `--base`/`--step` rather than leaving stale pricing live.
+
+- **Deploying and arming are separate steps, on purpose**, same split
+  `KevinFloorV4`'s own deploy script uses between "on chain" and "funded and
+  live":
+  1. `forge script script/DeployKevinNFT.s.sol --broadcast` — puts the bare
+     contract on chain. Nothing priced, nothing loaded.
+  2. `node tools/load-nft-tiers.mjs --set-prices --load` — prices all five
+     tiers from `mint-model-burn.mjs`'s current output and loads all 1,000
+     token ids, chunked to stay under the block gas limit. Idempotent: safe
+     to re-run if a transaction fails partway.
+  3. Read `remaining(tier)` back for all five tiers by hand. They must read
+     exactly 400/300/200/75/25 before the next step.
+  4. `lockTiers()`, by hand, from the owner. Irreversible.
+  5. `openMint()`, by hand, from the owner.
+
+  Both scripts were proven end-to-end against a local anvil fork — full
+  deploy, price, load, lock, open, and a real mint that burned exactly the
+  priced amount and decremented the tier's remaining count — before either
+  was committed.
 
 ## Perks
 
@@ -60,21 +95,71 @@ Perks have to be things we actually control, or they are just a promise.
 
 | Perk | Where it lives | Tier |
 |---|---|---|
-| Playable seat in Kevin's Card Room | `poker/js/characters.js` — the registry already takes minted characters | All |
+| Share of 100% of the KEK and WETH LP fees | below | All, scaling by tier |
+| Playable seat in Kevin's Card Room | `poker/js/characters.js` — the registry has the seam, `ownedBy()` is still a stub pending a deployed contract address | All |
 | Character in Kevin's Gym | `gym/` character picker | Uncommon+ |
 | Holder tag in the Telegram group | bot, on a verified wallet | All |
-| Higher weight in the GME distribution | below | All, scaling by tier |
 | Trait-matched sticker | the sticker pipeline already builds these | Epic+ |
 
 The poker registry was built with this seam in it: a character is data — id,
 name, art, style — and nothing in the game reaches past `ROSTER`, so a minted
-character sits down the same way a built-in one does.
+character sits down the same way a built-in one does. `ownedBy()` stays a stub
+returning `[]` until there is a real mainnet contract address for it to read
+against — wiring it against nothing would be untestable in the way the deploy
+and load scripts were actually proven.
+
+**The NFTs do not touch the GME pool.** That pool's revenue share is a
+promise to $KEVIN token holders generally, decided before this collection
+existed, and stays exactly that — see below. Giving NFT holders a second,
+overlapping claim on the same pool was the original plan; it was deliberately
+dropped so the two promises never compete for the same money.
+
+## The KEK/WETH fee share
+
+Holding a Kevin NFT earns a share of two of this project's three LP pools —
+KEK and WETH, not GME. `KevinNFT.sol` implements it as a standard
+MasterChef-shaped accumulator, doubled for two reward tokens:
+
+```
+weight = Common 1 · Uncommon 2 · Rare 4 · Epic 8 · Legendary 16   (same ladder as GME's, reused)
+your share of a deposit = deposit × (your token's weight ÷ total weight of all minted tokens)
+```
+
+`depositFees(kekAmount, wethAmount)` is permissionless — anyone can top the
+pool up, most likely a keeper sweeping LP fees on some cadence (weekly, per
+the original ask). It credits only what actually arrives (delta-accounted,
+fee-on-transfer safe), matching `KevinFloorV4`'s `fundWarChestToken` idiom.
+Holders `claim()` what has accrued to their specific token id at any time —
+gas is the only cost. A token minted after a deposit already landed owes
+nothing from that deposit; a token that changes hands keeps whatever it had
+already accrued, so the entitlement transfers with the NFT on a sale, not
+with whoever originally minted it.
+
+The Foundry suite (`contracts/test/KevinNFT.t.sol`) covers the properties
+that actually matter here: proportional splitting by tier weight, no
+retroactive claims, claim entitlement surviving a transfer, delta-accounted
+deposits under a fee-on-transfer token, and a fuzz test that the sum of every
+token's claimable balance can never exceed what was actually deposited.
+
+**Before this is promoted publicly, get it in front of a securities lawyer.**
+This is the part of the design most likely to read as a security, more so
+than the GME pool below: it is a direct, ongoing revenue share — a cut of
+real trading fees — paid out in proportion to holding a specific numbered
+asset that was itself paid for by burning value. That shape (pay in, receive
+a pro-rata cut of revenue this project generates) is close to the textbook
+definition regulators use for an investment contract, and marketing the fee
+share as a reason to mint is exactly the part that draws attention. That is
+not a reason to not build it — the contract is built and tested — it is a
+reason the terms someone can be shown before minting need to be reviewed by
+someone who does this for a living, in the jurisdiction this actually runs
+in, before `openMint()` is ever called against a public audience.
 
 ## The GME pool
 
-The launch puts 15% into GME. Distributing what that becomes to holders is the
-part with real-world consequences, so the mechanics are written down and the
-maths is a script anyone can rerun.
+The launch puts 15% into GME. Distributing what that becomes to $KEVIN
+holders generally — unrelated to this NFT collection — is the part with
+real-world consequences, so the mechanics are written down and the maths is a
+script anyone can rerun.
 
 **Formula.** Eligibility is a floor of **10,000,000 KEVIN** at a published
 snapshot block. Weight is the sum of the tiers you hold:
@@ -103,6 +188,11 @@ be designed by someone who does this for a living, in the jurisdiction you are
 actually in, before any of it is promised publicly. Everything else in this
 document is ours to decide. This part is not.
 
-Two smaller things that follow from the same caution: the snapshot block should
-be announced **after** it is taken, or people buy in to farm it, and the
-allocation output should be published in full so anyone can check their own row.
+Two smaller things that follow from the same caution: the snapshot block
+should be announced **after** it is taken, or people buy in to farm it, and
+the allocation output should be published in full so anyone can check their
+own row.
+
+The weight formula above ("Common 1 · Uncommon 2 · ... Legendary 16") is
+shared verbatim with the KEK/WETH fee share on purpose — one ladder, two
+pools, instead of inventing a second scheme with its own edge cases.
