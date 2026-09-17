@@ -202,13 +202,13 @@
     const [dcx, dcy] = at(A.dome.cx, A.dome.y);
     const dw = A.dome.w * scale;
     x.save(); x.translate(dcx, dcy); x.rotate(A.dome.tilt);
-    if (hat === 'cap') drawPart(x, PARTS['hat-cap'], 0, dw*0.06, dw*1.2, 0.42, 0.72);
-    else if (hat === 'visor') drawPart(x, PARTS['hat-visor'], 0, dw*0.04, dw*1.1, 0.5, 0.55);
-    else if (hat === 'band') drawPart(x, PARTS['hat-band'], 0, dw*0.02, dw*0.92, 0.5, 0.45);
-    else if (hat === 'crown') drawPart(x, PARTS['hat-crown'], 0, dw*0.06, dw*0.85, 0.5, 0.85);
-    else if (hat === 'tophat') drawPart(x, PARTS['hat-tophat'], 0, dw*0.02, dw*1.05, 0.5, 1.0);
-    else if (hat === 'halo') drawPart(x, PARTS['hat-halo'], 0, -dw*0.30, dw*0.9, 0.5, 0.5);
-    else if (hat === 'horns') drawPart(x, PARTS['hat-horns'], 0, -dw*0.02, dw*0.7, 0.5, 0.75);
+    if (hat === 'cap') drawPart(x, PARTS['hat-cap'], 0, dw*0.15, dw*1.2, 0.42, 0.65);
+    else if (hat === 'visor') drawPart(x, PARTS['hat-visor'], 0, dw*0.13, dw*1.1, 0.5, 0.50);
+    else if (hat === 'band') drawPart(x, PARTS['hat-band'], 0, dw*0.11, dw*0.92, 0.5, 0.42);
+    else if (hat === 'crown') drawPart(x, PARTS['hat-crown'], 0, dw*0.10, dw*0.85, 0.5, 0.68);
+    else if (hat === 'tophat') drawPart(x, PARTS['hat-tophat'], 0, dw*0.08, dw*1.05, 0.5, 0.78);
+    else if (hat === 'halo') drawPart(x, PARTS['hat-halo'], 0, -dw*0.22, dw*0.9, 0.5, 0.5);
+    else if (hat === 'horns') drawPart(x, PARTS['hat-horns'], 0, dw*0.02, dw*0.7, 0.5, 0.65);
 
     x.restore();
 
