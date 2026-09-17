@@ -13,7 +13,7 @@
 // Everything is drawn from a seeded RNG, so the whole collection is
 // reproducible from `--seed`: same seed, same thousand PFPs, byte for byte.
 // Trait combinations are guaranteed unique.
-import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, readdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
@@ -28,6 +28,7 @@ const SEED = Number(flag('seed', 20260907));
 const OUT = flag('out', join(ROOT, 'assets/pfp'));
 const SIZE = Number(flag('size', 512));
 const BASE = join(ROOT, 'assets/refs/16-kevin-idle.png');
+const PARTS_DIR = join(ROOT, 'assets/pfp/parts');
 
 // --- traits ------------------------------------------------------------------
 // Weights are relative, not percentages. Rarity is a design decision, so it
@@ -86,13 +87,25 @@ async function main() {
   await mkdir(join(OUT, 'meta'), { recursive: true });
   const baseData = 'data:image/png;base64,' + (await readFile(BASE)).toString('base64');
 
+  // Illustrated prop assets (hats, eyewear, mouth props) rather than the
+  // primitive canvas shapes the first version of this pipeline drew them
+  // with -- see tools/lib/pfp-draw.js for why that looked cheap. Keyed by
+  // filename stem (e.g. "hat-cap") so pfp-draw.js can look each one up by
+  // the same name it already uses for that trait's value.
+  const partFiles = (await readdir(PARTS_DIR)).filter((f) => f.endsWith('.png'));
+  const parts = {};
+  for (const f of partFiles) {
+    const stem = f.replace(/\.png$/, '');
+    parts[stem] = 'data:image/png;base64,' + (await readFile(join(PARTS_DIR, f))).toString('base64');
+  }
+
   const browser = await chromium.launch({
     executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
     args: ['--force-color-profile=srgb', '--no-sandbox'],
   });
   const page = await browser.newPage({ viewport: { width: SIZE, height: SIZE } });
   await page.addScriptTag({ path: join(ROOT, 'tools/lib/pfp-draw.js') });
-  await page.evaluate(async (d) => { await window.__pfpInit(d); }, baseData);
+  await page.evaluate(async ([d, p]) => { await window.__pfpInit(d, p); }, [baseData, parts]);
 
   const rand = rng(SEED);
   const seen = new Set();

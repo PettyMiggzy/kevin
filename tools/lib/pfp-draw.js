@@ -19,9 +19,22 @@
 
   let base = null;      // the character, backdrop removed
   let box = null;       // his bounding box inside that canvas
+  let PARTS = {};       // illustrated prop assets, keyed by e.g. "hat-cap"
   const INK = '#0B0B0B';
 
-  window.__pfpInit = async (dataUri) => {
+  /**
+   * Draw an illustrated prop, scaled to width w with its own aspect ratio
+   * preserved, anchored so the point (ax*w, ay*h) of the image lands at
+   * (cx, cy). Missing assets skip silently rather than crashing a whole
+   * 1000-image run over one bad trait name.
+   */
+  function drawPart(x, img, cx, cy, w, ax = 0.5, ay = 1) {
+    if (!img) return;
+    const h = w * (img.naturalHeight / img.naturalWidth);
+    x.drawImage(img, cx - ax * w, cy - ay * h, w, h);
+  }
+
+  window.__pfpInit = async (dataUri, partData) => {
     const img = new Image();
     img.src = dataUri;
     await img.decode();
@@ -48,6 +61,14 @@
     for (let k=0;k<w*h;k++){ if (!p[k*4+3]) continue; const cx=k%w, cy=(k/w)|0;
       if (cx<x0)x0=cx; if (cx>x1)x1=cx; if (cy<y0)y0=cy; if (cy>y1)y1=cy; }
     base = c; box = { x0, y0, x1, y1, w: x1-x0+1, h: y1-y0+1 };
+
+    PARTS = {};
+    for (const [name, uri] of Object.entries(partData || {})) {
+      const p = new Image();
+      p.src = uri;
+      await p.decode();
+      PARTS[name] = p;
+    }
   };
 
   /** Recolour his red without touching the cream face, white eyes or ink. */
@@ -145,16 +166,8 @@
     // --- eyes ---
     const e = traits.eyes.value;
     x.save(); x.translate(eyeCx, eyeY); x.rotate(A.eyes.tilt); x.translate(-eyeCx, -eyeY);
-    if (e === 'shades' || e === 'visorshades') {
-      const w = A.eyes.span*scale*1.06, h = w*0.34;
-      if (e === 'visorshades') rect(x, eyeCx-w/2, eyeY-h/2, w, h, '#111', 7, h/2);
-      else {
-        rect(x, eyeCx-w/2, eyeY-h/2, w*0.46, h, '#111', 7, 10);
-        rect(x, eyeCx+w*0.04, eyeY-h/2, w*0.46, h, '#111', 7, 10);
-        x.beginPath(); x.moveTo(eyeCx-w*0.04, eyeY); x.lineTo(eyeCx+w*0.04, eyeY); stroke(x, 8);
-      }
-      x.globalAlpha = .35; x.fillStyle = '#FFF';
-      x.fillRect(eyeCx-w*0.44, eyeY-h*0.32, w*0.16, h*0.3); x.globalAlpha = 1;
+    if (e === 'shades' || e === 'visorshades' || e === 'threed') {
+      drawPart(x, PARTS[`eyes-${e}`], eyeCx, eyeY, A.eyes.span*scale*1.1, 0.5, 0.5);
     } else if (e === 'laser') {
       for (const sx of [-1, 1]) {
         const g = x.createLinearGradient(eyeCx+sx*hw*0.16, eyeY, eyeCx+sx*S, eyeY+S*0.1);
@@ -170,10 +183,6 @@
         const ch = e === 'money' ? '$' : '@';
         x.strokeText(ch, eyeCx+A.eyes.span*scale*sx*0.9, eyeY); x.fillText(ch, eyeCx+A.eyes.span*scale*sx*0.9, eyeY);
       }
-    } else if (e === 'threed') {
-      const w = A.eyes.span*scale*1.02, h = w*0.30;
-      rect(x, eyeCx-w/2, eyeY-h/2, w*0.47, h, 'rgba(230,40,40,.72)', 6, 6);
-      rect(x, eyeCx+w*0.03, eyeY-h/2, w*0.47, h, 'rgba(40,120,230,.72)', 6, 6);
     }
 
     x.restore();
@@ -181,21 +190,11 @@
     // --- mouth ---
     const m = traits.mouth.value;
     if (m === 'cigar' || m === 'joint') {
-      const len = hw * (m === 'cigar' ? 0.24 : 0.22);
-      const th = hw * (m === 'cigar' ? 0.070 : 0.045);
-      rect(x, mouthX, mouthY, len, th, m === 'cigar' ? '#6B3F1D' : '#EFE6CC', 6, th/2);
-      x.fillStyle = '#FF6A00';
-      ellipse(x, mouthX+len, mouthY+th/2, th*0.42, th*0.42, '#FF6A00', 4);
-      x.globalAlpha = .5; x.fillStyle = '#DDD';
-      for (let i = 0; i < 3; i++) ellipse(x, mouthX+len+hw*0.05+i*hw*0.05, mouthY-hw*0.06-i*hw*0.05, hw*0.035+i*hw*0.012, hw*0.03+i*hw*0.01, '#DDD', 0);
-      x.globalAlpha = 1;
+      drawPart(x, PARTS[`mouth-${m}`], mouthX, mouthY, hw * (m === 'cigar' ? 0.42 : 0.38), 0, 0.5);
     } else if (m === 'lolly') {
-      const r = hw*0.10;
-      x.strokeStyle = '#EEE'; x.lineWidth = 7;
-      x.beginPath(); x.moveTo(mouthX, mouthY+r*0.4); x.lineTo(mouthX+hw*0.26, mouthY+r*0.4); x.stroke();
-      ellipse(x, mouthX+hw*0.30, mouthY+r*0.4, r, r, '#FF4FA3', 7);
+      drawPart(x, PARTS['mouth-lolly'], mouthX, mouthY + hw*0.05, hw*0.30, 0.15, 0.9);
     } else if (m === 'tooth') {
-      rect(x, mouthX-hw*0.02, mouthY-hw*0.01, hw*0.07, hw*0.07, '#FFD24A', 5, 3);
+      drawPart(x, PARTS['mouth-tooth'], mouthX + hw*0.01, mouthY + hw*0.02, hw*0.10, 0.3, 0.3);
     }
 
     // --- hat ---
@@ -203,28 +202,13 @@
     const [dcx, dcy] = at(A.dome.cx, A.dome.y);
     const dw = A.dome.w * scale;
     x.save(); x.translate(dcx, dcy); x.rotate(A.dome.tilt);
-    if (hat === 'cap' || hat === 'visor') {
-      const w = dw;
-      if (hat === 'cap') poly(x, [[-w*0.50,w*0.06],[-w*0.40,-w*0.26],[w*0.34,-w*0.24],[w*0.46,w*0.06]], '#E02128');
-      poly(x, [[-w*0.14,w*0.02],[w*0.66,-w*0.04],[w*0.64,w*0.13],[-w*0.14,w*0.15]], hat === 'cap' ? '#B0141B' : '#2B6CD4');
-    } else if (hat === 'band') {
-      rect(x, -dw*0.52, -dw*0.07, dw*1.04, dw*0.16, '#FFFFFF', 7, 6);
-      x.fillStyle = '#E02128'; x.fillRect(-dw*0.10, -dw*0.06, dw*0.20, dw*0.14);
-    } else if (hat === 'crown') {
-      const w = dw*0.80, b = dw*0.06;
-      poly(x, [[-w/2,b],[-w/2,b-w*0.34],[-w*0.22,b-w*0.10],[0,b-w*0.44],[w*0.22,b-w*0.10],[w/2,b-w*0.34],[w/2,b]], '#FFD24A');
-    } else if (hat === 'tophat') {
-      rect(x, -dw*0.58, -dw*0.10, dw*1.16, dw*0.12, '#171512', 7, 4);
-      rect(x, -dw*0.30, -dw*0.62, dw*0.60, dw*0.54, '#171512', 7, 4);
-      x.fillStyle = '#E02128'; x.fillRect(-dw*0.30, -dw*0.26, dw*0.60, dw*0.12);
-    } else if (hat === 'halo') {
-      x.save(); x.translate(0, -dw*0.34); x.scale(1, 0.34);
-      x.beginPath(); x.arc(0, 0, dw*0.42, 0, Math.PI*2);
-      x.lineWidth = dw*0.12; x.strokeStyle = '#FFD24A'; x.stroke();
-      x.lineWidth = 5; x.strokeStyle = INK; x.stroke(); x.restore();
-    } else if (hat === 'horns') {
-      for (const sx of [-1, 1]) poly(x, [[sx*dw*0.34,dw*0.04],[sx*dw*0.46,-dw*0.34],[sx*dw*0.16,-dw*0.06]], '#B0141B');
-    }
+    if (hat === 'cap') drawPart(x, PARTS['hat-cap'], 0, dw*0.06, dw*1.2, 0.42, 0.72);
+    else if (hat === 'visor') drawPart(x, PARTS['hat-visor'], 0, dw*0.04, dw*1.1, 0.5, 0.55);
+    else if (hat === 'band') drawPart(x, PARTS['hat-band'], 0, dw*0.02, dw*0.92, 0.5, 0.45);
+    else if (hat === 'crown') drawPart(x, PARTS['hat-crown'], 0, dw*0.06, dw*0.85, 0.5, 0.85);
+    else if (hat === 'tophat') drawPart(x, PARTS['hat-tophat'], 0, dw*0.02, dw*1.05, 0.5, 1.0);
+    else if (hat === 'halo') drawPart(x, PARTS['hat-halo'], 0, -dw*0.30, dw*0.9, 0.5, 0.5);
+    else if (hat === 'horns') drawPart(x, PARTS['hat-horns'], 0, -dw*0.02, dw*0.7, 0.5, 0.75);
 
     x.restore();
 
